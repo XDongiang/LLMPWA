@@ -8,6 +8,9 @@ import time
 import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 from jax._src.random import resolve_prng_impl
 import toml
 import hashlib
@@ -68,7 +71,7 @@ def checkDirectoryStructure():
 class LLMResonanceGenerator:
     """LLM驱动的共振态代码生成器"""
     
-    def __init__(self, config_path: str = "agent/resonances_config.toml", model: str = "o3-pro-2025-06-10", model_check: str = "gpt-5-2025-08-07"):
+    def __init__(self, config_path: str = "agent/resonances_config.toml", model: Optional[str] = None, model_check: Optional[str] = None):
         """
         初始化LLM代码生成器
         
@@ -79,13 +82,14 @@ class LLMResonanceGenerator:
         # 检查并创建必要的目录结构
         checkDirectoryStructure()
 
+        self.model = model or os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')
+        self.model_check = model_check or os.getenv('EASYTRANS_MODEL_CHECK', self.model)
+
         # 初始化EasyTrans客户端
         self.llm_client = EasyTransClient()
-        print(f"🤖 LLM引擎初始化完成: {model}")
-        
+        print(f"🤖 LLM引擎初始化完成: {self.model}")
+
         self.config_path = config_path
-        self.model = model
-        self.model_check = model_check
         self.config = self.load_config()
 
         # 解析模板部分
@@ -378,7 +382,7 @@ Resonance_Info:
 3. 根据输入部分中的固定参数列表的信息，修改args_list列表，将该参数从args_list中移除。
 4. 根据输入部分中的固定参数列表的信息，修改extract_parameters函数，将固定参数改为参数列表中对应的值，并调整args的编号。
 5. 根据上面整理出的思路，生成修改后的args_list、extract_parameters，要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。
-6. 参数列表是从完整配置文件中提取，args_list是从参数列表中提取的，写一个函数将args_list中的参数重新填回配置文件的数据结构中的函数，输入为args_list，输出为完整配置文件的数据结构,因此需要在函数中定义相同的配置文件数据结构，要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。
+6. 参数列表是从完整配置文件中提取，args_list是从参数列表中提取的，写一个函数将args_list中的参数重新填回配置文件的数据结构中的函数，函数签名为 build_config(args, errors=None)，输出为完整配置文件的数据结构，因此需要在函数中定义相同的配置文件数据结构。每个可自由浮动的参数字段（fixed=False）都有对应的 'error' 字段：当 errors 不为 None 时，按照与 args 相同的索引顺序从 errors 中取对应值填入 'error' 字段；当 errors 为 None 时，'error' 字段填 0.0。固定参数（fixed=True）的 'error' 字段始终为 0.0。要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。
 
 ### 2. 函数模板：
 {prepare_data_parameters}
@@ -487,7 +491,11 @@ load data 函数:
             
             if not generated_code:
                 raise EasyTransError("LLM返回空的代码内容")
-            
+
+            # Strip markdown code fences if present
+            generated_code = re.sub(r'^```\w*\n?', '', generated_code.strip())
+            generated_code = re.sub(r'\n?```$', '', generated_code.strip())
+
             print(f"✨ 函数生成成功！代码长度: {len(generated_code)} 字符")
 
             check_prompt = f"""{prompt}
@@ -523,11 +531,12 @@ Code:
 
         try:
             ana_prompt = self.analysis_toml_config_prompt()
-            ana_result = self.generate_partial_function(ana_prompt, "agent/cache/ana_cache.json", False)
-            ana_result = json.loads(ana_result)
+            ana_result_raw = self.generate_partial_function(ana_prompt, "agent/cache/ana_cache.json", False)
+            ana_result = json.loads(ana_result_raw)
             print("ana_reuslt:",ana_result)
         except Exception as e:
             print(f"⚠️  分析失败: {e}")
+            raise
         time.sleep(1)
 
         try:
@@ -543,7 +552,7 @@ Code:
                 ana_value = sorted(ana_value)
                 resonance_name = ana_value[0]
                 resonance_calculation_prompt = self.generate_calculate_function_prompt(ana_key,ana_value,resonance_name)
-                resonance_calculation_functions.append(self.generate_partial_function(resonance_calculation_prompt, f"agent/cache/resonance_calculation_{resonance_name}.json", True))
+                resonance_calculation_functions.append(self.generate_partial_function(resonance_calculation_prompt, f"agent/cache/resonance_calculation_{ana_key}.json", True))
             functions['resonance_calculation'] = "\n\n".join(resonance_calculation_functions)
         except Exception as e:
             print(f"⚠️  calculation 函数生成失败: {e}")
@@ -650,9 +659,9 @@ def main():
     
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="LLM驱动的PWA共振态函数生成器")
-    parser.add_argument("--model", default="gpt-5-mini-2025-08-07", 
+    parser.add_argument("--model", default=os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro'),
                       help="使用的LLM模型")
-    parser.add_argument("--model-check", default="gpt-5-2025-08-07", 
+    parser.add_argument("--model-check", default=os.getenv('EASYTRANS_MODEL_CHECK', os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')),
                       help="用于代码检查的LLM模型")
     args = parser.parse_args()
     
@@ -669,7 +678,7 @@ def main():
         
         functions = generator.generate_complete_resonance_functions()
         full_code = generator.construct_code(functions)
-        compressed_full_code = compress_code(full_code, level="medium")
+        compressed_full_code = full_code#compress_code(full_code, level="medium")
         checked_full_code = generator.chatcheck(full_code)
         generator.save_code(compressed_full_code,output_path="run/generated_script_compressed.py")
         generator.save_code(checked_full_code,output_path="run/generated_script.py")

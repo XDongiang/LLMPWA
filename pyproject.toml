@@ -22,8 +22,9 @@ dependencies = [
     "matplotlib",
     "tabulate",
     "root",
-    "requests",
+    "openai",
     "toml",
+    "python-dotenv",
 ]
 
 [project.scripts]

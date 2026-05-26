@@ -412,3 +412,25 @@ if __name__  == "__main__":
     logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
     logger.info(f"优化信息: {result.message}")
     logger.info("="*50)
+
+    # 计算参数误差（Hessian逆矩阵对角线）
+    logger.info("计算参数误差（Hessian逆矩阵）...")
+    args_size = args_list.shape[0]
+    hessian_matrix = onp.zeros([args_size, args_size])
+    for i in range(args_size):
+        v = onp.zeros(args_size)
+        v[i] = 1.0
+        hessian_matrix[:, i] = onp.array(jit_hvp(result.x, v))
+    ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
+    logger.info(f"误差计算完成")
+
+    # 保存结果
+    os.makedirs("output/fit", exist_ok=True)
+    onp.save("output/fit/fit_result_values.npy", result.x)
+    onp.save("output/fit/fit_result_errors.npy", ferror)
+    logger.info("参数已保存至 output/fit/fit_result_values.npy")
+
+    result_config = build_config(result.x, ferror)
+    with open("output/fit/fit_result_config.json", "w", encoding="utf-8") as f:
+        json.dump(result_config, f, indent=4)
+    logger.info("配置已保存至 output/fit/fit_result_config.json")

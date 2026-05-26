@@ -129,7 +129,6 @@ def normalize_data(data):
     data['data_phif0_kk'] = onp.einsum("jkl,j->jkl", data['data_phif0_kk'], regular_phif0_kk)
     data['mc_phif0_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif0_kk'], regular_phif0_kk)
     data['truth_phif0_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif0_kk'], regular_phif0_kk)
-
     data['data_phif2_kk'] = onp.einsum("jkl,j->jkl", data['data_phif2_kk'], regular_phif2_kk)
     data['mc_phif2_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif2_kk'], regular_phif2_kk)
     data['truth_phif2_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif2_kk'], regular_phif2_kk)
@@ -145,7 +144,7 @@ def prepare_data_for_jax(data, device=None):
 def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
@@ -154,7 +153,7 @@ def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, 
 def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
@@ -184,24 +183,20 @@ def component_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_pa
 
 def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator_1d = flatte1270(B_mass, B_width, f_kk)
-    i_dim = (Amplitude_param_AMP.shape)[0]
-    B_propagator = np.stack([B_propagator_1d] * i_dim, axis=0)
-    propagator_combined = dplex_deinsum("j, ij->ij", A_propagator, B_propagator)
+    B_propagator = flatte1270(B_mass, B_width, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,lj->jk", result, propagator_combined)
+    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
     return result
 
 def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator_1d = flatte1270(B_mass, B_width, f_kk)
-    i_dim = (Amplitude_param_AMP.shape)[0]
-    B_propagator = np.stack([B_propagator_1d] * i_dim, axis=0)
-    propagator_combined = dplex_deinsum("j, ij->ij", A_propagator, B_propagator)
+    B_propagator = flatte1270(B_mass, B_width, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,lj->ljk", result, propagator_combined)
+    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
     return result
 
 args_list = onp.array([
@@ -255,191 +250,180 @@ def extract_parameters(args):
                                args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5)
     }
 
-def pack_args_to_config(args):
-    f980_mass = args[0]
-    f980_g_kk = args[1]
-    f980_rg = args[2]
-    f980_const2 = args[3]
-    f980_theta2 = args[4]
-    f0_mass = args[5]
-    f0_width = args[6]
-    f0_const1 = args[7]
-    f0_const2 = args[8]
-    f0_theta1 = args[9]
-    f0_theta2 = args[10]
-    f1270_mass = args[11]
-    f1270_width = args[12]
-    f1270_consts = list(args[13:18])
-    f1270_thetas = list(args[18:23])
-    f2_masses = [args[23], args[24], args[25]]
-    f2_widths = [args[26], args[27], args[28]]
-    f2_consts_flat = list(args[29:44])
-    f2_thetas_flat = list(args[44:59])
-    f2_consts = [f2_consts_flat[0:5], f2_consts_flat[5:10], f2_consts_flat[10:15]]
-    f2_thetas = [f2_thetas_flat[0:5], f2_thetas_flat[5:10], f2_thetas_flat[10:15]]
+def build_config(args, errors=None):
+    def err(i):
+        return 0.0 if errors is None else errors[i]
+
+    def param(value, fixed, error=0.0, range_value=None):
+        result = {'value': value, 'fixed': fixed}
+        if range_value is not None:
+            result['range'] = range_value
+        result['error'] = error
+        return result
+
     return {
         'resonances': {
             'phif0_980': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'flatte980',
-                        'mass': {'value': f980_mass, 'range': [0.98, 10.0], 'fixed': False, 'error': 0.0029114167854559173},
-                        'g_kk': {'value': f980_g_kk, 'fixed': False, 'error': 0.010260657247901088},
-                        'rg': {'value': f980_rg, 'fixed': False, 'error': 1.348489540060868},
+                        'mass': param(args[0], False, err(0), [0.98, 10.0]),
+                        'g_kk': param(args[1], False, err(1)),
+                        'rg': param(args[2], False, err(2)),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif0_kk',
-                    'const1': {'value': 0.1, 'fixed': True, 'error': 0.0},
-                    'const2': {'value': f980_const2, 'fixed': False, 'error': 0.003833456119689838},
-                    'theta1': {'value': 0.1, 'fixed': True, 'error': 0.0},
-                    'theta2': {'value': f980_theta2, 'fixed': False, 'error': 0.0032382807585900437}
+                    'const1': param(0.1, True),
+                    'const2': param(args[3], False, err(3)),
+                    'theta1': param(0.1, True),
+                    'theta2': param(args[4], False, err(4))
                 }
             },
             'phif0_1710': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': f0_mass, 'range': [1.704, 1.0], 'fixed': False, 'error': 0.008608254171218993},
-                        'width': {'value': f0_width, 'range': [0.123, 1.0], 'fixed': False, 'error': 0.007928828044131218},
+                        'mass': param(args[5], False, err(5), [1.704, 1.0]),
+                        'width': param(args[6], False, err(6), [0.123, 1.0]),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif0_kk',
-                    'const1': {'value': f0_const1, 'fixed': False, 'error': 0.0028493281809777366},
-                    'const2': {'value': f0_const2, 'fixed': False, 'error': 0.0027873338673183225},
-                    'theta1': {'value': f0_theta1, 'fixed': False, 'error': 0.003420832265462995},
-                    'theta2': {'value': f0_theta2, 'fixed': False, 'error': 0.002285070372617045}
+                    'const1': param(args[7], False, err(7)),
+                    'const2': param(args[8], False, err(8)),
+                    'theta1': param(args[9], False, err(9)),
+                    'theta2': param(args[10], False, err(10))
                 }
             },
             'phif2_1270': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'flatte1270',
-                        'mass': {'value': f1270_mass, 'range': [1.2755, 1.0], 'fixed': False, 'error': 0.008900150561499074},
-                        'width': {'value': f1270_width, 'range': [0.1867, 1.0], 'fixed': False, 'error': 0.009003877508753227},
+                        'mass': param(args[11], False, err(11), [1.2755, 1.0]),
+                        'width': param(args[12], False, err(12), [0.1867, 1.0]),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif2_kk',
-                    'const1': {'value': f1270_consts[0], 'fixed': False, 'error': 0.013059446776572923},
-                    'const2': {'value': f1270_consts[1], 'fixed': False, 'error': 0.011103610207449996},
-                    'const3': {'value': f1270_consts[2], 'fixed': False, 'error': 0.007598401439603328},
-                    'const4': {'value': f1270_consts[3], 'fixed': False, 'error': 0.013596613875924366},
-                    'const5': {'value': f1270_consts[4], 'fixed': False, 'error': 0.011084121094273973},
-                    'theta1': {'value': f1270_thetas[0], 'fixed': False, 'error': 0.010607053111143525},
-                    'theta2': {'value': f1270_thetas[1], 'fixed': False, 'error': 0.009620235767829567},
-                    'theta3': {'value': f1270_thetas[2], 'fixed': False, 'error': 0.008259678006502619},
-                    'theta4': {'value': f1270_thetas[3], 'fixed': False, 'error': 0.010731665771685451},
-                    'theta5': {'value': f1270_thetas[4], 'fixed': False, 'error': 0.009363006763018657}
+                    'const1': param(args[13], False, err(13)),
+                    'const2': param(args[14], False, err(14)),
+                    'const3': param(args[15], False, err(15)),
+                    'const4': param(args[16], False, err(16)),
+                    'const5': param(args[17], False, err(17)),
+                    'theta1': param(args[18], False, err(18)),
+                    'theta2': param(args[19], False, err(19)),
+                    'theta3': param(args[20], False, err(20)),
+                    'theta4': param(args[21], False, err(21)),
+                    'theta5': param(args[22], False, err(22))
                 }
             },
             'phif2_1525': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': f2_masses[0], 'range': [1.517, 1.0], 'fixed': False, 'error': 0.0021852818767245097},
-                        'width': {'value': f2_widths[0], 'range': [0.086, 1.0], 'fixed': False, 'error': 0.004480554483528854},
+                        'mass': param(args[23], False, err(23), [1.517, 1.0]),
+                        'width': param(args[26], False, err(26), [0.086, 1.0]),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif2_kk',
-                    'const1': {'value': f2_consts[0][0], 'fixed': False, 'error': 0.002361030920067052},
-                    'const2': {'value': f2_consts[0][1], 'fixed': False, 'error': 0.0022601284491659272},
-                    'const3': {'value': f2_consts[0][2], 'fixed': False, 'error': 0.0018391542634132708},
-                    'const4': {'value': f2_consts[0][3], 'fixed': False, 'error': 0.0034476100080681558},
-                    'const5': {'value': f2_consts[0][4], 'fixed': False, 'error': 0.0024458295985315373},
-                    'theta1': {'value': f2_thetas[0][0], 'fixed': False, 'error': 0.002019182721147269},
-                    'theta2': {'value': f2_thetas[0][1], 'fixed': False, 'error': 0.0014883832205133188},
-                    'theta3': {'value': f2_thetas[0][2], 'fixed': False, 'error': 0.0009832831099109687},
-                    'theta4': {'value': f2_thetas[0][3], 'fixed': False, 'error': 0.0037659511330376417},
-                    'theta5': {'value': f2_thetas[0][4], 'fixed': False, 'error': 0.0016345295470368193}
+                    'const1': param(args[29], False, err(29)),
+                    'const2': param(args[30], False, err(30)),
+                    'const3': param(args[31], False, err(31)),
+                    'const4': param(args[32], False, err(32)),
+                    'const5': param(args[33], False, err(33)),
+                    'theta1': param(args[44], False, err(44)),
+                    'theta2': param(args[45], False, err(45)),
+                    'theta3': param(args[46], False, err(46)),
+                    'theta4': param(args[47], False, err(47)),
+                    'theta5': param(args[48], False, err(48))
                 }
             },
             'phif2_2150': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': f2_masses[1], 'range': [2.157, 1.0], 'fixed': False, 'error': 0.009091748268572158},
-                        'width': {'value': f2_widths[1], 'range': [0.152, 1.0], 'fixed': False, 'error': 0.009061189535661485},
+                        'mass': param(args[24], False, err(24), [2.157, 1.0]),
+                        'width': param(args[27], False, err(27), [0.152, 1.0]),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif2_kk',
-                    'const1': {'value': f2_consts[1][0], 'fixed': False, 'error': 0.004293173395970161},
-                    'const2': {'value': f2_consts[1][1], 'fixed': False, 'error': 0.004579214352357212},
-                    'const3': {'value': f2_consts[1][2], 'fixed': False, 'error': 0.0025923332971131054},
-                    'const4': {'value': f2_consts[1][3], 'fixed': False, 'error': 0.004795045874173534},
-                    'const5': {'value': f2_consts[1][4], 'fixed': False, 'error': 0.004151013688821708},
-                    'theta1': {'value': f2_thetas[1][0], 'fixed': False, 'error': 0.003178818200828604},
-                    'theta2': {'value': f2_thetas[1][1], 'fixed': False, 'error': 0.004094191659114589},
-                    'theta3': {'value': f2_thetas[1][2], 'fixed': False, 'error': 0.0024912191401879813},
-                    'theta4': {'value': f2_thetas[1][3], 'fixed': False, 'error': 0.0032647649405574786},
-                    'theta5': {'value': f2_thetas[1][4], 'fixed': False, 'error': 0.003910253340981285}
+                    'const1': param(args[34], False, err(34)),
+                    'const2': param(args[35], False, err(35)),
+                    'const3': param(args[36], False, err(36)),
+                    'const4': param(args[37], False, err(37)),
+                    'const5': param(args[38], False, err(38)),
+                    'theta1': param(args[49], False, err(49)),
+                    'theta2': param(args[50], False, err(50)),
+                    'theta3': param(args[51], False, err(51)),
+                    'theta4': param(args[52], False, err(52)),
+                    'theta5': param(args[53], False, err(53))
                 }
             },
             'phif2_2340': {
                 'propagators': {
                     'A_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': 1.02, 'fixed': True},
-                        'width': {'value': 0.004, 'fixed': True},
+                        'mass': param(1.02, True),
+                        'width': param(0.004, True),
                         'Sbc': 'phi_kk'
                     },
                     'B_propagator': {
                         'propagator_type': 'BW',
-                        'mass': {'value': f2_masses[2], 'range': [2.345, 0.01], 'fixed': False, 'error': 0.025714265576588485},
-                        'width': {'value': f2_widths[2], 'range': [0.322, 1.0], 'fixed': False, 'error': 0.008869958469754202},
+                        'mass': param(args[25], False, err(25), [2.345, 0.01]),
+                        'width': param(args[28], False, err(28), [0.322, 1.0]),
                         'Sbc': 'f_kk'
                     }
                 },
                 'Amplitude': {
                     'AMP': 'phif2_kk',
-                    'const1': {'value': f2_consts[2][0], 'fixed': False, 'error': 0.0226276447864268},
-                    'const2': {'value': f2_consts[2][1], 'fixed': False, 'error': 0.01462254664631181},
-                    'const3': {'value': f2_consts[2][2], 'fixed': False, 'error': 0.01602693686543622},
-                    'const4': {'value': f2_consts[2][3], 'fixed': False, 'error': 0.015326282883084562},
-                    'const5': {'value': f2_consts[2][4], 'fixed': False, 'error': 0.014428141030373473},
-                    'theta1': {'value': f2_thetas[2][0], 'fixed': False, 'error': 0.01543028339321429},
-                    'theta2': {'value': f2_thetas[2][1], 'fixed': False, 'error': 0.01485537124391433},
-                    'theta3': {'value': f2_thetas[2][2], 'fixed': False, 'error': 0.015675234074991284},
-                    'theta4': {'value': f2_thetas[2][3], 'fixed': False, 'error': 0.01289703559343365},
-                    'theta5': {'value': f2_thetas[2][4], 'fixed': False, 'error': 0.016369611794000778}
+                    'const1': param(args[39], False, err(39)),
+                    'const2': param(args[40], False, err(40)),
+                    'const3': param(args[41], False, err(41)),
+                    'const4': param(args[42], False, err(42)),
+                    'const5': param(args[43], False, err(43)),
+                    'theta1': param(args[54], False, err(54)),
+                    'theta2': param(args[55], False, err(55)),
+                    'theta3': param(args[56], False, err(56)),
+                    'theta4': param(args[57], False, err(57)),
+                    'theta5': param(args[58], False, err(58))
                 }
             }
         }
@@ -493,11 +477,11 @@ def data_likelihood_kk(args):
         np.einsum("mljk->mjk", component_data_phif2_kk_BW_flatte1270) +
         np.einsum("mljk->mjk", component_data_phif2_kk_BW_BW)
     ))
-    frac_f0_flatte = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_flatte980)) / sum_frac)
+    frac_f980_flatte = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_flatte980)) / sum_frac)
     frac_f0_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_BW)) / sum_frac)
-    frac_f2_flatte = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
+    frac_f1270_flatte = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
     frac_f2_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_BW)) / sum_frac)
-    total_frac = frac_f0_flatte + frac_f0_BW + frac_f2_flatte + frac_f2_BW
+    total_frac = frac_f980_flatte + frac_f0_BW + frac_f1270_flatte + frac_f2_BW
     step_function = np.power(total_frac - 1.03, 2.0) * constraint_strength
     total_amplitude = data_phif0_kk_BW_flatte980
     total_amplitude = total_amplitude + data_phif0_kk_BW_BW
@@ -568,8 +552,7 @@ wt_data_kk = jax_data['wt_data_kk']
 
 data_size = len(data_phi_kk)
 
-if __name__  == "__main__":
-    """使用Newton-CG方法和HVP的拟合函数"""
+if __name__ == "__main__":
     logger = setup_logging()
     logger.info("开始HVP优化版PWA拟合（Newton-CG方法）")
 
@@ -622,3 +605,23 @@ if __name__  == "__main__":
     logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
     logger.info(f"优化信息: {result.message}")
     logger.info("="*50)
+
+    logger.info("计算参数误差（Hessian逆矩阵）...")
+    args_size = args_list.shape[0]
+    hessian_matrix = onp.zeros([args_size, args_size])
+    for i in range(args_size):
+        v = onp.zeros(args_size)
+        v[i] = 1.0
+        hessian_matrix[:, i] = onp.array(jit_hvp(result.x, v))
+    ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
+    logger.info(f"误差计算完成")
+
+    os.makedirs("output/fit", exist_ok=True)
+    onp.save("output/fit/fit_result_values.npy", result.x)
+    onp.save("output/fit/fit_result_errors.npy", ferror)
+    logger.info("参数已保存至 output/fit/fit_result_values.npy")
+
+    result_config = build_config(result.x, ferror)
+    with open("output/fit/fit_result_config.json", "w", encoding="utf-8") as f:
+        json.dump(result_config, f, indent=4)
+    logger.info("配置已保存至 output/fit/fit_result_config.json")
