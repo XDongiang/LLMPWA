@@ -275,13 +275,21 @@ class LLMResonanceGenerator:
 
     def _get_weight_key(self, resonance_name: str, ana_result: dict) -> str:
         """Derive the weight.npz key for a resonance from ana_result."""
-        classification = ana_result.get("propagator_classification", {})
-        for prop_key, resonance_list in classification.items():
+        # Use amplitude_classification to find the correct group
+        amplitude_classification = ana_result.get("amplitude_classification", {})
+        for amp_key, resonance_list in amplitude_classification.items():
             if resonance_name in resonance_list:
-                # prop_key is like "BW_flatte980", index is position within group
+                # amp_key is like "phif0_kk_BW_flatte980", index is position within group
                 idx = sorted(resonance_list).index(resonance_name)
-                return f"{resonance_name}_{prop_key}_{idx}"
-        return f"{resonance_name}_0"
+                # The key format is already correct: amp_key itself is the base key
+                return f"{amp_key}_{idx}"
+
+        # Fallback - construct from resonance configuration
+        A_prop = self.config['resonances'][resonance_name]['propagators']['A_propagator']['propagator_type']
+        B_prop = self.config['resonances'][resonance_name]['propagators']['B_propagator']['propagator_type']
+        amp_value = self.config['resonances'][resonance_name]['Amplitude']['AMP']
+        prop_key = f"{A_prop}_{B_prop}"
+        return f"{amp_value}_{prop_key}_0"
 
     def _prompt_draw_plot_resonance(self, resonance_name: str, resonance_info: dict,
                                     weight_key: str) -> str:
