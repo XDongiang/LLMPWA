@@ -4,8 +4,8 @@ You are given a Python code template:
 def load_data():
     data = {{}}
 
-    # Load real data
-    data['data_{{var}}'] = onp.load("data/real_data/{{var}}.npy")
+    # Load MC evaluation sample for fitted-weight histograms
+    data['data_{{var}}'] = onp.load("data/mc_truth/{{var}}.npy")
 
     # Load MC data
     data['mc_{{var}}'] = onp.load("data/mc_truth/{{var}}.npy")
@@ -14,7 +14,7 @@ def load_data():
     data['truth_{{var}}'] = data['mc_{{var}}'][:, 0:150000]
 
     # Extra Sbc data (1D kinematic variables, no normalization needed)
-    data['data_{{extra}}'] = onp.load("data/real_data/{{extra}}.npy")
+    data['data_{{extra}}'] = onp.load("data/mc_truth/{{extra}}.npy")
     data['mc_{{extra}}'] = onp.load("data/mc_truth/{{extra}}.npy")
     data['truth_{{extra}}'] = data['mc_{{extra}}'][0:150000]
 
@@ -45,7 +45,7 @@ Replace {{extra}} with each variable name from the extra_sbc list.
 Rules:
 - For sbc variables: truth slicing is [0:150000], no normalization.
 - For amp variables: truth slicing is [:, 0:150000], normalization required (einsum "jkl,j->jkl").
-- For extra_sbc variables: these are 1D kinematic arrays, truth slicing is [0:150000], NO normalization. Load from data/real_data/ for data, data/mc_truth/ for mc and truth.
+- For extra_sbc variables: these are 1D kinematic arrays, truth slicing is [0:150000], NO normalization. Load from data/mc_truth/ for all data, mc and truth.
 Keep the rest of the code structure exactly the same.
 Output the final Python code string only, without extra explanations. Do not add any #=== or #====== separator comments.
 

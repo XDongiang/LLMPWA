@@ -566,6 +566,8 @@ class LLMResonanceGenerator:
         header = "\n".join([
             "# Auto-generated draw plot script by LLMResonanceGenerator — do not edit manually",
             self.sections.get('draw_plot_imports', ''),
+            self.sections.get('PATH_CONFIG', ''),
+            self.sections.get('LOGGING_CONFIG', ''),
         ])
 
         resonance_fragments = functions['resonance_plot_fragments']

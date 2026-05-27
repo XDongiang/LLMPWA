@@ -1,6 +1,5 @@
 # Auto-generated draw plot script by LLMResonanceGenerator — do not edit manually
-#==============================================================================
-#==============================================================================
+
 import numpy as onp
 import os
 import re
@@ -10,12 +9,20 @@ import pandas as pd
 import ROOT
 from ROOT import TH1D, TCanvas, gStyle, TLegend, TLatex
 
+
 import sys
 foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(foo_path)
 sys.path.append(foo_path)
 
-logger = logging.getLogger("draw")
+
+def setup_logging():
+    """Setup logging configuration"""
+    with open("config/logconfig_plot.json", "r") as config_file:
+        LOGGING_CONFIG = json.load(config_file)
+        logging.config.dictConfig(LOGGING_CONFIG)
+    return logging.getLogger("fit")
+
 
 
 def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
@@ -32,51 +39,46 @@ def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_trut
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif0_kk_BW_flatte980_0"]
+    comp_wt = all_wt["phif0_980_BW_flatte980_0"]
     hist_comp = TH1D("phif0_980_" + var_name, "phif0_980 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif0_kk_BW_flatte980_0"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif0_980_BW_flatte980_0"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif0_980_" + var_name, "phif0_980 " + var_name, 900, 600)
     gStyle.SetOptStat(0)
-
     hist_data.SetMarkerStyle(20)
     hist_data.SetMarkerSize(0.8)
     hist_data.Draw("E1")
-
     hist_fit.SetLineColor(ROOT.kRed)
     hist_fit.SetLineWidth(2)
     hist_fit.Draw("HIST SAME")
-
     hist_comp.SetLineColor(ROOT.kBlue)
     hist_comp.SetLineWidth(2)
     hist_comp.SetLineStyle(2)
     hist_comp.Draw("HIST SAME")
-
     legend = TLegend(0.65, 0.70, 0.92, 0.92)
     legend.AddEntry(hist_data, "Data", "ep")
     legend.AddEntry(hist_fit, "Fit total", "l")
     legend.AddEntry(hist_comp, "phif0_980", "l")
     legend.Draw()
-
     latex = TLatex()
     latex.SetNDC()
     latex.SetTextSize(0.03)
     latex.DrawLatex(0.15, 0.85, "fit fraction: {:.4f}".format(frac))
-
     c.SaveAs("output/pictures/partial_mods_pictures/phif0_980_{}.png".format(var_name))
 
     return frac
 
 def draw_single_resonance_phif0_1710(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
+    """画 phif0_1710 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -89,17 +91,17 @@ def draw_single_resonance_phif0_1710(var_name, data_arr, mc_arr, all_wt, all_tru
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif0_kk_BW_BW_0"]
+    comp_wt = all_wt["phif0_1710_BW_BW_0"]
     hist_comp = TH1D("phif0_1710_" + var_name, "phif0_1710 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif0_kk_BW_BW_0"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif0_1710_BW_BW_0"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif0_1710_" + var_name, "phif0_1710 " + var_name, 900, 600)
@@ -128,7 +130,6 @@ def draw_single_resonance_phif0_1710(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_1270(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
-    """画 phif2_1270 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -141,17 +142,17 @@ def draw_single_resonance_phif2_1270(var_name, data_arr, mc_arr, all_wt, all_tru
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif2_kk_BW_flatte1270_0"]
+    comp_wt = all_wt["phif2_1270_BW_flatte1270_0"]
     hist_comp = TH1D("phif2_1270_" + var_name, "phif2_1270 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif2_kk_BW_flatte1270_0"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif2_1270_BW_flatte1270_0"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif2_1270_" + var_name, "phif2_1270 " + var_name, 900, 600)
@@ -192,17 +193,17 @@ def draw_single_resonance_phif2_1525(var_name, data_arr, mc_arr, all_wt, all_tru
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif2_kk_BW_BW_0"]
+    comp_wt = all_wt["phif2_1525_BW_BW_1"]
     hist_comp = TH1D("phif2_1525_" + var_name, "phif2_1525 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif2_kk_BW_BW_0"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif2_1525_BW_BW_1"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif2_1525_" + var_name, "phif2_1525 " + var_name, 900, 600)
@@ -231,7 +232,6 @@ def draw_single_resonance_phif2_1525(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_2150(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
-    """画 phif2_2150 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -244,17 +244,17 @@ def draw_single_resonance_phif2_2150(var_name, data_arr, mc_arr, all_wt, all_tru
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif2_kk_BW_BW_1"]
+    comp_wt = all_wt["phif2_2150_BW_BW_2"]
     hist_comp = TH1D("phif2_2150_" + var_name, "phif2_2150 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif2_kk_BW_BW_1"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif2_2150_BW_BW_2"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif2_2150_" + var_name, "phif2_2150 " + var_name, 900, 600)
@@ -295,17 +295,17 @@ def draw_single_resonance_phif2_2340(var_name, data_arr, mc_arr, all_wt, all_tru
         hist_data.Fill(data_arr[i])
 
     hist_fit = TH1D("fit_" + var_name, var_name + " fit", 100, min_value, max_value)
-    for i in range(fit_result_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    comp_wt = all_wt["phif2_kk_BW_BW_2"]
+    comp_wt = all_wt["phif2_2340_BW_BW_3"]
     hist_comp = TH1D("phif2_2340_" + var_name, "phif2_2340 partial wave", 100, min_value, max_value)
-    for i in range(comp_wt.shape[0]):
+    for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
-    frac = onp.sum(all_truth_wt["phif2_kk_BW_BW_2"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif2_2340_BW_BW_3"]) / sum_truth_wt
 
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
     c = TCanvas("phif2_2340_" + var_name, "phif2_2340 " + var_name, 900, 600)
@@ -340,11 +340,10 @@ if __name__ == "__main__":
     all_wt = onp.load("output/draw/weight.npz")
     all_truth_wt = onp.load("output/draw/weight_truth.npz")
 
-    data_phi_kk = onp.sqrt(onp.load("data/real_data/phi_kk.npy"))
-    mc_phi_kk = onp.sqrt(onp.load("data/mc_truth/phi_kk.npy"))
     data_f_kk = onp.sqrt(onp.load("data/real_data/f_kk.npy"))
     mc_f_kk = onp.sqrt(onp.load("data/mc_truth/f_kk.npy"))
-
+    data_phi_kk = onp.sqrt(onp.load("data/real_data/phi_kk.npy"))
+    mc_phi_kk = onp.sqrt(onp.load("data/mc_truth/phi_kk.npy"))
     data_b123_kk = onp.sqrt(onp.load("data/real_data/b123_kk.npy"))
     mc_b123_kk = onp.sqrt(onp.load("data/mc_truth/b123_kk.npy"))
     data_b124_kk = onp.sqrt(onp.load("data/real_data/b124_kk.npy"))
@@ -377,7 +376,8 @@ if __name__ == "__main__":
     ]:
         doubled_wt = {key: onp.append(all_wt[key], all_wt[key]) for key in all_wt.files}
         doubled_truth_wt = {key: onp.append(all_truth_wt[key], all_truth_wt[key]) for key in all_truth_wt.files}
-        doubled_mc = onp.append(mc_arr[:all_wt["all_mods_wt"].shape[0]], mc_arr[:all_wt["all_mods_wt"].shape[0]])
+        base_mc_size = all_wt["all_mods_wt"].shape[0]
+        doubled_mc = onp.append(mc_arr[:base_mc_size], mc_arr[:base_mc_size])
         data_size = data_arr.shape[0]
         for mod_name, draw_func in resonance_drawers:
             draw_func(var_name, data_arr, doubled_mc, doubled_wt, doubled_truth_wt, data_size)

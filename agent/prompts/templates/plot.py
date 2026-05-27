@@ -13,13 +13,19 @@ import pandas as pd
 import ROOT
 from ROOT import TH1D, TCanvas, gStyle, TLegend, TLatex
 
+# SECTION: PATH_CONFIG
 import sys
 foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(foo_path)
 sys.path.append(foo_path)
 
-logger = logging.getLogger("draw")
-
+# SECTION: LOGGING_CONFIG
+def setup_logging():
+    """Setup logging configuration"""
+    with open("config/logconfig_plot.json", "r") as config_file:
+        LOGGING_CONFIG = json.load(config_file)
+        logging.config.dictConfig(LOGGING_CONFIG)
+    return logging.getLogger("fit")
 
 # SECTION: draw_plot_resonance_template
 
@@ -44,15 +50,15 @@ def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_trut
         hist_fit.Fill(mc_arr[i], fit_result_wt[i])
     hist_fit.Scale(data_size / sum_wt)
 
-    # phif0_980 分波直方图（键名：phif0_980_BW_flatte980_0）
-    comp_wt = all_wt["phif0_980_BW_flatte980_0"]
+    # phif0_980 分波直方图（键名：phif0_kk_BW_flatte980_0）
+    comp_wt = all_wt["phif0_kk_BW_flatte980_0"]
     hist_comp = TH1D("phif0_980_" + var_name, "phif0_980 partial wave", 100, min_value, max_value)
     for i in range(mc_arr.shape[0]):
         hist_comp.Fill(mc_arr[i], comp_wt[i])
     hist_comp.Scale(data_size / sum_wt)
 
     # fit fraction（用 truth MC 计算）
-    frac = onp.sum(all_truth_wt["phif0_980_BW_flatte980_0"]) / sum_truth_wt
+    frac = onp.sum(all_truth_wt["phif0_kk_BW_flatte980_0"]) / sum_truth_wt
 
     # 画图
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
@@ -120,8 +126,9 @@ if __name__ == "__main__":
         # b.* 变量每个事例有两个组合，权重复制
         doubled_wt = {key: onp.append(all_wt[key], all_wt[key]) for key in all_wt.files}
         doubled_truth_wt = {key: onp.append(all_truth_wt[key], all_truth_wt[key]) for key in all_truth_wt.files}
+        doubled_mc = onp.append(mc_arr[:all_wt["all_mods_wt"].shape[0]], mc_arr[:all_wt["all_mods_wt"].shape[0]])
         data_size = data_arr.shape[0]
-        frac = draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, doubled_wt, doubled_truth_wt, data_size)
+        frac = draw_single_resonance_phif0_980(var_name, data_arr, doubled_mc, doubled_wt, doubled_truth_wt, data_size)
         fit_fraction_coll.append({"mod_name": "phif0_980", "var": var_name, "fraction": frac})
 
     # 输出 fit fraction 表格

@@ -121,11 +121,11 @@ def flatte500(m_, b1, b2, b3, b4, b5, Sbc):
 def load_data():
     data = {}
 
-    # Load real data
-    data['data_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")#onp.load("data/real_data/phi_kk.npy")
-    data['data_f_kk'] = onp.load("data/mc_truth/f_kk.npy")#onp.load("data/real_data/f_kk.npy")
-    data['data_phif0_kk'] = onp.load("data/mc_truth/phif0_kk.npy")#onp.load("data/real_data/phif0_kk.npy")
-    data['data_phif2_kk'] = onp.load("data/mc_truth/phif2_kk.npy")#onp.load("data/real_data/phif2_kk.npy")
+    # Load MC evaluation sample for fitted-weight histograms
+    data['data_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")
+    data['data_f_kk'] = onp.load("data/mc_truth/f_kk.npy")
+    data['data_phif0_kk'] = onp.load("data/mc_truth/phif0_kk.npy")
+    data['data_phif2_kk'] = onp.load("data/mc_truth/phif2_kk.npy")
 
     # Load MC data
     data['mc_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")
@@ -140,10 +140,10 @@ def load_data():
     data['truth_phif2_kk'] = data['mc_phif2_kk'][:, 0:150000]
 
     # Extra Sbc data (1D kinematic variables, no normalization needed)
-    data['data_b123_kk'] = onp.load("data/real_data/b123_kk.npy")
+    data['data_b123_kk'] = onp.load("data/mc_truth/b123_kk.npy")
     data['mc_b123_kk'] = onp.load("data/mc_truth/b123_kk.npy")
     data['truth_b123_kk'] = data['mc_b123_kk'][0:150000]
-    data['data_b124_kk'] = onp.load("data/real_data/b124_kk.npy")
+    data['data_b124_kk'] = onp.load("data/mc_truth/b124_kk.npy")
     data['mc_b124_kk'] = onp.load("data/mc_truth/b124_kk.npy")
     data['truth_b124_kk'] = data['mc_b124_kk'][0:150000]
 
