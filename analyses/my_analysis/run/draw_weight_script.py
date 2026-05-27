@@ -122,10 +122,10 @@ def load_data():
     data = {}
 
     # Load real data
-    data['data_phi_kk'] = onp.load("data/real_data/phi_kk.npy")
-    data['data_f_kk'] = onp.load("data/real_data/f_kk.npy")
-    data['data_phif0_kk'] = onp.load("data/real_data/phif0_kk.npy")
-    data['data_phif2_kk'] = onp.load("data/real_data/phif2_kk.npy")
+    data['data_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")#onp.load("data/real_data/phi_kk.npy")
+    data['data_f_kk'] = onp.load("data/mc_truth/f_kk.npy")#onp.load("data/real_data/f_kk.npy")
+    data['data_phif0_kk'] = onp.load("data/mc_truth/phif0_kk.npy")#onp.load("data/real_data/phif0_kk.npy")
+    data['data_phif2_kk'] = onp.load("data/mc_truth/phif2_kk.npy")#onp.load("data/real_data/phif2_kk.npy")
 
     # Load MC data
     data['mc_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")
