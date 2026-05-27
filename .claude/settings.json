@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/caihao/PWACG/rendered_scripts/**)",
+      "Read(//home/caihao/PWACG/run/**)"
+    ]
+  }
+}

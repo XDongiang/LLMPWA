@@ -239,6 +239,99 @@ def mc_likelihood_kk(args):
 
 
 #==============================================================================
+# SECTION: weight_functions
+#==============================================================================
+def weight_kk(args):
+    params = extract_parameters(args)
+    comp_phif0_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], data_f_kk,
+        data_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+    )
+    comp_phif2_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], data_f_kk,
+        data_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+    )
+    comp_phif2_kk_BW_flatte1270 = component_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], data_f_kk,
+        data_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+    )
+    total_wt = np.sum(dplex_dabs(
+        np.einsum("mljk->mjk", comp_phif0_kk_BW_BW) +
+        np.einsum("mljk->mjk", comp_phif2_kk_BW_BW) +
+        np.einsum("mljk->mjk", comp_phif2_kk_BW_flatte1270)
+    ), axis=1)
+    wt_list = [
+        total_wt,
+        np.einsum("ljk->lj", dplex_dabs(comp_phif0_kk_BW_BW)),
+        np.einsum("ljk->lj", dplex_dabs(comp_phif2_kk_BW_BW)),
+        np.einsum("ljk->lj", dplex_dabs(comp_phif2_kk_BW_flatte1270)),
+    ]
+    return wt_list
+
+def weight_truth_kk(args):
+    params = extract_parameters(args)
+    comp_phif0_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], truth_f_kk,
+        truth_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+    )
+    comp_phif2_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], truth_f_kk,
+        truth_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+    )
+    comp_phif2_kk_BW_flatte1270 = component_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], truth_f_kk,
+        truth_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+    )
+    total_wt = np.sum(dplex_dabs(
+        np.einsum("mljk->mjk", comp_phif0_kk_BW_BW) +
+        np.einsum("mljk->mjk", comp_phif2_kk_BW_BW) +
+        np.einsum("mljk->mjk", comp_phif2_kk_BW_flatte1270)
+    ), axis=1)
+    wt_list = [
+        total_wt,
+        np.einsum("ljk->lj", dplex_dabs(comp_phif0_kk_BW_BW)),
+        np.einsum("ljk->lj", dplex_dabs(comp_phif2_kk_BW_BW)),
+        np.einsum("ljk->lj", dplex_dabs(comp_phif2_kk_BW_flatte1270)),
+    ]
+    return wt_list
+
+def run_weight(args_list, mode="pass"):
+    args = np.array(args_list)
+    jit_weight = jit(weight_kk)
+    jit_weight_truth = jit(weight_truth_kk)
+    if mode == "pass":
+        wt_list = jit_weight(args)
+    elif mode == "truth":
+        wt_list = jit_weight_truth(args)
+    sum_wt = onp.sum(wt_list[0])
+    total_weight = {"all_mods_wt": wt_list[0]}
+    total_fit_frac = 0.0
+    resonance_names = ["phif0_kk_BW_BW", "phif2_kk_BW_BW", "phif2_kk_BW_flatte1270"]
+    for i, name in enumerate(resonance_names):
+        wt = wt_list[i + 1]
+        for j in range(wt.shape[0]):
+            key = f"{name}_{j}"
+            total_weight[key] = wt[j]
+            frac = onp.sum(wt[j]) / sum_wt
+            print(f"{key} frac: {frac}")
+            total_fit_frac += frac
+    total_weight["fit_value"] = onp.array(args_list)
+    total_weight["sum_wt"] = sum_wt
+    print(f"total fit fraction: {total_fit_frac}")
+    os.makedirs("output/draw", exist_ok=True)
+    if mode == "pass":
+        onp.savez("output/draw/weight.npz", **total_weight)
+    elif mode == "truth":
+        onp.savez("output/draw/weight_truth.npz", **total_weight)
+    return total_fit_frac
+
+#==============================================================================
 # SECTION: combined_likelihood_function
 #==============================================================================
 

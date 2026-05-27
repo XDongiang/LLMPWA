@@ -4,7 +4,6 @@
 *.npy
 *.npz*
 *.npy*
-*.txt
 *.out
 setup-claude.sh
 CLAUDE.md

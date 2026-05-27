@@ -210,6 +210,15 @@ class LLMResonanceGenerator:
             likelihood_functions_section=self.sections.get('likelihood_functions', '')
         )
 
+    def _prompt_weight_function(self, parameter_info: dict,
+                                resonance_calculation: list, extract_parameters: str) -> str:
+        return load_prompt("weight_function").format(
+            parameter_info_str=json.dumps(parameter_info["parameter_lists"], indent=4),
+            resonance_calculation="\n\n".join(resonance_calculation),
+            extract_parameters=extract_parameters,
+            weight_functions_section=self.sections.get('weight_functions', '')
+        )
+
     def _prompt_main_section(self, full_code: str) -> str:
         return load_prompt("main_section").format(
             main_section=self.sections.get('main_section', ''),
@@ -321,6 +330,16 @@ class LLMResonanceGenerator:
         )
         time.sleep(1)
 
+        # Stage 6: weight functions
+        functions['weight_function'] = self._generate(
+            self._prompt_weight_function(
+                ana_result, resonance_calculation_fragments, functions['extract_parameters']
+            ),
+            os.path.join(cache_dir, "weight_function_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
         return functions
 
     def assemble_code(self, functions: Dict[str, str]) -> str:
@@ -347,12 +366,15 @@ class LLMResonanceGenerator:
                 + self.sections.get('combined_likelihood_function', '')
             )
 
+        if 'weight_function' in functions:
+            parts.append(functions['weight_function'])
+
         if 'run_load_data' in functions:
             parts.append(functions['run_load_data'])
 
         full_code = "\n\n".join(parts)
 
-        # Stage 6: main entry point (needs full_code as context)
+        # Stage 7: main entry point (needs full_code as context)
         functions['main_section'] = self._generate(
             self._prompt_main_section(full_code),
             os.path.join(cache_dir, "main_section_cache.json"),

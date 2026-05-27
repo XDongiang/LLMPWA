@@ -1,0 +1,30 @@
+### 任务目标
+你的任务是：
+- 理解 function template 中 calculate 和 component 函数的例子，理解其中的矩阵计算的过程。
+- 理解 propagator function 中的函数与 function template late 和 component 的共振态信息。
+- 结合上面的理解，生成该共振态的 calculate 和 component 函数。
+- 保留模板中固定部分的结构、缩进、函数名、逻辑不变。输出结果中只包含 Python 代码字符串，不添加任何额外解释或注释,并且输出时不要使用 Markdown 代码块。
+
+### 注意事项
+1. propagator 中函数调用规则
+    - 判断其所有参数是否为固定值。
+    - 如果是 → 必须使用 direct call。
+    - 如果 Resonance_len_in_Group 为 False → 必须使用 direct call。
+    - 否则 → 使用 vmap。
+2. 注意如果使用 direct 的方式计算，则输出的数组是一维的；如果使用 vmap 的方式计算，则输出的数组是二维的。因此要对应调整后面的计算：
+    - 理解这个计算 propagator_combined = dplex_deinsum("j, ij->ij", A_propagator, B_propagator) 中指标的意义，根据上一步计算的 A_propagator 和 B_propagator 对应调整。
+3. 注意如果该参数即使是固定值也需要传参，例如 mass, width, const, theta。
+
+### 函数模板
+propagator function
+{physics_propagator}
+
+function template:
+{calculate_function_template}
+
+### 输入信息部分
+calculation name: {ana_key}
+Resonance_len_in_Group: {resonance_len_in_group}
+
+Resonance_Info:
+{resonance_info}
