@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-#==============================================================================
+
 # SECTION: draw_plot_imports
-#==============================================================================
-#==============================================================================
+
 import numpy as onp
 import os
 import re
@@ -14,14 +13,16 @@ import pandas as pd
 import ROOT
 from ROOT import TH1D, TCanvas, gStyle, TLegend, TLatex
 
+import sys
+foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(foo_path)
+sys.path.append(foo_path)
+
 logger = logging.getLogger("draw")
 
-#==============================================================================
 
-#==============================================================================
 # SECTION: draw_plot_resonance_template
-#==============================================================================
-#==============================================================================
+
 
 def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
     """画 phif0_980 共振态的 data vs fit 叠加图，返回 fit fraction。"""
@@ -80,12 +81,9 @@ def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_trut
 
     return frac
 
-#==============================================================================
 
-#==============================================================================
 # SECTION: draw_plot_main_template
-#==============================================================================
-#==============================================================================
+
 
 if __name__ == "__main__":
     ROOT.gROOT.SetBatch(True)

@@ -1,6 +1,4 @@
 # Auto-generated draw weight script by LLMResonanceGenerator — do not edit manually
-# Common utility functions
-# ==============================================================================
 import copy
 import json
 import logging
@@ -16,19 +14,13 @@ from jax import device_put, grad, jit, vmap, jvp
 from jax import config
 
 
-# ==============================================================================
 
-# Path configuration
-# ==============================================================================
 import sys
 foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(foo_path)
 sys.path.append(foo_path)
 
-# ==============================================================================
 
-# Logging configuration
-# ==============================================================================
 def setup_logging():
     """Setup logging configuration"""
     with open("config/logconfig_fit.json", "r") as config_file:
@@ -36,40 +28,31 @@ def setup_logging():
         logging.config.dictConfig(LOGGING_CONFIG)
     return logging.getLogger("fit")
 
-# ==============================================================================
 
-# ==============================================================================
-# 复数张量与复数张量的爱因斯坦求和
 def dplex_deinsum(subscript, aa, bb):
     real = np.einsum(subscript, aa[0], bb[0]) - np.einsum(subscript, aa[1], bb[1])
     imag = np.einsum(subscript, aa[0], bb[1]) + np.einsum(subscript, aa[1], bb[0])
     return np.stack([real, imag], axis=0)
 
-# 复数张量与实数张量的爱因斯坦求和
 def dplex_deinsum_ord(subscript, aa, bb):
     real = np.einsum(subscript, aa, bb[0])
     imag = np.einsum(subscript, aa, bb[1])
     return np.stack([real, imag], axis=0)
 
-# 复数张量的模平方
 def dplex_dabs(aa):
     return aa[0]**2 + aa[1]**2 # 因为是纵向叠加所以aa[0]是纵向上第一个数组
 
-# 复数张量转换成dplex数据格式
 def dplex_dtomine(aa):
     return np.stack([np.real(aa), np.imag(aa)], axis=0) # 组合而成的数组 axis=0 的第一个数组为实部，第二个数组为虚部
 
-# 用于将计算得到的张量的实部与虚部组合成dplex的数据格式
 def dplex_dconstruct(aa, bb):
     return np.stack([aa, bb], axis=0) # 纵向叠加数组 第一维为实部，第二维为虚部
 
-# 实数张量与虚数张量的除法
 def dplex_ddivide(a, bb):
     real = a * bb[0] / dplex_dabs(bb)
     imag = -a * bb[1] / dplex_dabs(bb)
     return np.stack([real, imag], axis=0)
 
-# ==============================================================================
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -160,7 +143,6 @@ def load_data():
     data['data_b123_kk'] = onp.load("data/real_data/b123_kk.npy")
     data['mc_b123_kk'] = onp.load("data/mc_truth/b123_kk.npy")
     data['truth_b123_kk'] = data['mc_b123_kk'][0:150000]
-
     data['data_b124_kk'] = onp.load("data/real_data/b124_kk.npy")
     data['mc_b124_kk'] = onp.load("data/mc_truth/b124_kk.npy")
     data['truth_b124_kk'] = data['mc_b124_kk'][0:150000]
@@ -180,7 +162,6 @@ def normalize_data(data):
     data['data_phif0_kk'] = onp.einsum("jkl,j->jkl", data['data_phif0_kk'], regular_phif0_kk)
     data['mc_phif0_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif0_kk'], regular_phif0_kk)
     data['truth_phif0_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif0_kk'], regular_phif0_kk)
-
     data['data_phif2_kk'] = onp.einsum("jkl,j->jkl", data['data_phif2_kk'], regular_phif2_kk)
     data['mc_phif2_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif2_kk'], regular_phif2_kk)
     data['truth_phif2_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif2_kk'], regular_phif2_kk)
@@ -193,11 +174,10 @@ def prepare_data_for_jax(data, device=None):
         jax_data[key] = device_put(np.array(value), device=device)
     return jax_data
 
-#==============================================================================
 def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
@@ -206,13 +186,11 @@ def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, 
 def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
     return result
-
-#==============================================================================
 
 def calculate_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
@@ -236,11 +214,10 @@ def component_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_pa
     result = dplex_deinsum("ljk,lj->ljk", result, propagator_combined)
     return result
 
-#==============================================================================
 def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte1270(B_mass, B_width, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
@@ -249,13 +226,11 @@ def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Ampl
 def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte1270(B_mass, B_width, f_kk)
-    propagator_combined = dplex_deinsum("j,j->j", A_propagator, B_propagator)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
     return result
-
-#==============================================================================
 
 args_list = onp.array([
     0.9794812115574156, 0.10678616326827592, 8.570187550432664,
@@ -304,12 +279,11 @@ def extract_parameters(args):
                                args[34], args[35], args[36], args[37], args[38],
                                args[39], args[40], args[41], args[42], args[43]]).reshape(-1, 5),
         'f2_theta': np.array([args[44], args[45], args[46], args[47], args[48],
-                              args[49], args[50], args[51], args[52], args[53],
-                              args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5)
+                               args[49], args[50], args[51], args[52], args[53],
+                               args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5)
     }
 
 def build_config(args, errors=None):
-    """根据参数列表构建完整配置文件"""
     def err(i):
         return 0.0 if errors is None else errors[i]
 
@@ -592,7 +566,6 @@ data = load_data()
 data = normalize_data(data)
 jax_data = prepare_data_for_jax(data)
 
-# 实验数据
 data_phi_kk = jax_data['data_phi_kk']
 data_f_kk = jax_data['data_f_kk']
 data_phif0_kk = jax_data['data_phif0_kk']
@@ -600,7 +573,6 @@ data_phif2_kk = jax_data['data_phif2_kk']
 data_b123_kk = jax_data['data_b123_kk']
 data_b124_kk = jax_data['data_b124_kk']
 
-# MC数据
 mc_phi_kk = jax_data['mc_phi_kk']
 mc_f_kk = jax_data['mc_f_kk']
 mc_phif0_kk = jax_data['mc_phif0_kk']
@@ -608,7 +580,6 @@ mc_phif2_kk = jax_data['mc_phif2_kk']
 mc_b123_kk = jax_data['mc_b123_kk']
 mc_b124_kk = jax_data['mc_b124_kk']
 
-# Truth数据
 truth_phi_kk = jax_data['truth_phi_kk']
 truth_f_kk = jax_data['truth_f_kk']
 truth_phif0_kk = jax_data['truth_phif0_kk']

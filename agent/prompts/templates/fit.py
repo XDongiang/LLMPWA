@@ -22,6 +22,23 @@ def component_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_pa
     result = dplex_deinsum("ljk,lj->ljk", result, propagator_combined)
     return result
 
+def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
+    return result
+
+def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
+    return result
 # SECTION: likelihood_functions
 def data_likelihood_kk(args):
     params = extract_parameters(args)

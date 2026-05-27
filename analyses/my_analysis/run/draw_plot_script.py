@@ -1,5 +1,6 @@
 # Auto-generated draw plot script by LLMResonanceGenerator — do not edit manually
 #==============================================================================
+#==============================================================================
 import numpy as onp
 import os
 import re
@@ -9,12 +10,16 @@ import pandas as pd
 import ROOT
 from ROOT import TH1D, TCanvas, gStyle, TLegend, TLatex
 
-logger = logging.getLogger("draw")
+import sys
+foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(foo_path)
+sys.path.append(foo_path)
 
-#==============================================================================
+logger = logging.getLogger("draw")
 
 
 def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
+    """画 phif0_980 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -72,7 +77,6 @@ def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_trut
     return frac
 
 def draw_single_resonance_phif0_1710(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
-    """画 phif0_1710 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -124,6 +128,7 @@ def draw_single_resonance_phif0_1710(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_1270(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
+    """画 phif2_1270 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -175,7 +180,6 @@ def draw_single_resonance_phif2_1270(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_1525(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
-    """画 phif2_1525 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -227,6 +231,7 @@ def draw_single_resonance_phif2_1525(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_2150(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
+    """画 phif2_2150 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -278,7 +283,6 @@ def draw_single_resonance_phif2_2150(var_name, data_arr, mc_arr, all_wt, all_tru
     return frac
 
 def draw_single_resonance_phif2_2340(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size):
-    """画 phif2_2340 共振态的 data vs fit 叠加图，返回 fit fraction。"""
     fit_result_wt = all_wt["all_mods_wt"]
     sum_wt = onp.sum(fit_result_wt)
     sum_truth_wt = onp.sum(all_truth_wt["all_mods_wt"])
@@ -357,28 +361,20 @@ if __name__ == "__main__":
 
     fit_fraction_coll = []
 
-    sbc_variables = [
-        ("phi_kk", data_phi_kk, mc_phi_kk),
+    for var_name, data_arr, mc_arr in [
         ("f_kk", data_f_kk, mc_f_kk),
-    ]
-
-    for var_name, data_arr, mc_arr in sbc_variables:
+        ("phi_kk", data_phi_kk, mc_phi_kk),
+    ]:
         data_size = data_arr.shape[0]
         for mod_name, draw_func in resonance_drawers:
             frac = draw_func(var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size)
             if var_name == "f_kk":
-                fit_fraction_coll.append({
-                    "mod_name": mod_name,
-                    "var": var_name,
-                    "fraction": float(frac),
-                })
+                fit_fraction_coll.append({"mod_name": mod_name, "var": var_name, "fraction": float(frac)})
 
-    extra_sbc_variables = [
+    for var_name, data_arr, mc_arr in [
         ("b123_kk", data_b123_kk, mc_b123_kk),
         ("b124_kk", data_b124_kk, mc_b124_kk),
-    ]
-
-    for var_name, data_arr, mc_arr in extra_sbc_variables:
+    ]:
         doubled_wt = {key: onp.append(all_wt[key], all_wt[key]) for key in all_wt.files}
         doubled_truth_wt = {key: onp.append(all_truth_wt[key], all_truth_wt[key]) for key in all_truth_wt.files}
         data_size = data_arr.shape[0]
@@ -388,11 +384,9 @@ if __name__ == "__main__":
     os.makedirs("output/draw", exist_ok=True)
     with open("output/draw/fit_fraction_table.json", "w") as f:
         json.dump(fit_fraction_coll, f, indent=2)
-
     df = pd.DataFrame(fit_fraction_coll)
     with open("output/draw/fit_fraction_table.md", "w") as f:
-        f.write(df.to_markdown(index=False))
+        f.write(df.to_markdown())
     with open("output/draw/fit_fraction_table.latex", "w") as f:
-        f.write(df.to_latex(index=False, escape=False))
-
+        f.write(df.to_latex(escape=False))
     print("画图完成，结果已保存至 output/pictures/partial_mods_pictures/")
