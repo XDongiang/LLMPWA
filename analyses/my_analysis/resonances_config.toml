@@ -162,3 +162,5 @@ theta3 = { value = 0.13756083806604205, fixed = false, error = 0.015675234074991
 theta4 = { value = -0.0033564526519642953, fixed = false, error = 0.01289703559343365 }
 theta5 = { value = 0.06849361819185686, fixed = false, error = 0.016369611794000778 }
 
+[draw]
+extra_sbc = ["b123_kk", "b124_kk"]

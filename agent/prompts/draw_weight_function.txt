@@ -3,13 +3,13 @@
 1. 输入信息中包含共振态信息、函数定义（calculate_xxx 和 component_xxx）、extract_parameters 函数，以及权重函数的例子。仔细理解这些内容。
 2. 理解 component_xxx 函数与 calculate_xxx 函数的区别：component_xxx 保留各共振态分量维度（einsum 末尾为 "ljk,lj->ljk"），用于分别计算每个共振态的强度贡献；calculate_xxx 对分量求和（einsum 末尾为 "ljk,lj->jk"），用于计算总振幅。
 3. 理解权重函数例子中的逻辑：
-   - weight_xxx 函数使用 component_xxx 计算各共振态分量，对相干叠加后取模平方并对 helicity 求和得到 total_wt，同时保留各分量的非相干强度，返回 wt_list。
-   - weight_truth_xxx 函数结构与 weight_xxx 完全相同，但使用 truth_xxx 数据而非 data_xxx 数据。
-   - run_weight 函数调用上述两个函数，按共振态分组提取 fit fraction，保存 .npz 文件。
+   - weight_kk(args) 函数使用 component_xxx 计算各共振态分量，对相干叠加后取模平方并对 helicity 求和得到 total_wt（形状 [events]），同时保留各分量的非相干强度（einsum "ljk->lj"），返回 wt_list = [total_wt, comp_0, comp_1, ...]。
+   - weight_truth_kk(args) 函数结构与 weight_kk 完全相同，但使用 truth_xxx 全局变量而非 data_xxx。
+   - run_weight(args_list, mode="pass") 函数：mode="pass" 时调用 weight_kk，mode="truth" 时调用 weight_truth_kk；按共振态分组提取 fit fraction 并打印；保存结果到 output/draw/weight.npz（pass 模式）或 output/draw/weight_truth.npz（truth 模式）。
 4. 根据输入信息中的共振态类型，生成包含以下三个函数的代码：
    - weight_kk(args)：使用 data_xxx 全局变量
    - weight_truth_kk(args)：使用 truth_xxx 全局变量
-   - run_weight(args_list, mode="pass")：mode="pass" 时调用 weight_kk，mode="truth" 时调用 weight_truth_kk，保存结果到 output/draw/weight.npz 或 output/draw/weight_truth.npz
+   - run_weight(args_list, mode="pass")
 5. 要求返回的内容只包含 python 代码字符串，不包含解释、注释或额外文本，缩进与函数例子一致。
 
 ### 2. 输入信息
@@ -21,4 +21,4 @@
 {extract_parameters}
 
 ### 3. 权重函数例子：
-{weight_functions_section}
+{draw_weight_functions_section}

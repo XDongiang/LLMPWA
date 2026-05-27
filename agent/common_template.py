@@ -239,7 +239,7 @@ def mc_likelihood_kk(args):
 
 
 #==============================================================================
-# SECTION: weight_functions
+# SECTION: draw_weight_functions
 #==============================================================================
 def weight_kk(args):
     params = extract_parameters(args)
@@ -527,3 +527,55 @@ if __name__  == "__main__":
     with open("output/fit/fit_result_config.json", "w", encoding="utf-8") as f:
         json.dump(result_config, f, indent=4)
     logger.info("配置已保存至 output/fit/fit_result_config.json")
+
+#==============================================================================
+# SECTION: draw_load_data_section
+#==============================================================================
+
+data = load_data()
+data = normalize_data(data)
+jax_data = prepare_data_for_jax(data)
+
+# 实验数据
+data_phi_kk = jax_data['data_phi_kk']
+data_f_kk = jax_data['data_f_kk']
+data_phif0_kk = jax_data['data_phif0_kk']
+data_phif2_kk = jax_data['data_phif2_kk']
+data_b123_kk = jax_data['data_b123_kk']
+data_b124_kk = jax_data['data_b124_kk']
+
+# MC数据
+mc_phi_kk = jax_data['mc_phi_kk']
+mc_f_kk = jax_data['mc_f_kk']
+mc_phif0_kk = jax_data['mc_phif0_kk']
+mc_phif2_kk = jax_data['mc_phif2_kk']
+mc_b123_kk = jax_data['mc_b123_kk']
+mc_b124_kk = jax_data['mc_b124_kk']
+
+# Truth数据
+truth_phi_kk = jax_data['truth_phi_kk']
+truth_f_kk = jax_data['truth_f_kk']
+truth_phif0_kk = jax_data['truth_phif0_kk']
+truth_phif2_kk = jax_data['truth_phif2_kk']
+truth_b123_kk = jax_data['truth_b123_kk']
+truth_b124_kk = jax_data['truth_b124_kk']
+
+# 权重数据
+wt_data_kk = jax_data['wt_data_kk']
+
+#==============================================================================
+# SECTION: draw_main_section
+#==============================================================================
+
+if __name__ == "__main__":
+    config.update("jax_enable_x64", True)
+
+    args_list = onp.load("output/fit/fit_result_values.npy")
+
+    print("计算数据权重 (mode=pass)...")
+    run_weight(args_list, mode="pass")
+
+    print("计算 truth MC 权重 (mode=truth)...")
+    run_weight(args_list, mode="truth")
+
+    print("权重计算完成，结果已保存至 output/draw/")

@@ -1,0 +1,14 @@
+### 1. 任务目标
+你的任务是：
+1. 充分理解输入部分的 load_data 函数和函数模板中对 load_data 函数的调用方式。
+2. 根据你对 load_data 函数调用的理解，为输入部分的 load_data 函数生成一个函数调用段落。
+3. 注意：load_data 函数中包含 extra_sbc 变量（如 b123_kk、b124_kk），这些是 1D 运动学变量，需要在全局变量赋值段落中正确展开（data_xxx、mc_xxx、truth_xxx 各一个）。
+4. 要求返回的内容只包含 python 代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。
+
+### 2. 函数模板：
+{draw_load_data_section}
+
+### 3. 输入部分
+
+load_data 函数:
+{load_data}

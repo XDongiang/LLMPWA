@@ -1,0 +1,17 @@
+### 1. 任务目标
+你的任务是：
+1. 理解输入信息中函数的信息，整理出这些函数之间的关联。
+2. 理解函数模板中主程序入口例子中各个函数的调用关系。
+3. 根据你的理解，生成 draw weight 脚本的主程序入口部分。
+4. 主程序入口的逻辑：
+   - 设置 JAX（config.update("jax_enable_x64", True)）
+   - 从 output/fit/fit_result_values.npy 加载拟合结果作为 args_list
+   - 调用 run_weight(args_list, mode="pass") 计算数据权重
+   - 调用 run_weight(args_list, mode="truth") 计算 truth MC 权重
+5. 要求返回的内容只包含 python 代码字符串，不包含解释、代码框、注释或额外文本，缩进和函数组织方式与函数例子一致。
+
+### 2. 函数模板：
+{draw_main_section}
+
+### 3. 输入部分
+{full_code}

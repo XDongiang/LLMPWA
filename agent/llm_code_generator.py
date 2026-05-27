@@ -210,18 +210,47 @@ class LLMResonanceGenerator:
             likelihood_functions_section=self.sections.get('likelihood_functions', '')
         )
 
-    def _prompt_weight_function(self, parameter_info: dict,
-                                resonance_calculation: list, extract_parameters: str) -> str:
-        return load_prompt("weight_function").format(
-            parameter_info_str=json.dumps(parameter_info["parameter_lists"], indent=4),
-            resonance_calculation="\n\n".join(resonance_calculation),
-            extract_parameters=extract_parameters,
-            weight_functions_section=self.sections.get('weight_functions', '')
-        )
-
     def _prompt_main_section(self, full_code: str) -> str:
         return load_prompt("main_section").format(
             main_section=self.sections.get('main_section', ''),
+            full_code=full_code
+        )
+
+    # ------------------------------------------------------------------
+    # Draw prompt builders
+    # ------------------------------------------------------------------
+
+    def get_draw_extra_sbc(self) -> List[str]:
+        return self.config.get('draw', {}).get('extra_sbc', [])
+
+    def _prompt_draw_load_data(self) -> str:
+        sbc, amp = self.get_all_resonance_data()
+        extra_sbc = self.get_draw_extra_sbc()
+        return load_prompt("draw_load_data").format(
+            data_loading_section=self.sections.get('DATA_LOADING', ''),
+            sbc=sbc,
+            amp=amp,
+            extra_sbc=extra_sbc
+        )
+
+    def _prompt_draw_weight_function(self, parameter_info: dict,
+                                     resonance_calculation: list, extract_parameters: str) -> str:
+        return load_prompt("draw_weight_function").format(
+            parameter_info_str=json.dumps(parameter_info["parameter_lists"], indent=4),
+            resonance_calculation="\n\n".join(resonance_calculation),
+            extract_parameters=extract_parameters,
+            draw_weight_functions_section=self.sections.get('draw_weight_functions', '')
+        )
+
+    def _prompt_draw_run_load_data(self, load_data: str) -> str:
+        return load_prompt("draw_run_load_data").format(
+            draw_load_data_section=self.sections.get('draw_load_data_section', ''),
+            load_data=load_data
+        )
+
+    def _prompt_draw_main_section(self, full_code: str) -> str:
+        return load_prompt("draw_main_section").format(
+            draw_main_section=self.sections.get('draw_main_section', ''),
             full_code=full_code
         )
 
@@ -330,16 +359,6 @@ class LLMResonanceGenerator:
         )
         time.sleep(1)
 
-        # Stage 6: weight functions
-        functions['weight_function'] = self._generate(
-            self._prompt_weight_function(
-                ana_result, resonance_calculation_fragments, functions['extract_parameters']
-            ),
-            os.path.join(cache_dir, "weight_function_cache.json"),
-            check=False
-        )
-        time.sleep(1)
-
         return functions
 
     def assemble_code(self, functions: Dict[str, str]) -> str:
@@ -365,9 +384,6 @@ class LLMResonanceGenerator:
                 functions['likelihood_function'] + "\n\n"
                 + self.sections.get('combined_likelihood_function', '')
             )
-
-        if 'weight_function' in functions:
-            parts.append(functions['weight_function'])
 
         if 'run_load_data' in functions:
             parts.append(functions['run_load_data'])
@@ -395,6 +411,109 @@ class LLMResonanceGenerator:
         print(f"Script saved: {output_path}")
         return output_path
 
+    # ------------------------------------------------------------------
+    # Draw generation pipeline
+    # ------------------------------------------------------------------
+
+    def generate_draw_functions(self) -> Dict[str, str]:
+        """Run the draw weight generation pipeline."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        functions = {}
+
+        # Stage 1: analyse TOML config (reuse fit cache)
+        ana_result_raw = self._generate(
+            self._prompt_analysis_toml_config(),
+            os.path.join(cache_dir, "ana_cache.json"),
+            check=False
+        )
+        ana_result = json.loads(ana_result_raw)
+        print("Analysis result:", ana_result)
+        time.sleep(1)
+
+        # Stage 2: draw data loading (includes extra_sbc)
+        functions['draw_load_data'] = self._generate(
+            self._prompt_draw_load_data(),
+            os.path.join(cache_dir, "draw_load_data_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 3: resonance calculate/component functions (reuse fit cache)
+        resonance_calculation_fragments = []
+        for ana_key, ana_value in ana_result["propagator_classification"].items():
+            ana_value = sorted(ana_value)
+            fragment = self._generate(
+                self._prompt_calculate_function(ana_key, ana_value, ana_value[0]),
+                os.path.join(cache_dir, f"resonance_calculation_{ana_key}.json"),
+                check=True
+            )
+            resonance_calculation_fragments.append(fragment)
+        functions['resonance_calculation'] = "\n\n".join(resonance_calculation_fragments)
+        time.sleep(1)
+
+        # Stage 4: extract_parameters (reuse fit cache)
+        functions['extract_parameters'] = self._generate(
+            self._prompt_extract_parameters(ana_result),
+            os.path.join(cache_dir, "extract_parameters_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 5: draw weight functions
+        functions['draw_weight_function'] = self._generate(
+            self._prompt_draw_weight_function(
+                ana_result, resonance_calculation_fragments, functions['extract_parameters']
+            ),
+            os.path.join(cache_dir, "draw_weight_function_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 6: draw run_load_data
+        functions['draw_run_load_data'] = self._generate(
+            self._prompt_draw_run_load_data(functions['draw_load_data']),
+            os.path.join(cache_dir, "draw_run_load_data_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        return functions
+
+    def assemble_draw_code(self, functions: Dict[str, str]) -> str:
+        """Assemble draw weight script from fragments."""
+        cache_dir = os.path.join(self.workdir, "cache")
+
+        header = "\n".join([
+            "# Auto-generated draw weight script by LLMResonanceGenerator — do not edit manually",
+            self.sections.get('COMMON_UTILITIES', ''),
+            self.sections.get('PATH_CONFIG', ''),
+            self.sections.get('LOGGING_CONFIG', ''),
+            self.sections.get('DPLEX_FUNCTIONS', ''),
+            self.sections.get('PHYSICS_FUNCTIONS', ''),
+        ])
+
+        parts = [header]
+        for key in ('draw_load_data', 'resonance_calculation', 'extract_parameters',
+                    'draw_weight_function'):
+            if key in functions:
+                parts.append(functions[key])
+
+        if 'draw_run_load_data' in functions:
+            parts.append(functions['draw_run_load_data'])
+
+        full_code = "\n\n".join(parts)
+
+        # Stage 7: draw main section (needs full_code as context)
+        functions['draw_main_section'] = self._generate(
+            self._prompt_draw_main_section(full_code),
+            os.path.join(cache_dir, "draw_main_section_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        full_code += "\n\n" + functions['draw_main_section']
+        return full_code
+
 
 def main():
     parser = argparse.ArgumentParser(description="LLM-driven PWA resonance code generator")
@@ -406,7 +525,9 @@ def main():
     parser.add_argument("--model-check", default=os.getenv('EASYTRANS_MODEL_CHECK',
                                                             os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')))
     parser.add_argument("--output", default=None,
-                        help="Output script path (default: workdir/run/generated_script.py)")
+                        help="Output script path")
+    parser.add_argument("--mode", default="fit", choices=["fit", "draw"],
+                        help="Generation mode: 'fit' for fit script, 'draw' for draw weight script")
     args = parser.parse_args()
 
     generator = LLMResonanceGenerator(
@@ -417,9 +538,16 @@ def main():
     )
     generator.print_config_summary()
 
-    functions = generator.generate_functions()
-    full_code = generator.assemble_code(functions)
-    generator.save_code(full_code, output_path=args.output)
+    if args.mode == "fit":
+        functions = generator.generate_functions()
+        full_code = generator.assemble_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "generated_script.py")
+        generator.save_code(full_code, output_path=output_path)
+    elif args.mode == "draw":
+        functions = generator.generate_draw_functions()
+        full_code = generator.assemble_draw_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "draw_weight_script.py")
+        generator.save_code(full_code, output_path=output_path)
 
 
 if __name__ == "__main__":
