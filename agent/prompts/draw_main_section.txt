@@ -8,7 +8,7 @@
    - 从 output/fit/fit_result_values.npy 加载拟合结果作为 args_list
    - 调用 run_weight(args_list, mode="pass") 计算数据权重
    - 调用 run_weight(args_list, mode="truth") 计算 truth MC 权重
-5. 要求返回的内容只包含 python 代码字符串，不包含解释、代码框、注释或额外文本，缩进和函数组织方式与函数例子一致。
+5. 要求返回的内容只包含 python 代码字符串，不包含解释、代码框、注释或额外文本，缩进和函数组织方式与函数例子一致。不要添加任何 #=== 或 #====== 形式的分隔符注释。
 
 ### 2. 函数模板：
 {draw_main_section}

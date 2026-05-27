@@ -1,0 +1,29 @@
+### 1. 任务目标
+你的任务是生成 draw_plot_script.py 的 __main__ 入口，整合所有共振态的画图函数。
+
+1. 理解输入的所有 draw_single_resonance_xxx 函数的签名和功能。
+2. 理解函数模板中 __main__ 入口的结构：
+   - ROOT.gROOT.SetBatch(True)
+   - 加载 weight.npz 和 weight_truth.npz
+   - 用 onp.sqrt 加载各运动学变量的 .npy 文件（sbc 变量和 extra_sbc 变量）
+   - 遍历 sbc 变量：对每个变量调用所有 draw_single_resonance_xxx 函数
+   - 遍历 extra_sbc 变量（b.* 开头）：先对 all_wt 和 all_truth_wt 中的每个键做 onp.append(wt, wt) 复制，再调用所有画图函数
+   - 收集所有 fit fraction，每个共振态只记录一次（取 f_kk 变量的结果）
+   - 输出 fit fraction 表格到 output/draw/fit_fraction_table.json、.md、.latex
+3. 注意：
+   - sbc 变量从 data/real_data/ 和 data/mc_truth/ 加载
+   - extra_sbc 变量同样从 data/real_data/ 和 data/mc_truth/ 加载
+   - fit fraction 只用第一个 sbc 变量（通常是 f_kk）的结果记录，避免重复
+4. 要求返回的内容只包含 python 代码字符串，不包含解释、代码框、注释或额外文本。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+
+### 2. 函数模板：
+{draw_plot_main_template}
+
+### 3. 输入信息
+
+所有画图函数：
+{resonance_fragments}
+
+sbc 变量列表（需要加载 data 和 mc）：{sbc_list}
+
+extra_sbc 变量列表（需要加载 data 和 mc，且权重需要复制）：{extra_sbc_list}

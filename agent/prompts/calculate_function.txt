@@ -3,7 +3,7 @@
 - 理解 function template 中 calculate 和 component 函数的例子，理解其中的矩阵计算的过程。
 - 理解 propagator function 中的函数与 function template late 和 component 的共振态信息。
 - 结合上面的理解，生成该共振态的 calculate 和 component 函数。
-- 保留模板中固定部分的结构、缩进、函数名、逻辑不变。输出结果中只包含 Python 代码字符串，不添加任何额外解释或注释,并且输出时不要使用 Markdown 代码块。
+- 保留模板中固定部分的结构、缩进、函数名、逻辑不变。输出结果中只包含 Python 代码字符串，不添加任何额外解释或注释,并且输出时不要使用 Markdown 代码块。不要添加任何 #=== 或 #====== 形式的分隔符注释。
 
 ### 注意事项
 1. propagator 中函数调用规则

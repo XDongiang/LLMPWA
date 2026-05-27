@@ -45,7 +45,7 @@ Replace {{var}} with each variable name from the given list.
 For variables Sbc, the truth slicing is [0:150000], variables amp the truth slicing is [:, 0:150000].
 For normalization, use "regular_{{var}}" as the normalization factor name and only amp need normalization.
 Keep the rest of the code structure exactly the same.
-Output the final Python code string only, without extra explanations.
+Output the final Python code string only, without extra explanations. Do not add any #=== or #====== separator comments.
 
 ## Variable list:
 sbc = {sbc}

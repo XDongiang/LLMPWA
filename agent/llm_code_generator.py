@@ -22,6 +22,14 @@ sys.path.append(foo_path)
 from agent.easytrans_client import EasyTransClient, EasyTransError
 
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
+TEMPLATES_DIR = os.path.join(PROMPTS_DIR, "templates")
+
+# Which template files each mode needs
+_MODE_TEMPLATES = {
+    "fit":  ["shared", "fit"],
+    "draw": ["shared", "fit", "draw"],
+    "plot": ["plot"],
+}
 
 
 def load_prompt(name: str) -> str:
@@ -31,11 +39,7 @@ def load_prompt(name: str) -> str:
         return f.read()
 
 
-def parse_template_sections(file_path=None):
-    """Parse # SECTION: blocks from a Python template file."""
-    if file_path is None:
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "common_template.py")
-
+def _parse_sections_from_file(file_path: str) -> dict:
     sections = {}
     current_section = None
     section_content = []
@@ -58,6 +62,15 @@ def parse_template_sections(file_path=None):
     return sections
 
 
+def parse_template_sections(mode: str = "fit") -> dict:
+    """Load and merge sections for the given mode from prompts/templates/."""
+    sections = {}
+    for name in _MODE_TEMPLATES.get(mode, ["shared", "fit"]):
+        path = os.path.join(TEMPLATES_DIR, f"{name}.py")
+        sections.update(_parse_sections_from_file(path))
+    return sections
+
+
 def check_directory_structure(workdir: str):
     for subdir in ["run", "cache", "results", "data"]:
         path = os.path.join(workdir, subdir)
@@ -70,8 +83,10 @@ class LLMResonanceGenerator:
     """LLM-driven PWA resonance code generator (generation only, no execution)."""
 
     def __init__(self, workdir: str = ".", config_path: str = None,
-                 model: Optional[str] = None, model_check: Optional[str] = None):
+                 model: Optional[str] = None, model_check: Optional[str] = None,
+                 mode: str = "fit"):
         self.workdir = os.path.abspath(workdir)
+        self.mode = mode
         check_directory_structure(self.workdir)
 
         self.model = model or os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')
@@ -83,7 +98,7 @@ class LLMResonanceGenerator:
         self.config_path = config_path or os.path.join(self.workdir, "resonances_config.toml")
         self.config = self._load_config()
 
-        self.sections = parse_template_sections()
+        self.sections = parse_template_sections(mode=self.mode)
 
         physics_file = os.path.join(self.workdir, "physics_functions.py")
         if os.path.exists(physics_file):
@@ -91,7 +106,7 @@ class LLMResonanceGenerator:
                 self.sections['PHYSICS_FUNCTIONS'] = f.read()
             print(f"Loaded physics functions: {physics_file}")
         else:
-            print(f"Warning: {physics_file} not found, using default from common_template.py")
+            print(f"Warning: {physics_file} not found, using default from prompts/templates/shared.py")
 
     # ------------------------------------------------------------------
     # Config helpers
@@ -252,6 +267,38 @@ class LLMResonanceGenerator:
         return load_prompt("draw_main_section").format(
             draw_main_section=self.sections.get('draw_main_section', ''),
             full_code=full_code
+        )
+
+    # ------------------------------------------------------------------
+    # Plot prompt builders
+    # ------------------------------------------------------------------
+
+    def _get_weight_key(self, resonance_name: str, ana_result: dict) -> str:
+        """Derive the weight.npz key for a resonance from ana_result."""
+        classification = ana_result.get("propagator_classification", {})
+        for prop_key, resonance_list in classification.items():
+            if resonance_name in resonance_list:
+                # prop_key is like "BW_flatte980", index is position within group
+                idx = sorted(resonance_list).index(resonance_name)
+                return f"{resonance_name}_{prop_key}_{idx}"
+        return f"{resonance_name}_0"
+
+    def _prompt_draw_plot_resonance(self, resonance_name: str, resonance_info: dict,
+                                    weight_key: str) -> str:
+        return load_prompt("draw_plot_resonance").format(
+            resonance_name=resonance_name,
+            resonance_info=json.dumps(resonance_info, indent=4),
+            weight_key=weight_key,
+            draw_plot_resonance_template=self.sections.get('draw_plot_resonance_template', '')
+        )
+
+    def _prompt_draw_plot_main(self, resonance_fragments: list, sbc: list,
+                               extra_sbc: list) -> str:
+        return load_prompt("draw_plot_main").format(
+            resonance_fragments="\n\n".join(resonance_fragments),
+            sbc_list=sbc,
+            extra_sbc_list=extra_sbc,
+            draw_plot_main_template=self.sections.get('draw_plot_main_template', '')
         )
 
     # ------------------------------------------------------------------
@@ -479,6 +526,62 @@ class LLMResonanceGenerator:
 
         return functions
 
+    def generate_plot_functions(self) -> Dict[str, Any]:
+        """Run the draw plot generation pipeline. Returns a dict with resonance_plot_fragments list."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        functions: Dict[str, Any] = {}
+
+        # Stage 1: analyse TOML config (reuse fit cache)
+        ana_result_raw = self._generate(
+            self._prompt_analysis_toml_config(),
+            os.path.join(cache_dir, "ana_cache.json"),
+            check=False
+        )
+        ana_result = json.loads(ana_result_raw)
+        print("Analysis result:", ana_result)
+        time.sleep(1)
+
+        # Stage 2: one LLM call per resonance
+        resonance_fragments = []
+        for resonance_name, resonance_info in self.config.get('resonances', {}).items():
+            weight_key = self._get_weight_key(resonance_name, ana_result)
+            print(f"Generating plot function for {resonance_name} (key: {weight_key})")
+            fragment = self._generate(
+                self._prompt_draw_plot_resonance(resonance_name, resonance_info, weight_key),
+                os.path.join(cache_dir, f"draw_plot_{resonance_name}_cache.json"),
+                check=False
+            )
+            resonance_fragments.append(fragment)
+            time.sleep(1)
+
+        functions['resonance_plot_fragments'] = resonance_fragments
+        return functions
+
+    def assemble_plot_code(self, functions: Dict[str, Any]) -> str:
+        """Assemble draw plot script from per-resonance fragments."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        sbc, _ = self.get_all_resonance_data()
+        extra_sbc = self.get_draw_extra_sbc()
+
+        header = "\n".join([
+            "# Auto-generated draw plot script by LLMResonanceGenerator — do not edit manually",
+            self.sections.get('draw_plot_imports', ''),
+        ])
+
+        resonance_fragments = functions['resonance_plot_fragments']
+        parts = [header] + resonance_fragments
+        full_code = "\n\n".join(parts)
+
+        # Stage 3: main entry point integrating all plot functions
+        main_code = self._generate(
+            self._prompt_draw_plot_main(resonance_fragments, sbc, extra_sbc),
+            os.path.join(cache_dir, "draw_plot_main_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        return full_code + "\n\n" + main_code
+
     def assemble_draw_code(self, functions: Dict[str, str]) -> str:
         """Assemble draw weight script from fragments."""
         cache_dir = os.path.join(self.workdir, "cache")
@@ -526,8 +629,8 @@ def main():
                                                             os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')))
     parser.add_argument("--output", default=None,
                         help="Output script path")
-    parser.add_argument("--mode", default="fit", choices=["fit", "draw"],
-                        help="Generation mode: 'fit' for fit script, 'draw' for draw weight script")
+    parser.add_argument("--mode", default="fit", choices=["fit", "draw", "plot"],
+                        help="Generation mode: 'fit' for fit script, 'draw' for draw weight script, 'plot' for draw plot script")
     args = parser.parse_args()
 
     generator = LLMResonanceGenerator(
@@ -535,6 +638,7 @@ def main():
         config_path=args.config,
         model=args.model,
         model_check=args.model_check,
+        mode=args.mode,
     )
     generator.print_config_summary()
 
@@ -547,6 +651,11 @@ def main():
         functions = generator.generate_draw_functions()
         full_code = generator.assemble_draw_code(functions)
         output_path = args.output or os.path.join(args.workdir, "run", "draw_weight_script.py")
+        generator.save_code(full_code, output_path=output_path)
+    elif args.mode == "plot":
+        functions = generator.generate_plot_functions()
+        full_code = generator.assemble_plot_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "draw_plot_script.py")
         generator.save_code(full_code, output_path=output_path)
 
 

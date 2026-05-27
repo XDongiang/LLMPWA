@@ -47,7 +47,7 @@ Rules:
 - For amp variables: truth slicing is [:, 0:150000], normalization required (einsum "jkl,j->jkl").
 - For extra_sbc variables: these are 1D kinematic arrays, truth slicing is [0:150000], NO normalization. Load from data/real_data/ for data, data/mc_truth/ for mc and truth.
 Keep the rest of the code structure exactly the same.
-Output the final Python code string only, without extra explanations.
+Output the final Python code string only, without extra explanations. Do not add any #=== or #====== separator comments.
 
 ## Variable list:
 sbc = {sbc}
