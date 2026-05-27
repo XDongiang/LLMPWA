@@ -432,9 +432,6 @@ truth_f_kk = jax_data['truth_f_kk']
 truth_phif0_kk = jax_data['truth_phif0_kk']
 truth_phif2_kk = jax_data['truth_phif2_kk']
 
-# 权重数据
-wt_data_kk = jax_data['wt_data_kk']
-
 # 数据大小（用于似然函数计算）
 data_size = len(data_phi_kk)
 
@@ -559,9 +556,6 @@ truth_phif0_kk = jax_data['truth_phif0_kk']
 truth_phif2_kk = jax_data['truth_phif2_kk']
 truth_b123_kk = jax_data['truth_b123_kk']
 truth_b124_kk = jax_data['truth_b124_kk']
-
-# 权重数据
-wt_data_kk = jax_data['wt_data_kk']
 
 #==============================================================================
 # SECTION: draw_main_section

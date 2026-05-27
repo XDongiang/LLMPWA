@@ -165,12 +165,6 @@ def load_data():
     data['mc_b124_kk'] = onp.load("data/mc_truth/b124_kk.npy")
     data['truth_b124_kk'] = data['mc_b124_kk'][0:150000]
 
-    # Weight data
-    try:
-        data['wt_data_kk'] = onp.load("data/weight/weight_kk.npy")
-    except FileNotFoundError:
-        data['wt_data_kk'] = onp.ones_like(data['data_phi_kk'])
-
     return data
 
 def normalize_data(data):
@@ -178,7 +172,6 @@ def normalize_data(data):
     regular_phif0_kk = 1. / onp.average(
         onp.sqrt(onp.sum(onp.asarray(data['mc_phif0_kk'])**2, axis=2)), axis=1
     )
-
     regular_phif2_kk = 1. / onp.average(
         onp.sqrt(onp.sum(onp.asarray(data['mc_phif2_kk'])**2, axis=2)), axis=1
     )
@@ -622,9 +615,6 @@ truth_phif0_kk = jax_data['truth_phif0_kk']
 truth_phif2_kk = jax_data['truth_phif2_kk']
 truth_b123_kk = jax_data['truth_b123_kk']
 truth_b124_kk = jax_data['truth_b124_kk']
-
-# 权重数据
-wt_data_kk = jax_data['wt_data_kk']
 
 if __name__ == "__main__":
     config.update("jax_enable_x64", True)

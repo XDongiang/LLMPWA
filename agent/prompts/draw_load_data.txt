@@ -18,12 +18,6 @@ def load_data():
     data['mc_{{extra}}'] = onp.load("data/mc_truth/{{extra}}.npy")
     data['truth_{{extra}}'] = data['mc_{{extra}}'][0:150000]
 
-    # Weight data
-    try:
-        data['wt_data_kk'] = onp.load("data/weight/weight_kk.npy")
-    except FileNotFoundError:
-        data['wt_data_kk'] = onp.ones_like(data['data_phi_kk'])
-
     return data
 
 def normalize_data(data):
