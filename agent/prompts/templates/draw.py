@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# SECTION: LOGGING_CONFIG
+def setup_logging():
+    """Setup logging configuration"""
+    with open("config/logconfig_fit.json", "r") as config_file:
+        LOGGING_CONFIG = json.load(config_file)
+        logging.config.dictConfig(LOGGING_CONFIG)
+    return logging.getLogger("fit")
+
 
 # SECTION: draw_weight_functions
 
@@ -130,16 +138,17 @@ truth_b124_kk = jax_data['truth_b124_kk']
 # SECTION: draw_main_section
 
 if __name__ == "__main__":
+    logger = setup_logging()
     config.update("jax_enable_x64", True)
 
     args_list = onp.load("output/fit/fit_result_values.npy")
 
-    print("计算数据权重 (mode=pass)...")
+    logger.info("计算数据权重 (mode=pass)...")
     run_weight(args_list, mode="pass")
 
-    print("计算 truth MC 权重 (mode=truth)...")
+    logger.info("计算 truth MC 权重 (mode=truth)...")
     run_weight(args_list, mode="truth")
 
-    print("权重计算完成，结果已保存至 output/draw/")
+    logger.info("权重计算完成，结果已保存至 output/draw/")
 
 #==============================================================================

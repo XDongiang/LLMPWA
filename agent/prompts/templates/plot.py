@@ -93,6 +93,7 @@ def draw_single_resonance_phif0_980(var_name, data_arr, mc_arr, all_wt, all_trut
 
 if __name__ == "__main__":
     ROOT.gROOT.SetBatch(True)
+    logger = setup_logging()
     os.makedirs("output/pictures/partial_mods_pictures", exist_ok=True)
 
     # 加载权重文件
@@ -140,4 +141,4 @@ if __name__ == "__main__":
         f.write(df.to_markdown())
     with open("output/draw/fit_fraction_table.latex", "w") as f:
         f.write(df.to_latex(escape=False))
-    print("画图完成，结果已保存至 output/pictures/partial_mods_pictures/")
+    logger.info("画图完成，结果已保存至 output/pictures/partial_mods_pictures/")

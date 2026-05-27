@@ -21,13 +21,6 @@ foo_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(foo_path)
 sys.path.append(foo_path)
 
-# SECTION: LOGGING_CONFIG
-def setup_logging():
-    """Setup logging configuration"""
-    with open("config/logconfig_fit.json", "r") as config_file:
-        LOGGING_CONFIG = json.load(config_file)
-        logging.config.dictConfig(LOGGING_CONFIG)
-    return logging.getLogger("fit")
 
 # SECTION: DPLEX_FUNCTIONS
 def dplex_deinsum(subscript, aa, bb):

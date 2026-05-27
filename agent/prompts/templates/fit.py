@@ -1,3 +1,11 @@
+# SECTION: LOGGING_CONFIG
+def setup_logging():
+    """Setup logging configuration"""
+    with open("config/logconfig_fit.json", "r") as config_file:
+        LOGGING_CONFIG = json.load(config_file)
+        logging.config.dictConfig(LOGGING_CONFIG)
+    return logging.getLogger("fit")
+
 
 # SECTION: calculate_functions
 def calculate_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
