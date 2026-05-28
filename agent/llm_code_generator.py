@@ -130,26 +130,38 @@ class LLMResonanceGenerator:
         return list(self.config.get('resonances', {}).keys())
 
     def get_all_resonance_data(self):
-        sbc_list = [
-            prop["Sbc"]
-            for resonance in self.config["resonances"].values()
-            for prop in resonance.get("propagators", {}).values()
-            if "Sbc" in prop
-        ]
-        amp_list = [
-            resonance["Amplitude"]["AMP"]
-            for resonance in self.config["resonances"].values()
-            if "AMP" in resonance.get("Amplitude", {})
-        ]
+        sbc_list = []
+        amp_list = []
+        for resonance in self.config["resonances"].values():
+            # propagator-level Sbc (A_propagator always has it; B_propagator has it for non-shared)
+            for prop in resonance.get("propagators", {}).values():
+                if "Sbc" in prop:
+                    sbc_list.append(prop["Sbc"])
+
+            if resonance.get("kind") == "shared_state":
+                # shared_state: AMP and B_Sbc live in each amplitudes[] entry
+                for amp_entry in resonance.get("amplitudes", []):
+                    if "AMP" in amp_entry:
+                        amp_list.append(amp_entry["AMP"])
+                    if "B_Sbc" in amp_entry:
+                        sbc_list.append(amp_entry["B_Sbc"])
+            else:
+                if "AMP" in resonance.get("Amplitude", {}):
+                    amp_list.append(resonance["Amplitude"]["AMP"])
+
         return list(dict.fromkeys(sbc_list)), list(dict.fromkeys(amp_list))
 
     def print_config_summary(self):
         print("Config summary:")
         print("=" * 40)
         for name, config in self.config.get('resonances', {}).items():
-            print(f"  {name}")
+            kind = config.get('kind', 'normal')
+            print(f"  {name} [{kind}]")
             for prop_name, prop_config in config.get('propagators', {}).items():
                 print(f"    - {prop_name}: {prop_config.get('propagator_type', 'unknown')}")
+            if kind == "shared_state":
+                for amp_entry in config.get('amplitudes', []):
+                    print(f"    - amplitude: {amp_entry.get('name')} AMP={amp_entry.get('AMP')} B_Sbc={amp_entry.get('B_Sbc')}")
 
     # ------------------------------------------------------------------
     # Cache helpers
@@ -285,9 +297,13 @@ class LLMResonanceGenerator:
                 return f"{amp_key}_{idx}"
 
         # Fallback - construct from resonance configuration
-        A_prop = self.config['resonances'][resonance_name]['propagators']['A_propagator']['propagator_type']
-        B_prop = self.config['resonances'][resonance_name]['propagators']['B_propagator']['propagator_type']
-        amp_value = self.config['resonances'][resonance_name]['Amplitude']['AMP']
+        res = self.config['resonances'][resonance_name]
+        A_prop = res['propagators']['A_propagator']['propagator_type']
+        B_prop = res['propagators']['B_propagator']['propagator_type']
+        if res.get('kind') == 'shared_state':
+            amp_value = res['amplitudes'][0]['AMP']
+        else:
+            amp_value = res['Amplitude']['AMP']
         prop_key = f"{A_prop}_{B_prop}"
         return f"{amp_value}_{prop_key}_0"
 
