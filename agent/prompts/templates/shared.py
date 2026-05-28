@@ -5,6 +5,8 @@ import json
 import logging
 import logging.config
 import os
+# must set before importing jax
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 import time
 import numpy as onp
 from functools import partial
