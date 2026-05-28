@@ -162,5 +162,166 @@ theta3 = { value = 0.13756083806604205, fixed = false, error = 0.015675234074991
 theta4 = { value = -0.0033564526519642953, fixed = false, error = 0.01289703559343365 }
 theta5 = { value = 0.06849361819185686, fixed = false, error = 0.016369611794000778 }
 
+# phif0(2470) resonance configuration
+[resonances.phif0_2470.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.phif0_2470.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.57497529295397, range = [2.47, 0.007], fixed = false, error = 0.00489289053639705 }
+width = { value = 0.15761784400243628, range = [0.075, 0.011], fixed = false, error = 0.008657054415984383 }
+Sbc = "f_kk"
+
+[resonances.phif0_2470.Amplitude]
+AMP = "phif0_kk"
+
+const1 = { value = -0.345074426966773, fixed = false, error = 0.01955694586578195 }
+const2 = { value = -0.15428119408751656, fixed = false, error = 0.014870979855746012 }
+
+theta1 = { value = 0.2290031973516395, fixed = false, error = 0.010330891827371173 }
+theta2 = { value = -0.13412740539296167, fixed = false, error = 0.01384041134802183 }
+
+
+# K*(2100) right resonance configuration
+[resonances.K2100_r.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K2100_r.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.0945745764239794, range = [2.1, 10.0], fixed = false, error = 0.010360304234649145 }
+width = { value = 0.1111549213189184, range = [0.1, 10.0], fixed = false, error = 0.007251719477040147 }
+Sbc = "kst2_124_kk"
+
+[resonances.K2100_r.Amplitude]
+AMP = "u_kst2_r_kk"
+
+const1 = { value = 0.00668002974985798, fixed = false, error = 0.000931092372072052 }
+const2 = { value = 0.004965565274392332, fixed = false, error = 0.0 }
+
+theta1 = { value = -0.014345480981877965, fixed = false, error = 0.001326594094840864 }
+theta2 = { value = -0.004182231968927211, fixed = false, error = 0.0016785526570292837 }
+
+
+# K*(2100) left resonance configuration
+[resonances.K2100.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K2100.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.0945745764239794, range = [2.1, 10.0], fixed = false, error = 0.010360304234649145 }
+width = { value = 0.1111549213189184, range = [0.1, 10.0], fixed = false, error = 0.007251719477040147 }
+Sbc = "kst2_123_kk"
+
+[resonances.K2100_l.Amplitude]
+AMP = "u_kst2_l_kk"
+
+const1 = { value = 0.00668002974985798, fixed = false, error = 0.000931092372072052 }
+const2 = { value = 0.004965565274392332, fixed = false, error = 0.0 }
+
+theta1 = { value = -0.014345480981877965, fixed = false, error = 0.001326594094840864 }
+theta2 = { value = -0.004182231968927211, fixed = false, error = 0.0016785526570292837 }
+
+
+# K*(1820) right resonance configuration
+[resonances.K1820_r.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K1820_r.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.8192837147853098, range = [1.819, 10.0], fixed = false, error = 0.0 }
+width = { value = 0.2552907595714486, range = [0.264, 10.0], fixed = false, error = 0.0 }
+Sbc = "kst2_124_kk"
+
+[resonances.K1820_r.Amplitude]
+AMP = "u_kst2_r_kk"
+
+const1 = { value = 0.05353392339205181, fixed = false, error = 0.0 }
+const2 = { value = -0.013515632832936594, fixed = false, error = 0.00226112856864931 }
+
+theta1 = { value = -0.029170417788916315, fixed = false, error = 0.0 }
+theta2 = { value = 0.008796315351616747, fixed = false, error = 0.0 }
+
+
+# K*(1820) left resonance configuration
+[resonances.K1820_l.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K1820_l.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.8192837147853098, range = [1.819, 10.0], fixed = false, error = 0.0 }
+width = { value = 0.2552907595714486, range = [0.264, 10.0], fixed = false, error = 0.0 }
+Sbc = "kst2_123_kk"
+
+[resonances.K1820_l.Amplitude]
+AMP = "u_kst2_l_kk"
+
+const1 = { value = 0.05353392339205181, fixed = false, error = 0.0 }
+const2 = { value = -0.013515632832936594, fixed = false, error = 0.00226112856864931 }
+
+theta1 = { value = -0.029170417788916315, fixed = false, error = 0.0 }
+theta2 = { value = 0.008796315351616747, fixed = false, error = 0.0 }
+
+
+# K*(2250) right resonance configuration
+[resonances.K2250_r.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K2250_r.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.228180871519652, range = [2.247, 10.0], fixed = false, error = 0.0 }
+width = { value = 0.22526773581883117, range = [0.18, 10.0], fixed = false, error = 0.0 }
+Sbc = "kst2_124_kk"
+
+[resonances.K2250_r.Amplitude]
+AMP = "u_kst2_r_kk"
+
+const1 = { value = -0.021627369735391727, fixed = false, error = 0.0007050326213965233 }
+const2 = { value = 0.0034149684028485067, fixed = false, error = 0.0 }
+
+theta1 = { value = -0.03739773648153083, fixed = false, error = 0.00164650487132265 }
+theta2 = { value = 0.005079738018594662, fixed = false, error = 0.0017954208250450397 }
+
+
+# K*(2250) left resonance configuration
+[resonances.K2250_l.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_kk"
+
+[resonances.K2250_l.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.228180871519652, range = [2.247, 10.0], fixed = false, error = 0.0 }
+width = { value = 0.22526773581883117, range = [0.18, 10.0], fixed = false, error = 0.0 }
+Sbc = "kst2_123_kk"
+
+[resonances.K2250_l.Amplitude]
+AMP = "u_kst2_l_kk"
+
+const1 = { value = -0.021627369735391727, fixed = false, error = 0.0007050326213965233 }
+const2 = { value = 0.0034149684028485067, fixed = false, error = 0.0 }
+
+theta1 = { value = -0.03739773648153083, fixed = false, error = 0.00164650487132265 }
+theta2 = { value = 0.005079738018594662, fixed = false, error = 0.0017954208250450397 }
+
+
 [draw]
 extra_sbc = ["b123_kk", "b124_kk"]
