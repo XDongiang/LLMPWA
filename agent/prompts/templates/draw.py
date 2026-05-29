@@ -4,10 +4,10 @@
 # SECTION: LOGGING_CONFIG
 def setup_logging():
     """Setup logging configuration"""
-    with open("config/logconfig_fit.json", "r") as config_file:
+    with open("config/logconfig_draw.json", "r") as config_file:
         LOGGING_CONFIG = json.load(config_file)
         logging.config.dictConfig(LOGGING_CONFIG)
-    return logging.getLogger("fit")
+    return logging.getLogger("draw")
 
 
 # SECTION: draw_weight_functions

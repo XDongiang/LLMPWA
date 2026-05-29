@@ -26,7 +26,7 @@ def setup_logging():
     with open("config/logconfig_plot.json", "r") as config_file:
         LOGGING_CONFIG = json.load(config_file)
         logging.config.dictConfig(LOGGING_CONFIG)
-    return logging.getLogger("fit")
+    return logging.getLogger("plot")
 
 # SECTION: draw_plot_resonance_template
 

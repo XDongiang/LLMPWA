@@ -164,3 +164,8 @@ theta5 = { value = 0.06849361819185686, fixed = false, error = 0.016369611794000
 
 [draw]
 extra_sbc = ["b123_kk", "b124_kk"]
+
+[fit]
+total_frac = 1.1
+lambda_tfc = 1000
+boundary = true

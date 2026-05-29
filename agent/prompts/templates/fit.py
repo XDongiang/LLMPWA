@@ -93,7 +93,7 @@ def data_likelihood_kk(args):
     total_amplitude = data_phif0_kk_BW_BW
     total_amplitude = total_amplitude + data_phif2_kk_BW_BW
     total_amplitude = total_amplitude + data_phif2_kk_BW_flatte1270
-    likelihood = -np.sum(np.log(np.sum(dplex_dabs(total_amplitude), axis=1))) + 10000.0 * step_function
+    likelihood = -np.sum(np.log(np.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
     return likelihood
 
 def mc_likelihood_kk(args):
