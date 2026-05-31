@@ -1,0 +1,28 @@
+### 1. 任务目标
+你的任务是为单个共振态生成一个独立的画图函数。
+
+1. 理解输入的共振态信息（名称、传播子类型）和该共振态在 weight.npz 中对应的权重键名。
+2. 理解函数模板中 draw_single_resonance_xxx 函数的结构：
+   - 接收参数：var_name, data_arr, mc_arr, all_wt, all_truth_wt, data_size
+   - 从 all_wt["all_mods_wt"] 获取总权重，从 all_wt[{weight_key}] 获取该共振态的分波权重
+   - 创建三个 TH1D：数据直方图（无权重）、总拟合直方图（用 all_mods_wt 加权）、分波直方图（用分波权重加权）
+   - 拟合和分波直方图都需要 Scale(data_size / sum_wt)
+   - fit fraction 用 truth MC 计算：onp.sum(all_truth_wt[{weight_key}]) / sum_truth_wt
+   - 用 ROOT 画图：data(E1) + fit total(红色实线) + 分波(蓝色虚线)，添加 legend 和 fit fraction 文字
+   - 保存到 output/pictures/partial_mods_pictures/{{resonance_name}}_{{var_name}}.png
+   - 返回 fit fraction
+3. 根据输入的共振态名称和权重键名，生成对应的 draw_single_resonance_{{resonance_name}} 函数。
+4. 函数名格式：draw_single_resonance_{{resonance_name}}（将 resonance_name 中的特殊字符保持原样）
+5. 要求返回的内容只包含 python 代码字符串，不包含解释、代码框、注释或额外文本。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+
+### 2. 函数模板：
+{draw_plot_resonance_template}
+
+### 3. 输入信息
+
+共振态名称：{resonance_name}
+
+共振态配置：
+{resonance_info}
+
+该共振态在 weight.npz 中的权重键名：{weight_key}

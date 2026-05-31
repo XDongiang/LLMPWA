@@ -11,7 +11,6 @@ from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
-from jax._src.random import resolve_prng_impl
 import toml
 import hashlib
 import argparse
@@ -21,672 +20,677 @@ os.chdir(foo_path)
 sys.path.append(foo_path)
 
 from agent.easytrans_client import EasyTransClient, EasyTransError
-from agent.code_compressor import CodeCompressor, compress_code
+
+PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
+TEMPLATES_DIR = os.path.join(PROMPTS_DIR, "templates")
+
+# Which template files each mode needs
+_MODE_TEMPLATES = {
+    "fit":  ["shared", "fit"],
+    "draw": ["shared", "fit", "draw"],
+    "plot": ["plot"],
+}
 
 
-def parse_template_sections(file_path=__file__):
-    """
-    Parse template sections for programmatic access.
-    
-    Returns:
-        dict: Dictionary mapping section names to their content
-    """
+def load_prompt(name: str) -> str:
+    """Load a prompt template from agent/prompts/<name>.txt"""
+    path = os.path.join(PROMPTS_DIR, f"{name}.txt")
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def _parse_sections_from_file(file_path: str) -> dict:
     sections = {}
     current_section = None
     section_content = []
-    
+
     with open(file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-    
+
     for line in lines:
         if line.strip().startswith('# SECTION:'):
-            # Save previous section
             if current_section:
                 sections[current_section] = ''.join(section_content)
-            
-            # Start new section
             current_section = line.strip().split('SECTION:')[1].strip()
             section_content = []
         elif current_section:
             section_content.append(line)
-    
-    # Save last section
+
     if current_section:
         sections[current_section] = ''.join(section_content)
-    
+
     return sections
 
-def checkDirectoryStructure():
-    # 检查目录中是否存在指定的文件和子目录
-    fatherDirs = ["output", "result_repo", "rendered_scripts", "run"]
-    childDirs = ['output/fit/fit_result_combine', 'output/fit/fit_result_kk', 'output/fit/fit_result_pipi', 'output/error', 'output/pictures/partial_mods_pictures', 'output/draw', 'output/lasso', 'output/pull', 'output/select', 'output/significance', 'agent/cache']
-    requiredDirs = fatherDirs + childDirs
-    for subdir in requiredDirs:
-        if not os.path.isdir(subdir):
-            print(f"Directory {subdir} not exists！ create directory")
-            os.system("mkdir -p {}".format(subdir))
-    return True
+
+def parse_template_sections(mode: str = "fit") -> dict:
+    """Load and merge sections for the given mode from prompts/templates/."""
+    sections = {}
+    for name in _MODE_TEMPLATES.get(mode, ["shared", "fit"]):
+        path = os.path.join(TEMPLATES_DIR, f"{name}.py")
+        sections.update(_parse_sections_from_file(path))
+    return sections
+
+
+def check_directory_structure(workdir: str):
+    for subdir in ["run", "cache", "results", "data"]:
+        path = os.path.join(workdir, subdir)
+        if not os.path.isdir(path):
+            print(f"Directory {path} not exists! create directory")
+            os.makedirs(path, exist_ok=True)
 
 
 class LLMResonanceGenerator:
-    """LLM驱动的共振态代码生成器"""
-    
-    def __init__(self, config_path: str = "agent/resonances_config.toml", model: Optional[str] = None, model_check: Optional[str] = None):
-        """
-        初始化LLM代码生成器
-        
-        Args:
-            config_path: TOML配置文件路径
-            model: 使用的LLM模型
-        """
-        # 检查并创建必要的目录结构
-        checkDirectoryStructure()
+    """LLM-driven PWA resonance code generator (generation only, no execution)."""
+
+    def __init__(self, workdir: str = ".", config_path: str = None,
+                 model: Optional[str] = None, model_check: Optional[str] = None,
+                 mode: str = "fit"):
+        self.workdir = os.path.abspath(workdir)
+        self.mode = mode
+        check_directory_structure(self.workdir)
 
         self.model = model or os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')
         self.model_check = model_check or os.getenv('EASYTRANS_MODEL_CHECK', self.model)
 
-        # 初始化EasyTrans客户端
         self.llm_client = EasyTransClient()
-        print(f"🤖 LLM引擎初始化完成: {self.model}")
+        print(f"LLM engine: {self.model}")
 
-        self.config_path = config_path
-        self.config = self.load_config()
+        self.config_path = config_path or os.path.join(self.workdir, "resonances_config.toml")
+        self.config = self._load_config()
 
-        # 解析模板部分
-        self.sections = parse_template_sections("agent/common_template.py")
-        
-        self.system_prompt = """You are a professional physics computation code generator, specializing in Partial Wave Analysis (PWA) in particle physics.Generate complete, runnable Python functions without overly detailed docstrings."""
-    
-    def _load_cache(self, cache_file) -> dict:
-        """从文件中加载缓存。如果文件不存在或无效，则返回一个空字典。"""
-        try:
-            if os.path.exists(cache_file):
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    print(f"✅ 成功从 {cache_file} 加载缓存。")
-                    return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️ 加载缓存文件 {cache_file} 失败: {e}。将创建一个新的缓存。")
-        
-        print("ℹ️ 未找到缓存文件或文件为空，将创建一个新的缓存。")
-        return {}
+        self.sections = parse_template_sections(mode=self.mode)
 
-    def _save_cache(self, load_data_cache, cache_file):
-        """将当前内存中的缓存保存到文件。"""
-        try:
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(load_data_cache, f, ensure_ascii=False, indent=4)
-            print(f"💾 缓存已成功保存到 {cache_file}。")
-        except IOError as e:
-            print(f"❌ 保存缓存到 {cache_file} 失败: {e}。")
-        
-    def load_config(self) -> Dict[str, Any]:
-        """
-        从TOML文件加载共振态配置
-        
-        Returns:
-            Dict[str, Any]: 包含所有共振态配置的字典
-        """
+        physics_file = os.path.join(self.workdir, "physics_functions.py")
+        if os.path.exists(physics_file):
+            with open(physics_file, encoding='utf-8') as f:
+                self.sections['PHYSICS_FUNCTIONS'] = f.read()
+            print(f"Loaded physics functions: {physics_file}")
+        else:
+            print(f"Warning: {physics_file} not found, using default from prompts/templates/shared.py")
+
+    # ------------------------------------------------------------------
+    # Config helpers
+    # ------------------------------------------------------------------
+
+    def _load_config(self) -> Dict[str, Any]:
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 config_data = toml.load(f)
-            
-            print(f"✅ 配置文件加载成功: {self.config_path}")
-            print(f"📊 找到 {len(config_data.get('resonances', {}))} 个共振态配置")
-            
+            print(f"Config loaded: {self.config_path}")
+            print(f"Resonances: {len(config_data.get('resonances', {}))}")
             return config_data
-            
         except FileNotFoundError:
-            print(f"❌ 配置文件未找到: {self.config_path}")
+            print(f"Config not found: {self.config_path}")
             raise
         except toml.TomlDecodeError as e:
-            print(f"❌ TOML文件解析失败: {e}")
+            print(f"TOML parse error: {e}")
             raise
-        except Exception as e:
-            print(f"❌ 配置加载失败: {e}")
-            raise
-    
-    def extract_resonance_config(self, resonance_name: str) -> Dict[str, Any]:
-        """
-        提取指定共振态的配置信息
-        
-        Args:
-            resonance_name: 共振态名称 (如 'phif0_980', 'phif2_1270')
-            
-        Returns:
-            Dict[str, Any]: 共振态配置字典
-        """
-        resonances = self.config.get('resonances', {})
-        
-        if resonance_name not in resonances:
-            available_resonances = list(resonances.keys())
-            raise ValueError(f"未找到共振态 '{resonance_name}'。可用的共振态: {available_resonances}")
-        
-        resonance_config = resonances[resonance_name]
-        
-        # 构造返回的配置结构
-        config = {
-            'name': resonance_name,
-            'config': resonance_config
-        }
-        
-        return config
-    
+
     def get_all_resonance_names(self) -> List[str]:
-        """获取所有可用的共振态名称"""
         return list(self.config.get('resonances', {}).keys())
-    
-    def get_all_resonance_data(self) -> List[str]:
-        # 提取所有 Sbc
-        sbc_list = [
-            prop["Sbc"]
-            for resonance in self.config["resonances"].values()
-            for prop in resonance.get("propagators", {}).values()
-            if "Sbc" in prop
-        ]
-        # 提取所有 AMP
-        amp_list = [
-            resonance["Amplitude"]["AMP"]
-            for resonance in self.config["resonances"].values()
-            if "AMP" in resonance.get("Amplitude", {})
-        ]
+
+    def get_all_resonance_data(self):
+        sbc_list = []
+        amp_list = []
+        for resonance in self.config["resonances"].values():
+            # propagator-level Sbc (A_propagator always has it; B_propagator has it for non-shared)
+            for prop in resonance.get("propagators", {}).values():
+                if "Sbc" in prop:
+                    sbc_list.append(prop["Sbc"])
+
+            if resonance.get("kind") == "shared_state":
+                # shared_state: AMP and B_Sbc live in each amplitudes[] entry
+                for amp_entry in resonance.get("amplitudes", []):
+                    if "AMP" in amp_entry:
+                        amp_list.append(amp_entry["AMP"])
+                    if "B_Sbc" in amp_entry:
+                        sbc_list.append(amp_entry["B_Sbc"])
+            else:
+                if "AMP" in resonance.get("Amplitude", {}):
+                    amp_list.append(resonance["Amplitude"]["AMP"])
 
         return list(dict.fromkeys(sbc_list)), list(dict.fromkeys(amp_list))
-    
+
     def print_config_summary(self):
-        """打印配置文件摘要信息"""
-        print("🔍 配置文件摘要:")
+        print("Config summary:")
         print("=" * 40)
-        
-        resonances = self.config.get('resonances', {})
-        for name, config in resonances.items():
-            print(f"📋 共振态: {name}")
-            
-            # 打印传播子信息
-            propagators = config.get('propagators', {})
-            for prop_name, prop_config in propagators.items():
-                prop_type = prop_config.get('propagator_type', 'unknown')
-                print(f"   - {prop_name}: {prop_type}")
-            
-            # 打印系数数量
-            Amplitude = config.get('Amplitude', {})
-            const_count = len([k for k in Amplitude.keys() if k.startswith('const')])
-            theta_count = len([k for k in Amplitude.keys() if k.startswith('theta')])
-            print(f"   - 系数: {const_count} const, {theta_count} theta")
-    
-    def analysis_toml_config_prompt(self) -> Dict[str, Any]:
-        print(f"🚀 开始分析共振态配置以进行分组...")
-        all_resonances_info = self.config.get('resonances', {})
-        all_resonances_info = json.dumps(all_resonances_info, indent=4)
-        prompt = f"""
-toml 配置：
-{all_resonances_info}（注：此处为变量，指“所有共振信息”）
+        for name, config in self.config.get('resonances', {}).items():
+            kind = config.get('kind', 'normal')
+            print(f"  {name} [{kind}]")
+            for prop_name, prop_config in config.get('propagators', {}).items():
+                print(f"    - {prop_name}: {prop_config.get('propagator_type', 'unknown')}")
+            if kind == "shared_state":
+                for amp_entry in config.get('amplitudes', []):
+                    print(f"    - amplitude: {amp_entry.get('name')} AMP={amp_entry.get('AMP')} B_Sbc={amp_entry.get('B_Sbc')}")
 
-任务：
-1. 按“传播子类型”（propagator_type）对共振（resonances）进行分组。
-    定义：
-    - 相似的“A传播子”（A_propagator）必须具有相同的“传播子类型”（propagator_type）。
-    - 相似的“B传播子”（B_propagator）必须具有相同的“传播子类型”（propagator_type）。
-    组名称：
-    将“A传播子”（A_propagator）类型与“B传播子”（B_propagator）类型用下划线（_）组合。示例："TypeA_TypeB"（即“A类型_B类型”）。
+    # ------------------------------------------------------------------
+    # Cache helpers
+    # ------------------------------------------------------------------
 
-2. 因为在计算的时候，同一类型的传播子可以向量化计算，但是不同振幅参数的传播子不能向量化计算。因此按照传播子类型+振幅参数的方式进行分组。
-    定义：
-    - 具有任务1中定义的相同“A传播子”和“B传播子”类型。
-    - 具有相同的振幅名称（AMP的值）。
+    def _load_cache(self, cache_file: str) -> dict:
+        try:
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    print(f"Cache loaded: {cache_file}")
+                    return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Cache load failed ({cache_file}): {e}")
+        return {}
 
-3. 我们需要参数值的列表，根据任务2的分组结果，输出组内参数的列表。
-    定义：
-    - 对于每个组合并组内的共振态的参数，输出参数的值列表。
-    - 合并的方式为共振态之间相同的参数合并为一个参数，value值组合为列表。
-    - 共振态Amplitude参数合并为二维list，例如[[a_resonance_const1, a_resonance_const2], [b_resonance_const1, b_resonance_const2]]。
+    def _save_cache(self, cache: dict, cache_file: str):
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=4)
+            print(f"Cache saved: {cache_file}")
+        except IOError as e:
+            print(f"Cache save failed ({cache_file}): {e}")
 
-4. 认真读取toml配置中的fix属性，fix属性是True的变量在程序中的计算是不被优化的。将找到的变量的变量名填入到fixed_parameter表格中。
+    # ------------------------------------------------------------------
+    # Prompt builders
+    # ------------------------------------------------------------------
 
-输出格式：
-{{
-    "propagator_classification": {{
-    "TypeA_TypeB": ["resonance_name_1"（共振名称1）, "resonance_name_2"（共振名称2）],
-    "TypeA_TypeC": ["resonance_name_3"（共振名称3）]
-    }},
-    "amplitude_classification": {{
-    "AMP_TypeA_TypeB": ["resonance_name_1"（共振名称1）, "resonance_name_2"（共振名称2）],
-    "AMP_TypeA_TypeC": ["resonance_name_3"（共振名称3）]
-    }},
-    "parameter_lists": {{
-    "AMP_TypeA_TypeB": ["mass":[0.980, 1.27], "width":[0.05, 0.15], "const":[0.5, 1.0], "theta":[0.0, 1.57]],
-    "AMP_TypeA_TypeC": ["mass":[1.27], "width":[0.15], "const":[1.0], "theta":[1.57]
-    }},
-    "fixed_parameter":{{
-    "AMP_TypeA_TypeB": ["mass", "const1", "theta1"]
-    }}
-}}
+    def _prompt_analysis_toml_config(self) -> str:
+        all_resonances_info = json.dumps(self.config.get('resonances', {}), indent=4)
+        return load_prompt("analysis_toml_config").format(
+            all_resonances_info=all_resonances_info
+        )
 
-"""
-        return prompt
-    
-    def generate_load_data_prompt(self) -> str:
-        """生成数据加载函数"""
-        data_loading_section = self.sections.get('DATA_LOADING', '')
+    def _prompt_load_data(self) -> str:
         sbc, amp = self.get_all_resonance_data()
+        return load_prompt("load_data").format(
+            data_loading_section=self.sections.get('DATA_LOADING', ''),
+            sbc=sbc,
+            amp=amp
+        )
 
-        # 组装英文提示词
-        prompt = f"""You are given a Python code template:
-## function template:
-{data_loading_section}
-def load_data():
-    data = {{}}
-    
-    # Load real data
-    data['data_{{var}}'] = onp.load("data/real_data/{{var}}.npy")
-
-    # Load MC data
-    data['mc_{{var}}'] = onp.load("data/mc_truth/{{var}}.npy")
-
-    # MC truth data (for constraints)
-    data['truth_{{var}}'] = data['mc_{{var}}'][:, 0:150000]
-    
-    # Weight data
-    try:
-        data['wt_data_kk'] = onp.load("data/weight/weight_kk.npy")
-    except FileNotFoundError:
-        data['wt_data_kk'] = onp.ones_like(data['data_phi_kk'])
-    
-    return data
-
-def normalize_data(data):
-    # 计算归一化因子
-    regular_{{var}} = 1. / onp.average(
-        onp.sqrt(onp.sum(onp.asarray(data['mc_{{var}}'])**2, axis=2)), axis=1
-    )
-    
-    # 应用归一化
-    data['data_{{var}}'] = onp.einsum("jkl,j->jkl", data['data_{{var}}'], regular_{{var}})
-    data['mc_{{var}}'] = onp.einsum("jkl,j->jkl", data['mc_{{var}}'], regular_{{var}})
-    data['truth_{{var}}'] = onp.einsum("jkl,j->jkl", data['truth_{{var}}'], regular_{{var}})
-    
-    return data
-
-def prepare_data_for_jax(data, device=None):
-    jax_data = {{}}
-    for key, value in data.items():
-        jax_data[key] = device_put(np.array(value), device=device)
-    return jax_data
-
-## Task:
-Replace {{var}} with each variable name from the given list.
-For variables Sbc, the truth slicing is [0:150000], variables amp the truth slicing is [:, 0:150000].
-For normalization, use "regular_{{var}}" as the normalization factor name and only amp need normalization.
-Keep the rest of the code structure exactly the same.
-Output the final Python code string only, without extra explanations.
-
-## Variable list:
-sbc = {sbc}
-amp = {amp}
-"""
-        return prompt
-    
-    def generate_calculate_function_prompt(self, ana_key, ana_value, resonance_name) -> str:
-        """生成 calculate_{A_propagator_type}_{B_propagator_type} 函数的代码生成提示词"""
+    def _prompt_calculate_function(self, ana_key: str, ana_value: list, resonance_name: str) -> str:
         all_resonances_info = self.config.get('resonances', {})
         resonance_info = json.dumps(all_resonances_info.get(resonance_name, {}), indent=4)
-        calculate_function_template = self.sections.get('calculate_functions','')
-        physics_propagator = self.sections.get('PHYSICS_FUNCTIONS','')
-        prompt = f"""
-### 任务目标
-你的任务是：
-- 理解 function template 中 calculate 和 component 函数的例子，理解其中的矩阵计算的过程。
-- 理解 propagator function 中的函数与 function template 的关系，理解计算的内容。
-- 从 Resonance_Info 中提取可以用于生成 calculate 和 component 的共振态信息。
-- 结合上面的理解，生成该共振态的 calculate 和 component 函数。
-- 保留模板中固定部分的结构、缩进、函数名、逻辑不变。输出结果中只包含 Python 代码字符串，不添加任何额外解释或注释,并且输出时不要使用 Markdown 代码块。
+        return load_prompt("calculate_function").format(
+            physics_propagator=self.sections.get('PHYSICS_FUNCTIONS', ''),
+            calculate_function_template=self.sections.get('calculate_functions', ''),
+            ana_key=ana_key,
+            resonance_len_in_group=len(ana_value) > 1,
+            resonance_info=resonance_info
+        )
 
-### 注意事项
-1. propagator 中函数调用规则
-    - 判断其所有参数是否为固定值。
-    - 如果是 → 必须使用 direct call。
-    - 如果 Resonance_len_in_Group 为 False → 必须使用 direct call。
-    - 否则 → 使用 vmap。
-2. 注意如果使用 direct 的方式计算，则输出的数组是一维的；如果使用 vmap 的方式计算，则输出的数组是二维的。因此要对应调整后面的计算：
-    - 理解这个计算 propagator_combined = dplex_deinsum("j, ij->ij", A_propagator, B_propagator) 中指标的意义，根据上一步计算的 A_propagator 和 B_propagator 对应调整。
-3. 注意如果该参数即使是固定值也需要传参，例如 mass, width, const, theta。
+    def _prompt_extract_parameters(self, parameter_info: dict) -> str:
+        return load_prompt("extract_parameters").format(
+            prepare_data_parameters=self.sections.get('prepare_data_parameters', ''),
+            args_list=json.dumps(parameter_info["parameter_lists"], indent=4),
+            fixed_list=json.dumps(parameter_info["fixed_parameter"], indent=4),
+            full_config=self.config
+        )
 
-### 函数模板
-propagator function
-{physics_propagator}
+    def _prompt_run_load_data(self, load_data: str) -> str:
+        return load_prompt("run_load_data").format(
+            load_data_section=self.sections.get('load_data_section', ''),
+            load_data=load_data
+        )
 
-function template:
-{calculate_function_template}
+    def _prompt_likelihood_function(self, parameter_info: dict,
+                                    resonance_calculation: list, extract_parameters: str) -> str:
+        return load_prompt("likelihood_function").format(
+            parameter_info_str=json.dumps(parameter_info["parameter_lists"], indent=4),
+            resonance_calculation="\n\n".join(resonance_calculation),
+            extract_parameters=extract_parameters,
+            likelihood_functions_section=self.sections.get('likelihood_functions', '')
+        )
 
-### 输入信息部分
-calculation name: {ana_key}
-Resonance_len_in_Group: {len(ana_value) > 1}
+    def _prompt_main_section(self, full_code: str) -> str:
+        return load_prompt("main_section").format(
+            main_section=self.sections.get('main_section', ''),
+            full_code=full_code
+        )
 
-Resonance_Info:
-{resonance_info}
-"""
+    # ------------------------------------------------------------------
+    # Draw prompt builders
+    # ------------------------------------------------------------------
 
-        return prompt
+    def get_draw_extra_sbc(self) -> List[str]:
+        return self.config.get('draw', {}).get('extra_sbc', [])
 
-    def generate_extract_prompt(self, parameter_info) -> str:
-        """生成 data_likelihood_{channel} 函数的代码生成提示词"""
-        args_list = json.dumps(parameter_info["parameter_lists"], indent=4)
-        fixed_list = json.dumps(parameter_info["fixed_parameter"], indent=4)
-        prepare_data_parameters = self.sections.get('prepare_data_parameters','')
-        prompt = f"""
-### 1. 任务目标
-你的任务是：
-1. 根据输入部分的参数列表信息生成函数模板中args_list列表，整理得到根据输入信息的args_list列表。
-2. 理解函数模板中extract_parameters的内容，思考如何将args_list中的数据做为输入参数输入到extract_parameters函数中。
-    - 按照args_list的参数顺序，从args中提取对应的值，并赋给相应的变量名。
-    - 如果参数是二维数组，则在提取时保持二维数组的形状。
-3. 根据输入部分中的固定参数列表的信息，修改args_list列表，将该参数从args_list中移除。
-4. 根据输入部分中的固定参数列表的信息，修改extract_parameters函数，将固定参数改为参数列表中对应的值，并调整args的编号。
-5. 根据上面整理出的思路，生成修改后的args_list、extract_parameters，要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。
-6. 参数列表是从完整配置文件中提取，args_list是从参数列表中提取的，写一个函数将args_list中的参数重新填回配置文件的数据结构中的函数，函数签名为 build_config(args, errors=None)，输出为完整配置文件的数据结构，因此需要在函数中定义相同的配置文件数据结构。每个可自由浮动的参数字段（fixed=False）都有对应的 'error' 字段：当 errors 不为 None 时，按照与 args 相同的索引顺序从 errors 中取对应值填入 'error' 字段；当 errors 为 None 时，'error' 字段填 0.0。固定参数（fixed=True）的 'error' 字段始终为 0.0。要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。
+    def _prompt_draw_load_data(self) -> str:
+        sbc, amp = self.get_all_resonance_data()
+        extra_sbc = self.get_draw_extra_sbc()
+        return load_prompt("draw_load_data").format(
+            data_loading_section=self.sections.get('DATA_LOADING', ''),
+            sbc=sbc,
+            amp=amp,
+            extra_sbc=extra_sbc
+        )
 
-### 2. 函数模板：
-{prepare_data_parameters}
+    def _prompt_draw_weight_function(self, parameter_info: dict,
+                                     resonance_calculation: list, extract_parameters: str) -> str:
+        return load_prompt("draw_weight_function").format(
+            parameter_info_str=json.dumps(parameter_info["parameter_lists"], indent=4),
+            resonance_calculation="\n\n".join(resonance_calculation),
+            extract_parameters=extract_parameters,
+            draw_weight_functions_section=self.sections.get('draw_weight_functions', '')
+        )
 
-### 2. 输入部分
-参数列表:
-{args_list}
+    def _prompt_draw_run_load_data(self, load_data: str) -> str:
+        return load_prompt("draw_run_load_data").format(
+            draw_load_data_section=self.sections.get('draw_load_data_section', ''),
+            load_data=load_data
+        )
 
-固定参数列表：
-{fixed_list}
+    def _prompt_draw_main_section(self, full_code: str) -> str:
+        return load_prompt("draw_main_section").format(
+            draw_main_section=self.sections.get('draw_main_section', ''),
+            full_code=full_code
+        )
 
-完整配置文件内容：
-{self.config}
-"""
-        return prompt
-    
-    def generate_run_load_data_prompt(self,load_data) -> str:
-        """生成 data_likelihood_{channel} 函数的代码生成提示词"""
-        load_data_section = self.sections.get('load_data_section','')
-        prompt = f"""
-### 1. 任务目标
-你的任务是：
-1. 充分理解输入部分的load data函数和函数模板中对 load data函数的调用。
-2. 根据你对load data函数调用的理解，为输入部分的load data函数生成一个函数调用。
-3. 要求返回的内容只包含 python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。
+    # ------------------------------------------------------------------
+    # Plot prompt builders
+    # ------------------------------------------------------------------
 
-### 2. 函数模板：
-{load_data_section}
+    def _get_weight_key(self, resonance_name: str, ana_result: dict) -> str:
+        """Derive the weight.npz key for a resonance from ana_result."""
+        # Use amplitude_classification to find the correct group
+        amplitude_classification = ana_result.get("amplitude_classification", {})
+        for amp_key, resonance_list in amplitude_classification.items():
+            if resonance_name in resonance_list:
+                # amp_key is like "phif0_kk_BW_flatte980", index is position within group
+                idx = sorted(resonance_list).index(resonance_name)
+                # The key format is already correct: amp_key itself is the base key
+                return f"{amp_key}_{idx}"
 
-### 2. 输入部分
+        # Fallback - construct from resonance configuration
+        res = self.config['resonances'][resonance_name]
+        A_prop = res['propagators']['A_propagator']['propagator_type']
+        B_prop = res['propagators']['B_propagator']['propagator_type']
+        if res.get('kind') == 'shared_state':
+            amp_value = res['amplitudes'][0]['AMP']
+        else:
+            amp_value = res['Amplitude']['AMP']
+        prop_key = f"{A_prop}_{B_prop}"
+        return f"{amp_value}_{prop_key}_0"
 
-load data 函数:
-{load_data}
+    def _prompt_draw_plot_resonance(self, resonance_name: str, resonance_info: dict,
+                                    weight_key: str) -> str:
+        return load_prompt("draw_plot_resonance").format(
+            resonance_name=resonance_name,
+            resonance_info=json.dumps(resonance_info, indent=4),
+            weight_key=weight_key,
+            draw_plot_resonance_template=self.sections.get('draw_plot_resonance_template', '')
+        )
 
-"""
-        return prompt
-    
-    def generate_likelihood_function_prompt(self, parameter_info, resonance_calculation, extract_parameters) -> str:
-        """生成 data_likelihood_{channel} 函数的代码生成提示词"""
-        parameter_info_str = json.dumps(parameter_info["parameter_lists"], indent=4)
-        likelihood_functions_section = self.sections.get('likelihood_functions', '')
-        prompt = f"""
-### 1. 任务目标
-你的任务：
-1. 输入信息中包含共振态信息和函数定义，以及一个目标函数的例子。仔细理解这些内容，并理清它们之间的关系，记下你理解的内容。
-2. 理解函数定义中的calculate_xxx和component_xxx函数的内容，理解这些函数的输入、输出、以及它们之间的关系，注意这些函数是成对出现的，每一对是一个共振态的计算函数。
-3. 理解extract_parameters函数的内容，理解这个函数的输入、输出、以及它们之间的关系。
-4. 函数例子中的函数就是将extract_parameters和calculate_xxx、component_xxx结合起来，生成了一个完整的似然函数。理解这个函数例子中各个函数的调用关系。
-5. 将你理解的内容精炼的整理出来,要求 data 和 mc 包含全部输入的共振态类型。
-6. 根据你整理出来的内容和思路并根据输入信息生成函数，生成包括 data 与 mc 的两个似然函数，要求返回的内容只包含 python 代码字符串，不包含解释、注释或额外文本，缩进与函数例子一致。
+    def _prompt_draw_plot_main(self, resonance_fragments: list, sbc: list,
+                               extra_sbc: list) -> str:
+        return load_prompt("draw_plot_main").format(
+            resonance_fragments="\n\n".join(resonance_fragments),
+            sbc_list=sbc,
+            extra_sbc_list=extra_sbc,
+            draw_plot_main_template=self.sections.get('draw_plot_main_template', '')
+        )
 
-### 2. 输入信息
-共振态类型信息：
-{parameter_info_str}
+    # ------------------------------------------------------------------
+    # LLM call with caching
+    # ------------------------------------------------------------------
 
-函数定义(calculate_xxx和component_xxx):
-{resonance_calculation}
-{extract_parameters}
-
-函数例子：
-{likelihood_functions_section}
-
-"""
-        return prompt
-
-    def generate_main_prompt(self, full_code) -> str:
-        main_section = self.sections.get('main_section', '')
-        prompt = f"""
-### 1. 任务目标
-你的任务是：
-1. 理解输入信息中函数的信息，整理出这些函数之间的关联，以及输入了哪些类型的共振态。
-2. 理解函数模板中主程序入口例子中各个函数的调用和输入信息中的主程序入口函数调用之间的关系。
-3. 根据你的理解，生成主程序入口部分脚本。
-4. 要求返回的内容只包含python代码的字符串，不包含解释、代码框、注释或额外文本，缩进和函数组织方式与函数例子一致。
-
-### 2. 函数模板：
-{main_section}
-
-### 2. 输入部分
-{full_code}
-
-        """
-        return prompt
-        
-    def generate_partial_function(self, prompt: str, cache_file: str, check: bool) -> str:
-        load_data_cache = self._load_cache(cache_file)
+    def _generate(self, prompt: str, cache_file: str, check: bool = False) -> str:
+        cache = self._load_cache(cache_file)
         prompt_hash = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
-        if prompt_hash in load_data_cache:
-            print(f"✅ 发现匹配的缓存 {cache_file} (Hash: {prompt_hash[:8]}...)，从文件加载已生成的函数。")
-            return load_data_cache[prompt_hash]['generated_code']
 
-        print(f"📝 提示词长度: {len(prompt)} 字符")
-        
-        try:
-            # 使用responses API调用Claude模型 (不使用messages参数)
-            response = self.llm_client.responses(
-                input_text=prompt,
-                model=self.model
+        if prompt_hash in cache:
+            print(f"Cache hit ({cache_file}, {prompt_hash[:8]}...)")
+            return self._annotate(cache[prompt_hash]['generated_code'], cache_file, prompt_hash)
+
+        print(f"Prompt length: {len(prompt)} chars")
+
+        response = self.llm_client.responses(input_text=prompt, model=self.model)
+        if not self.llm_client.validate_response(response):
+            raise EasyTransError("LLM response validation failed")
+
+        generated_code = self.llm_client.extract_content(response)
+        if not generated_code:
+            raise EasyTransError("LLM returned empty content")
+
+        generated_code = re.sub(r'^```\w*\n?', '', generated_code.strip())
+        generated_code = re.sub(r'\n?```$', '', generated_code.strip())
+
+        print(f"Generated: {len(generated_code)} chars")
+
+        if check:
+            check_prompt = (
+                f"{prompt}\nPlease strictly check the following code for compliance with all "
+                f"the rules mentioned in the prompt. If any rule is violated, regenerate the "
+                f"code until it fully complies with all the rules.\nCode:\n{generated_code}"
             )
-            
-            if not self.llm_client.validate_response(response):
-                raise EasyTransError("LLM响应验证失败")
-            
-            generated_code = self.llm_client.extract_content(response)
-            print(generated_code)
-            
-            if not generated_code:
-                raise EasyTransError("LLM返回空的代码内容")
-
-            # Strip markdown code fences if present
+            check_out = self.llm_client.responses(input_text=check_prompt, model=self.model_check)
+            generated_code = self.llm_client.extract_content(check_out)
             generated_code = re.sub(r'^```\w*\n?', '', generated_code.strip())
             generated_code = re.sub(r'\n?```$', '', generated_code.strip())
 
-            print(f"✨ 函数生成成功！代码长度: {len(generated_code)} 字符")
+        cache[prompt_hash] = {"prompt": prompt, "generated_code": generated_code}
+        self._save_cache(cache, cache_file)
+        return self._annotate(generated_code, cache_file, prompt_hash)
 
-            check_prompt = f"""{prompt}
-Please strictly check the following code for compliance with all the rules mentioned in the prompt. If any rule is violated, regenerate the code until it fully complies with all the rules.
-Code:
-{generated_code}
-"""
-            if check:
-                check_out = self.llm_client.responses(
-                    input_text=check_prompt,
-                    model=self.model_check
-                )
-                generated_code = self.llm_client.extract_content(check_out)
-                print(f"🔍 代码检查结果: {generated_code}")
+    def _annotate(self, code: str, cache_file: str, prompt_hash: str) -> str:
+        """Prepend a separator comment with the cache source for traceability."""
+        cache_name = os.path.basename(cache_file)
+        return f"# === generated by LLM | cache: {cache_name} | hash: {prompt_hash[:8]} ===\n{code}"
 
-            load_data_cache[prompt_hash] = {
-                "prompt": prompt,
-                "generated_code": generated_code
-            }
-            self._save_cache(load_data_cache, cache_file)
+    # ------------------------------------------------------------------
+    # Generation pipeline
+    # ------------------------------------------------------------------
 
-            return generated_code
-            
-        except Exception as e:
-            print(f"❌ LLM代码生成失败: {e}")
-            raise
-    
-    def generate_complete_resonance_functions(self) -> Dict[str, str]:
-        """生成指定共振态的完整函数集合"""
-        print(f"🚀 开始生成共振态的完整函数集合...")
-
+    def generate_functions(self) -> Dict[str, str]:
+        """Run the full generation pipeline. Returns a dict of named code fragments."""
+        cache_dir = os.path.join(self.workdir, "cache")
         functions = {}
 
-        try:
-            ana_prompt = self.analysis_toml_config_prompt()
-            ana_result_raw = self.generate_partial_function(ana_prompt, "agent/cache/ana_cache.json", False)
-            ana_result = json.loads(ana_result_raw)
-            print("ana_reuslt:",ana_result)
-        except Exception as e:
-            print(f"⚠️  分析失败: {e}")
-            raise
+        # Stage 1: analyse TOML config
+        ana_result_raw = self._generate(
+            self._prompt_analysis_toml_config(),
+            os.path.join(cache_dir, "ana_cache.json"),
+            check=False
+        )
+        ana_result_json = '\n'.join(l for l in ana_result_raw.splitlines() if not l.startswith('# ==='))
+        ana_result = json.loads(ana_result_json)
+        print("Analysis result:", ana_result)
         time.sleep(1)
 
-        try:
-            data_load_prompt = self.generate_load_data_prompt()
-            functions['data_load'] = self.generate_partial_function(data_load_prompt, "agent/cache/load_data_cache.json", False)
-        except Exception as e:
-            print(f"⚠️  data load 函数生成失败: {e}")
-        time.sleep(1) 
-
-        try:
-            resonance_calculation_functions = []
-            for ana_key, ana_value in ana_result["propagator_classification"].items():
-                ana_value = sorted(ana_value)
-                resonance_name = ana_value[0]
-                resonance_calculation_prompt = self.generate_calculate_function_prompt(ana_key,ana_value,resonance_name)
-                resonance_calculation_functions.append(self.generate_partial_function(resonance_calculation_prompt, f"agent/cache/resonance_calculation_{ana_key}.json", True))
-            functions['resonance_calculation'] = "\n\n".join(resonance_calculation_functions)
-        except Exception as e:
-            print(f"⚠️  calculation 函数生成失败: {e}")
+        # Stage 2: data loading
+        functions['data_load'] = self._generate(
+            self._prompt_load_data(),
+            os.path.join(cache_dir, "load_data_cache.json"),
+            check=False
+        )
         time.sleep(1)
 
-        try:
-            extract_parameters_prompt = self.generate_extract_prompt(ana_result)
-            functions['extract_parameters'] = self.generate_partial_function(extract_parameters_prompt, "agent/cache/extract_parameters_cache.json", False)
-            run_load_data_prompt = self.generate_run_load_data_prompt(functions['data_load'])
-            functions['run_load_data'] = self.generate_partial_function(run_load_data_prompt, "agent/cache/run_load_data_cache.json", False)
-        except Exception as e:
-            print(f"⚠️  extract_parameters 函数生成失败: {e}")
+        # Stage 3: resonance calculate/component functions
+        resonance_calculation_fragments = []
+        for ana_key, ana_value in ana_result["propagator_classification"].items():
+            ana_value = sorted(ana_value)
+            fragment = self._generate(
+                self._prompt_calculate_function(ana_key, ana_value, ana_value[0]),
+                os.path.join(cache_dir, f"resonance_calculation_{ana_key}.json"),
+                check=True
+            )
+            resonance_calculation_fragments.append(fragment)
+        functions['resonance_calculation'] = "\n\n".join(resonance_calculation_fragments)
         time.sleep(1)
 
-        try:
-            likelihood_function_prompt = self.generate_likelihood_function_prompt(ana_result,resonance_calculation_functions,functions["extract_parameters"])
-            functions['likelihood_function'] = self.generate_partial_function(likelihood_function_prompt, "agent/cache/analysis_likelihood_cache.json", False)
-        except Exception as e:
-            print(f"⚠️  likelihood 函数生成失败: {e}")
-        time.sleep(1) 
-        
-        print(f"✅ 函数集合生成完成！")
+        # Stage 4: extract_parameters + run_load_data
+        functions['extract_parameters'] = self._generate(
+            self._prompt_extract_parameters(ana_result),
+            os.path.join(cache_dir, "extract_parameters_cache.json"),
+            check=False
+        )
+        functions['run_load_data'] = self._generate(
+            self._prompt_run_load_data(functions['data_load']),
+            os.path.join(cache_dir, "run_load_data_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 5: likelihood functions
+        functions['likelihood_function'] = self._generate(
+            self._prompt_likelihood_function(
+                ana_result, resonance_calculation_fragments, functions['extract_parameters']
+            ),
+            os.path.join(cache_dir, "analysis_likelihood_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
         return functions
 
-    def construct_code(self, functions: Dict[str, str]) -> str:
-        """根据函数集合构造完整代码"""
-        
-        common_utilities_section = self.sections.get('COMMON_UTILITIES', '')
-        path_config_section = self.sections.get('PATH_CONFIG', '')
-        logging_config_section = self.sections.get('LOGGING_CONFIG', '')
-        dplex_functions_section = self.sections.get('DPLEX_FUNCTIONS', '')
-        physics_functions_section = self.sections.get('PHYSICS_FUNCTIONS', '')
-        combined_likelihood_section = self.sections.get('combined_likelihood_function', '')
-        
-        # 组合头部
-        header = f"""# Auto-generated by LLMResonanceGenerator
-# Do not edit manually!
-{common_utilities_section}
-{path_config_section}
-{logging_config_section}
-{dplex_functions_section}
-{physics_functions_section}
-"""
-        # 组合所有函数
-        full_code = header
+    def assemble_code(self, functions: Dict[str, str]) -> str:
+        """Assemble all fragments into a single script string."""
+        cache_dir = os.path.join(self.workdir, "cache")
 
-        if 'data_load' in functions:
-            full_code += f"\n\n"
-            full_code += functions['data_load']
-        
-        if 'resonance_calculation' in functions:
-            full_code += f"\n\n"
-            full_code += functions['resonance_calculation']
+        header = "\n".join([
+            "# Auto-generated by LLMResonanceGenerator — do not edit manually",
+            self.sections.get('COMMON_UTILITIES', ''),
+            self.sections.get('PATH_CONFIG', ''),
+            self.sections.get('LOGGING_CONFIG', ''),
+            self.sections.get('DPLEX_FUNCTIONS', ''),
+            self.sections.get('PHYSICS_FUNCTIONS', ''),
+        ])
 
-        if 'extract_parameters' in functions:
-            full_code += f"\n\n"
-            full_code += functions['extract_parameters']
+        parts = [header]
+        for key in ('data_load', 'resonance_calculation', 'extract_parameters',):
+            if key in functions:
+                parts.append(functions[key])
 
         if 'likelihood_function' in functions:
-            full_code += f"\n\n"
-            full_code += functions['likelihood_function'] + "\n\n" + combined_likelihood_section
+            parts.append(
+                functions['likelihood_function'] + "\n\n"
+                + self.sections.get('combined_likelihood_function', '')
+            )
 
         if 'run_load_data' in functions:
-            full_code += f"\n\n"
-            full_code += functions['run_load_data'] + "\n\n" 
-        
-        try:
-            main_prompt = self.generate_main_prompt(full_code)
-            functions["main_section"] = self.generate_partial_function(main_prompt,"agent/cache/main_section_cache.json",False)
-        except Exception as e:
-            print(f"main section error: {e}")
+            parts.append(functions['run_load_data'])
+
+        full_code = "\n\n".join(parts)
+
+        # Stage 7: main entry point (needs full_code as context)
+        functions['main_section'] = self._generate(
+            self._prompt_main_section(full_code),
+            os.path.join(cache_dir, "main_section_cache.json"),
+            check=False
+        )
         time.sleep(1)
 
-        if 'main_section' in functions:
-            full_code += f"\n\n"
-            full_code += functions['main_section'] + "\n\n" 
-        
-        return full_code
-    
-    def chatcheck(self,full_code: str) -> bool:
-        """检查生成的代码是否符合语法"""
+        full_code += "\n\n" + functions['main_section']
         return full_code
 
-    def save_code(self, full_code: str, output_path: str = None) -> str:
-        """保存生成的函数到文件"""
+    def save_code(self, code: str, output_path: Optional[str] = None) -> str:
+        """Write the assembled script to disk and return the path."""
         if output_path is None:
-            output_path = f"run/generated_script.py"
-        
-        # 创建输出目录
+            output_path = os.path.join(self.workdir, "run", "generated_script.py")
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # 写入文件
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(full_code)
-        
-        print(f"💾 生成的函数已保存到: {output_path}")
+            f.write(code)
+        print(f"Script saved: {output_path}")
         return output_path
-    
+
+    # ------------------------------------------------------------------
+    # Draw generation pipeline
+    # ------------------------------------------------------------------
+
+    def generate_draw_functions(self) -> Dict[str, str]:
+        """Run the draw weight generation pipeline."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        functions = {}
+
+        # Stage 1: analyse TOML config (reuse fit cache)
+        ana_result_raw = self._generate(
+            self._prompt_analysis_toml_config(),
+            os.path.join(cache_dir, "ana_cache.json"),
+            check=False
+        )
+        ana_result_json = '\n'.join(l for l in ana_result_raw.splitlines() if not l.startswith('# ==='))
+        ana_result = json.loads(ana_result_json)
+        print("Analysis result:", ana_result)
+        time.sleep(1)
+
+        # Stage 2: draw data loading (includes extra_sbc)
+        functions['draw_load_data'] = self._generate(
+            self._prompt_draw_load_data(),
+            os.path.join(cache_dir, "draw_load_data_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 3: resonance calculate/component functions (reuse fit cache)
+        resonance_calculation_fragments = []
+        for ana_key, ana_value in ana_result["propagator_classification"].items():
+            ana_value = sorted(ana_value)
+            fragment = self._generate(
+                self._prompt_calculate_function(ana_key, ana_value, ana_value[0]),
+                os.path.join(cache_dir, f"resonance_calculation_{ana_key}.json"),
+                check=True
+            )
+            resonance_calculation_fragments.append(fragment)
+        functions['resonance_calculation'] = "\n\n".join(resonance_calculation_fragments)
+        time.sleep(1)
+
+        # Stage 4: extract_parameters (reuse fit cache)
+        functions['extract_parameters'] = self._generate(
+            self._prompt_extract_parameters(ana_result),
+            os.path.join(cache_dir, "extract_parameters_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 5: draw weight functions
+        functions['draw_weight_function'] = self._generate(
+            self._prompt_draw_weight_function(
+                ana_result, resonance_calculation_fragments, functions['extract_parameters']
+            ),
+            os.path.join(cache_dir, "draw_weight_function_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        # Stage 6: draw run_load_data
+        functions['draw_run_load_data'] = self._generate(
+            self._prompt_draw_run_load_data(functions['draw_load_data']),
+            os.path.join(cache_dir, "draw_run_load_data_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        return functions
+
+    def generate_plot_functions(self) -> Dict[str, Any]:
+        """Run the draw plot generation pipeline. Returns a dict with resonance_plot_fragments list."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        functions: Dict[str, Any] = {}
+
+        # Stage 1: analyse TOML config (reuse fit cache)
+        ana_result_raw = self._generate(
+            self._prompt_analysis_toml_config(),
+            os.path.join(cache_dir, "ana_cache.json"),
+            check=False
+        )
+        ana_result_json = '\n'.join(l for l in ana_result_raw.splitlines() if not l.startswith('# ==='))
+        ana_result = json.loads(ana_result_json)
+        print("Analysis result:", ana_result)
+        time.sleep(1)
+
+        # Stage 2: one LLM call per resonance
+        resonance_fragments = []
+        for resonance_name, resonance_info in self.config.get('resonances', {}).items():
+            weight_key = self._get_weight_key(resonance_name, ana_result)
+            print(f"Generating plot function for {resonance_name} (key: {weight_key})")
+            fragment = self._generate(
+                self._prompt_draw_plot_resonance(resonance_name, resonance_info, weight_key),
+                os.path.join(cache_dir, f"draw_plot_{resonance_name}_cache.json"),
+                check=False
+            )
+            resonance_fragments.append(fragment)
+            time.sleep(1)
+
+        functions['resonance_plot_fragments'] = resonance_fragments
+        return functions
+
+    def assemble_plot_code(self, functions: Dict[str, Any]) -> str:
+        """Assemble draw plot script from per-resonance fragments."""
+        cache_dir = os.path.join(self.workdir, "cache")
+        sbc, _ = self.get_all_resonance_data()
+        extra_sbc = self.get_draw_extra_sbc()
+
+        header = "\n".join([
+            "# Auto-generated draw plot script by LLMResonanceGenerator — do not edit manually",
+            self.sections.get('draw_plot_imports', ''),
+            self.sections.get('PATH_CONFIG', ''),
+            self.sections.get('LOGGING_CONFIG', ''),
+        ])
+
+        resonance_fragments = functions['resonance_plot_fragments']
+        parts = [header] + resonance_fragments
+        full_code = "\n\n".join(parts)
+
+        # Stage 3: main entry point integrating all plot functions
+        main_code = self._generate(
+            self._prompt_draw_plot_main(resonance_fragments, sbc, extra_sbc),
+            os.path.join(cache_dir, "draw_plot_main_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        return full_code + "\n\n" + main_code
+
+    def assemble_draw_code(self, functions: Dict[str, str]) -> str:
+        """Assemble draw weight script from fragments."""
+        cache_dir = os.path.join(self.workdir, "cache")
+
+        header = "\n".join([
+            "# Auto-generated draw weight script by LLMResonanceGenerator — do not edit manually",
+            self.sections.get('COMMON_UTILITIES', ''),
+            self.sections.get('PATH_CONFIG', ''),
+            self.sections.get('LOGGING_CONFIG', ''),
+            self.sections.get('DPLEX_FUNCTIONS', ''),
+            self.sections.get('PHYSICS_FUNCTIONS', ''),
+        ])
+
+        parts = [header]
+        for key in ('draw_load_data', 'resonance_calculation', 'extract_parameters',
+                    'draw_weight_function'):
+            if key in functions:
+                parts.append(functions[key])
+
+        if 'draw_run_load_data' in functions:
+            parts.append(functions['draw_run_load_data'])
+
+        full_code = "\n\n".join(parts)
+
+        # Stage 7: draw main section (needs full_code as context)
+        functions['draw_main_section'] = self._generate(
+            self._prompt_draw_main_section(full_code),
+            os.path.join(cache_dir, "draw_main_section_cache.json"),
+            check=False
+        )
+        time.sleep(1)
+
+        full_code += "\n\n" + functions['draw_main_section']
+        return full_code
+
 
 def main():
-    """主函数 - 演示LLM驱动的代码生成"""
-    print("🤖 LLM驱动的PWA共振态函数生成器")
-    print("=" * 50)
-    
-    # 解析命令行参数
-    parser = argparse.ArgumentParser(description="LLM驱动的PWA共振态函数生成器")
-    parser.add_argument("--model", default=os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro'),
-                      help="使用的LLM模型")
-    parser.add_argument("--model-check", default=os.getenv('EASYTRANS_MODEL_CHECK', os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')),
-                      help="用于代码检查的LLM模型")
+    parser = argparse.ArgumentParser(description="LLM-driven PWA resonance code generator")
+    parser.add_argument("--workdir", default=".",
+                        help="Analysis directory containing resonances_config.toml")
+    parser.add_argument("--config", default=None,
+                        help="TOML config path (default: workdir/resonances_config.toml)")
+    parser.add_argument("--model", default=os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro'))
+    parser.add_argument("--model-check", default=os.getenv('EASYTRANS_MODEL_CHECK',
+                                                            os.getenv('EASYTRANS_MODEL', 'gemini-2.5-pro')))
+    parser.add_argument("--output", default=None,
+                        help="Output script path")
+    parser.add_argument("--mode", default="fit", choices=["fit", "draw", "plot"],
+                        help="Generation mode: 'fit' for fit script, 'draw' for draw weight script, 'plot' for draw plot script")
     args = parser.parse_args()
-    
-    try:
-        # 创建生成器
-        generator = LLMResonanceGenerator(model=args.model, model_check=args.model_check)
-        
-        # 打印配置摘要
-        generator.print_config_summary()
-        
-        # 获取所有共振态名称
-        resonance_names = generator.get_all_resonance_names()
-        print(f"📊 全部共振态: {resonance_names}")
-        
-        functions = generator.generate_complete_resonance_functions()
-        full_code = generator.construct_code(functions)
-        compressed_full_code = full_code#compress_code(full_code, level="medium")
-        checked_full_code = generator.chatcheck(full_code)
-        generator.save_code(compressed_full_code,output_path="run/generated_script_compressed.py")
-        generator.save_code(checked_full_code,output_path="run/generated_script.py")
-        
-    except Exception as e:
-        print(f"❌ 主程序执行失败: {e}")
-        import traceback
-        traceback.print_exc()
+
+    generator = LLMResonanceGenerator(
+        workdir=args.workdir,
+        config_path=args.config,
+        model=args.model,
+        model_check=args.model_check,
+        mode=args.mode,
+    )
+    generator.print_config_summary()
+
+    if args.mode == "fit":
+        functions = generator.generate_functions()
+        full_code = generator.assemble_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "generated_script.py")
+        generator.save_code(full_code, output_path=output_path)
+    elif args.mode == "draw":
+        functions = generator.generate_draw_functions()
+        full_code = generator.assemble_draw_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "draw_weight_script.py")
+        generator.save_code(full_code, output_path=output_path)
+    elif args.mode == "plot":
+        functions = generator.generate_plot_functions()
+        full_code = generator.assemble_plot_code(functions)
+        output_path = args.output or os.path.join(args.workdir, "run", "draw_plot_script.py")
+        generator.save_code(full_code, output_path=output_path)
 
 
 if __name__ == "__main__":

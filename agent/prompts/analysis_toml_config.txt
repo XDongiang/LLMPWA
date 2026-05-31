@@ -1,0 +1,49 @@
+toml 配置：
+{all_resonances_info}（注：此处为变量，指"所有共振信息"）
+
+预处理规则：
+- 普通 resonance：包含 propagators 和 Amplitude 的 resonance，直接作为一个共振/振幅分量参与后续分组。
+- shared_state resonance：如果某个 resonance 的 kind = "shared_state"，它不是单个振幅项，而是一个共享物理态容器。必须先把 resonances.<state>.amplitudes 中的每一项展开为一个独立的振幅分量。
+- 展开 shared_state 时，分量名称使用 amplitudes[].name；传播子参数来自该 shared_state 的 propagators；A_propagator.Sbc 直接沿用；若 amplitudes[].B_Sbc 存在，则它覆盖 B_propagator.Sbc，作为该分量的 B 传播子 Sbc。
+- 展开 shared_state 时，振幅名称使用 amplitudes[].AMP。若 amplitudes[].parameter_ref 指向 shared_amplitude_parameters，则该分量的 const/theta 等振幅参数来自 shared_amplitude_parameters，并且这些分量共享同一组优化参数。
+- 对共享参数的处理：parameter_lists 中可以按展开后的分量重复填写共享参数的数值，以便后续向量化计算；但 fixed_parameter 和优化变量语义上只能保留一份共享参数，不能把 K2100_r.const1 和 K2100_l.const1 当成两个独立变量。
+
+任务：
+1. 按"传播子类型"（propagator_type）对共振（resonances）进行分组。
+    定义：
+    - 相似的"A传播子"（A_propagator）必须具有相同的"传播子类型"（propagator_type）。
+    - 相似的"B传播子"（B_propagator）必须具有相同的"传播子类型"（propagator_type）。
+    组名称：
+    将"A传播子"（A_propagator）类型与"B传播子"（B_propagator）类型用下划线（_）组合。示例："TypeA_TypeB"（即"A类型_B类型"）。
+
+2. 因为在计算的时候，同一类型的传播子可以向量化计算，但是不同振幅参数的传播子不能向量化计算。因此按照传播子类型+振幅参数的方式进行分组。
+    定义：
+    - 具有任务1中定义的相同"A传播子"和"B传播子"类型。
+    - 具有相同的振幅名称（AMP的值）。
+
+3. 我们需要参数值的列表，根据任务2的分组结果，输出组内参数的列表。
+    定义：
+    - 对于每个组合并组内的共振态的参数，输出参数的值列表。
+    - 合并的方式为共振态之间相同的参数合并为一个参数，value值组合为列表。
+    - 共振态Amplitude参数合并为二维list，例如[[a_resonance_const1, a_resonance_const2], [b_resonance_const1, b_resonance_const2]]。
+
+4. 认真读取toml配置中的fix属性，fix属性是True的变量在程序中的计算是不被优化的。将找到的变量的变量名填入到fixed_parameter表格中。
+
+输出格式：
+{{
+    "propagator_classification": {{
+    "TypeA_TypeB": ["resonance_name_1"（共振名称1）, "resonance_name_2"（共振名称2）],
+    "TypeA_TypeC": ["resonance_name_3"（共振名称3）]
+    }},
+    "amplitude_classification": {{
+    "AMP_TypeA_TypeB": ["resonance_name_1"（共振名称1）, "resonance_name_2"（共振名称2）],
+    "AMP_TypeA_TypeC": ["resonance_name_3"（共振名称3）]
+    }},
+    "parameter_lists": {{
+    "AMP_TypeA_TypeB": ["mass":[0.980, 1.27], "width":[0.05, 0.15], "const":[0.5, 1.0], "theta":[0.0, 1.57]],
+    "AMP_TypeA_TypeC": ["mass":[1.27], "width":[0.15], "const":[1.0], "theta":[1.57]]
+    }},
+    "fixed_parameter":{{
+    "AMP_TypeA_TypeB": ["mass", "const1", "theta1"]
+    }}
+}}
