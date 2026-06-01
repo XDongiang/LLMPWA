@@ -51,18 +51,18 @@ class DrawGenerator(FitGenerator):
         extra_sbc = self.get_draw_extra_sbc()
         prompt_template = load_prompt("draw_load_data")
 
-        def build_prompt():
-            return prompt_template.format(
-                data_loading_section=self.sections.get("DATA_LOADING", ""),
-                sbc=sbc,
-                amp=amp,
-                extra_sbc=extra_sbc,
-            )
+        prompt = self.build_stage_prompt(
+            "draw_load_data", prompt_template,
+            data_loading_section=self.sections.get("DATA_LOADING", ""),
+            sbc=sbc,
+            amp=amp,
+            extra_sbc=extra_sbc,
+        )
 
         self.run_llm_stage(
             name="draw_load_data",
             hash_inputs=[stripped_json, json.dumps(extra_sbc), prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/draw_load_data.py",
         )
 
@@ -83,18 +83,18 @@ class DrawGenerator(FitGenerator):
         )
         prompt_template = load_prompt("draw_weight_function")
 
-        def build_prompt():
-            return prompt_template.format(
-                parameter_info_str=schema_json,
-                resonance_calculation="\n\n".join(resonance_fragments),
-                extract_parameters=extract_parameters_code,
-                draw_weight_functions_section=self.sections.get("draw_weight_functions", ""),
-            )
+        prompt = self.build_stage_prompt(
+            "draw_weight_function", prompt_template,
+            parameter_info_str=schema_json,
+            resonance_calculation="\n\n".join(resonance_fragments),
+            extract_parameters=extract_parameters_code,
+            draw_weight_functions_section=self.sections.get("draw_weight_functions", ""),
+        )
 
         self.run_llm_stage(
             name="draw_weight_function",
             hash_inputs=[classification_json, schema_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/draw_weight_function.py",
         )
 
@@ -107,16 +107,16 @@ class DrawGenerator(FitGenerator):
         data_hash = self.compute_hash(draw_load_data_code)
         prompt_template = load_prompt("draw_run_load_data")
 
-        def build_prompt():
-            return prompt_template.format(
-                draw_load_data_section=self.sections.get("draw_load_data_section", ""),
-                load_data=draw_load_data_code,
-            )
+        prompt = self.build_stage_prompt(
+            "draw_run_load_data", prompt_template,
+            draw_load_data_section=self.sections.get("draw_load_data_section", ""),
+            load_data=draw_load_data_code,
+        )
 
         self.run_llm_stage(
             name="draw_run_load_data",
             hash_inputs=[data_hash, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/draw_run_load_data.py",
         )
 
@@ -129,16 +129,16 @@ class DrawGenerator(FitGenerator):
         assembled_hash = self.compute_hash(assembled_code)
         prompt_template = load_prompt("draw_main_section")
 
-        def build_prompt():
-            return prompt_template.format(
-                draw_main_section=self.sections.get("draw_main_section", ""),
-                full_code=assembled_code,
-            )
+        prompt = self.build_stage_prompt(
+            "draw_main_section", prompt_template,
+            draw_main_section=self.sections.get("draw_main_section", ""),
+            full_code=assembled_code,
+        )
 
         self.run_llm_stage(
             name="draw_main_section",
             hash_inputs=[assembled_hash, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/draw_main_section.py",
         )
 

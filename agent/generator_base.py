@@ -269,27 +269,118 @@ class StageRunner:
     # ------------------------------------------------------------------
 
     def _human_prompt_for(self, stage_name: str) -> str:
-        return self.llm_config.get("stages", {}).get(stage_name, {}).get("human_prompt", "")
+        stages = self.llm_config.get("stages", {})
+        # Exact match first, then fall back to parent key (e.g. "resonance_calculation" for "resonance_calculation.BW_BW")
+        if stage_name in stages and "human_prompt" in stages[stage_name]:
+            return stages[stage_name]["human_prompt"]
+        parent = stage_name.rsplit(".", 1)[0] if "." in stage_name else ""
+        if parent in stages:
+            return stages[parent].get("human_prompt", "")
+        return ""
+
+    def resolve_prompt(self, template: str) -> str:
+        """Replace {stages.A.B.C} placeholders with values from manifest.
+
+        Resolution rules:
+        - {stages.X.fragment} — load the fragment file at that path and insert its content
+        - {stages.X.output} or deeper — resolve output (following _fragment_ref if present),
+          then JSON-serialize the result (or sub-key if path goes deeper)
+        - Any other {stages.*} path — look up the raw manifest value and str() it
+        - Non-stages.* placeholders are left untouched (caller handles them)
+        """
+        import re
+
+        manifest = self.load_manifest()
+
+        def _replace(m: re.Match) -> str:
+            key_path = m.group(1)  # e.g. "stages.data_load.fragment"
+            if not key_path.startswith("stages."):
+                return m.group(0)  # leave non-stages placeholders alone
+            parts = key_path.split(".")  # ["stages", "data_load", "fragment"]
+            # Special case: last segment is "fragment" — load the file content
+            if parts[-1] == "fragment":
+                val = _nested_get(manifest, *parts)
+                if val and isinstance(val, str):
+                    abs_path = self._fragment_abs(val)
+                    if os.path.exists(abs_path):
+                        return self.load_fragment(val)
+                return m.group(0)
+            # "output" anywhere in path — resolve output then optionally descend
+            if "output" in parts:
+                out_idx = parts.index("output")
+                stage_parts = parts[1:out_idx]  # keys between "stages" and "output"
+                sub_parts = parts[out_idx + 1:]  # keys after "output"
+                raw_out = _nested_get(manifest, "stages", *stage_parts, "output")
+                if isinstance(raw_out, dict) and "_fragment_ref" in raw_out:
+                    ref = raw_out["_fragment_ref"]
+                    abs_path = self._fragment_abs(ref)
+                    if ref.endswith(".json"):
+                        import json as _json
+                        with open(abs_path, encoding="utf-8") as f:
+                            raw_out = _json.load(f)
+                    else:
+                        raw_out = self._load_toml(abs_path)
+                for sp in sub_parts:
+                    if isinstance(raw_out, dict):
+                        raw_out = raw_out.get(sp)
+                    else:
+                        raw_out = None
+                        break
+                if raw_out is None:
+                    return m.group(0)
+                if isinstance(raw_out, (dict, list)):
+                    import json as _json
+                    return _json.dumps(raw_out, indent=2, ensure_ascii=False)
+                return str(raw_out)
+            # Generic path lookup
+            val = _nested_get(manifest, *parts)
+            if val is None:
+                return m.group(0)
+            if isinstance(val, (dict, list)):
+                import json as _json
+                return _json.dumps(val, indent=2, ensure_ascii=False)
+            return str(val)
+
+        return re.sub(r"\{(stages\.[^}]+)\}", _replace, template)
+
+    def write_stage_meta(
+        self,
+        name: str,
+        fragment_name: str,
+        input_schema_hash: str,
+        prompt_log_rel: str,
+    ) -> None:
+        """Write stage metadata (hash, fragment path, prompt log) into manifest."""
+        manifest = self.load_manifest()
+        _nested_set(
+            manifest,
+            {
+                "input_schema_hash": input_schema_hash,
+                "fragment": fragment_name,
+                "prompt_log": prompt_log_rel,
+            },
+            "stages",
+            *name.split("."),
+        )
+        self.save_manifest(manifest)
 
     def run_llm_stage(
         self,
         name: str,
         hash_inputs: List[str],
-        build_prompt_fn: Callable[[], str],
+        prompt: str,
         fragment_name: str,
         check: bool = False,
     ) -> str:
-        """
-        Run an LLM stage with manifest-based caching.
+        """Run an LLM stage with manifest-based caching.
 
         name          — stage key in manifest (e.g. "data_load", "resonance_calculation.BW_BW")
-        hash_inputs   — list of strings that determine cache validity (stripped config, templates…)
-        build_prompt_fn — called only on cache miss; returns the full prompt string
+        hash_inputs   — list of strings that determine cache validity
+        prompt        — fully constructed prompt string (caller handles human_prompt injection)
         fragment_name — relative path under cache/ (e.g. "fragments/data_load.py")
         check         — whether to run a second LLM check pass
         """
-        human_prompt = self._human_prompt_for(name)
-        current_hash = self.compute_hash(*hash_inputs, human_prompt)
+        current_hash = self.compute_hash(*hash_inputs)
 
         manifest = self.load_manifest()
         stage_meta = _nested_get(manifest, "stages", *name.split("."))
@@ -300,10 +391,7 @@ class StageRunner:
                 print(f"Cache hit: {name}")
                 return self.load_fragment(frag_path)
 
-        print(f"Cache miss: {name} — calling LLM")
-        prompt = build_prompt_fn()
-        if human_prompt:
-            prompt = prompt + "\n\n" + human_prompt
+        print(f"Cache: {name} — calling LLM")
         code = self.llm_call(prompt, check=check)
         time.sleep(1)
 
@@ -324,11 +412,7 @@ class StageRunner:
             f.write(code)
             f.write("\n```\n")
 
-        manifest = self.load_manifest()
-        _nested_set(manifest, {"input_schema_hash": current_hash, "fragment": fragment_name,
-                                "prompt_log": prompt_log_rel},
-                    "stages", *name.split("."))
-        self.save_manifest(manifest)
+        self.write_stage_meta(name, fragment_name, current_hash, prompt_log_rel)
         return code
 
     def run_python_stage(
@@ -363,6 +447,22 @@ class StageRunner:
                     "stages", *name.split("."))
         self.save_manifest(manifest)
         return code
+
+    def build_stage_prompt(self, stage_name: str, template: str, **kwargs) -> str:
+        """Construct a full prompt: resolve manifest refs, apply kwargs, append human_prompt.
+
+        1. resolve_prompt handles {stages.X.Y} manifest references
+        2. format_map applies caller-supplied kwargs (non-stages placeholders)
+        3. human_prompt from llm_config_fit.toml is appended if present
+        """
+        prompt = self.resolve_prompt(template)
+        if kwargs:
+            prompt = prompt.format_map(kwargs)
+        human = self._human_prompt_for(stage_name)
+        if human:
+            human = self.resolve_prompt(human)
+            prompt = prompt + "\n\n" + human
+        return prompt
 
     # ------------------------------------------------------------------
     # Config helpers (shared across modes)

@@ -1,2 +1,9 @@
-[stages.]
-human_prompt = ""
+[stages.resonance_calculation]
+human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。"
+
+
+[stages.likelihood_function]
+human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + 对于range存在的参数加上边界约束np.power(range[i][0]-args[i],2)/np.power(range[i][1],2)/2.0（直接填充range的数值）"
+
+[stages.main_section]
+human_prmopt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。"

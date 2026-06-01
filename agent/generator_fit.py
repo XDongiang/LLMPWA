@@ -58,13 +58,15 @@ class FitGenerator(StageRunner):
         stripped_json = json.dumps(stripped_config.get("resonances", {}), indent=2)
         prompt_template = load_prompt("analysis_toml_config")
 
-        def build_prompt():
-            return prompt_template.format(all_resonances_info=stripped_json)
+        prompt = self.build_stage_prompt(
+            "classification", prompt_template,
+            all_resonances_info=stripped_json,
+        )
 
         self.run_llm_stage(
             name="classification",
             hash_inputs=[stripped_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/classification.json",
             check=False,
         )
@@ -81,17 +83,17 @@ class FitGenerator(StageRunner):
         sbc, amp = self.get_all_resonance_data()
         prompt_template = load_prompt("load_data")
 
-        def build_prompt():
-            return prompt_template.format(
-                data_loading_section=self.sections.get("DATA_LOADING", ""),
-                sbc=sbc,
-                amp=amp,
-            )
+        prompt = self.build_stage_prompt(
+            "data_load", prompt_template,
+            data_loading_section=self.sections.get("DATA_LOADING", ""),
+            sbc=sbc,
+            amp=amp,
+        )
 
         self.run_llm_stage(
             name="data_load",
             hash_inputs=[stripped_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/data_load.py",
         )
 
@@ -113,19 +115,19 @@ class FitGenerator(StageRunner):
                 stripped_config.get("resonances", {}).get(rep_name, {}), indent=2
             )
 
-            def build_prompt(key=group_key, names=resonance_names, info=resonance_info):
-                return prompt_template.format(
-                    physics_propagator=self.sections.get("PHYSICS_FUNCTIONS", ""),
-                    calculate_function_template=self.sections.get("calculate_functions", ""),
-                    ana_key=key,
-                    resonance_len_in_group=len(names) > 1,
-                    resonance_info=info,
-                )
+            prompt = self.build_stage_prompt(
+                f"resonance_calculation.{group_key}", prompt_template,
+                physics_propagator=self.sections.get("PHYSICS_FUNCTIONS", ""),
+                calculate_function_template=self.sections.get("calculate_functions", ""),
+                ana_key=group_key,
+                resonance_len_in_group=len(resonance_names) > 1,
+                resonance_info=resonance_info,
+            )
 
             self.run_llm_stage(
                 name=f"resonance_calculation.{group_key}",
                 hash_inputs=[classification_json, resonance_info, prompt_template],
-                build_prompt_fn=build_prompt,
+                prompt=prompt,
                 fragment_name=f"fragments/resonance_{group_key}.py",
                 check=False,
             )
@@ -160,15 +162,15 @@ class FitGenerator(StageRunner):
         parameter_lists_json = json.dumps(parameter_lists, indent=2)
         prompt_template = load_prompt("extract_parameters")
 
-        def build_prompt():
-            return prompt_template.format(
-                parameter_lists=parameter_lists_json,
-            )
+        prompt = self.build_stage_prompt(
+            "extract_parameters", prompt_template,
+            parameter_lists=parameter_lists_json,
+        )
 
         self.run_llm_stage(
             name="extract_parameters",
             hash_inputs=[parameter_lists_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/extract_parameters.py",
         )
 
@@ -203,25 +205,25 @@ class FitGenerator(StageRunner):
         resonance_fragments = self._load_resonance_fragments(classification)
         extract_parameters_code = self.load_fragment("fragments/extract_parameters.py")
 
-        schema = [{"path": p["path"], "range": p.get("range")} for p in free_params]
+        schema = [{"path": p["path"], "range": p.get("range"), "arg_index": p.get("arg_index")} for p in free_params]
         schema_json = json.dumps(schema, indent=2)
         classification_json = json.dumps(
             classification.get("propagator_classification", {}), indent=2
         )
         prompt_template = load_prompt("likelihood_function")
 
-        def build_prompt():
-            return prompt_template.format(
-                parameter_info_str=schema_json,
-                resonance_calculation="\n\n".join(resonance_fragments),
-                extract_parameters=extract_parameters_code,
-                likelihood_functions_section=self.sections.get("likelihood_functions", ""),
-            )
+        prompt = self.build_stage_prompt(
+            "likelihood_function", prompt_template,
+            parameter_info_str=schema_json,
+            resonance_calculation="\n\n".join(resonance_fragments),
+            extract_parameters=extract_parameters_code,
+            likelihood_functions_section=self.sections.get("likelihood_functions", ""),
+        )
 
         self.run_llm_stage(
             name="likelihood_function",
             hash_inputs=[classification_json, schema_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/likelihood_function.py",
         )
 
@@ -234,16 +236,16 @@ class FitGenerator(StageRunner):
         data_load_hash = self.compute_hash(data_load_code)
         prompt_template = load_prompt("run_load_data")
 
-        def build_prompt():
-            return prompt_template.format(
-                load_data_section=self.sections.get("load_data_section", ""),
-                load_data=data_load_code,
-            )
+        prompt = self.build_stage_prompt(
+            "run_load_data", prompt_template,
+            load_data_section=self.sections.get("load_data_section", ""),
+            load_data=data_load_code,
+        )
 
         self.run_llm_stage(
             name="run_load_data",
             hash_inputs=[data_load_hash, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/run_load_data.py",
         )
 
@@ -256,16 +258,16 @@ class FitGenerator(StageRunner):
         assembled_hash = self.compute_hash(assembled_code)
         prompt_template = load_prompt("main_section")
 
-        def build_prompt():
-            return prompt_template.format(
-                main_section=self.sections.get("main_section", ""),
-                full_code=assembled_code,
-            )
+        prompt = self.build_stage_prompt(
+            "main_section", prompt_template,
+            main_section=self.sections.get("main_section", ""),
+            full_code=assembled_code,
+        )
 
         self.run_llm_stage(
             name="main_section",
             hash_inputs=[assembled_hash, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/main_section.py",
         )
 

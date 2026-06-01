@@ -63,20 +63,18 @@ class PlotGenerator(FitGenerator):
         weight_key = self._get_weight_key(resonance_name, classification)
         prompt_template = load_prompt("draw_plot_resonance")
 
-        def build_prompt():
-            return prompt_template.format(
-                resonance_name=resonance_name,
-                resonance_info=resonance_info,
-                weight_key=weight_key,
-                draw_plot_resonance_template=self.sections.get(
-                    "draw_plot_resonance_template", ""
-                ),
-            )
+        prompt = self.build_stage_prompt(
+            f"draw_plot.{resonance_name}", prompt_template,
+            resonance_name=resonance_name,
+            resonance_info=resonance_info,
+            weight_key=weight_key,
+            draw_plot_resonance_template=self.sections.get("draw_plot_resonance_template", ""),
+        )
 
         self.run_llm_stage(
             name=f"draw_plot.{resonance_name}",
             hash_inputs=[resonance_info, weight_key, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name=f"fragments/draw_plot_{resonance_name}.py",
         )
 
@@ -97,18 +95,18 @@ class PlotGenerator(FitGenerator):
         fragments_hash = self.compute_hash("\n---\n".join(resonance_fragments))
         prompt_template = load_prompt("draw_plot_main")
 
-        def build_prompt():
-            return prompt_template.format(
-                resonance_fragments="\n\n".join(resonance_fragments),
-                sbc_list=sbc,
-                extra_sbc_list=extra_sbc,
-                draw_plot_main_template=self.sections.get("draw_plot_main_template", ""),
-            )
+        prompt = self.build_stage_prompt(
+            "draw_plot_main", prompt_template,
+            resonance_fragments="\n\n".join(resonance_fragments),
+            sbc_list=sbc,
+            extra_sbc_list=extra_sbc,
+            draw_plot_main_template=self.sections.get("draw_plot_main_template", ""),
+        )
 
         self.run_llm_stage(
             name="draw_plot_main",
             hash_inputs=[fragments_hash, sbc_json, extra_sbc_json, prompt_template],
-            build_prompt_fn=build_prompt,
+            prompt=prompt,
             fragment_name="fragments/draw_plot_main.py",
         )
 

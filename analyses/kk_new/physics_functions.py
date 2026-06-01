@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import jax.numpy as np
+
 # ==============================================================================
 # SECTION: PHYSICS_FUNCTIONS
 # Physics calculation functions (resonance shape functions)
@@ -8,7 +10,7 @@
 # directory as physics_functions.py and keep only the functions you need.
 # ==============================================================================
 
-import jax.numpy as np
+
 
 
 def BW(m_, w_, Sbc):

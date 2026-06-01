@@ -182,15 +182,12 @@ def normalize_data(data):
     data['data_phif0_kk'] = onp.einsum("jkl,j->jkl", data['data_phif0_kk'], regular_phif0_kk)
     data['mc_phif0_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif0_kk'], regular_phif0_kk)
     data['truth_phif0_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif0_kk'], regular_phif0_kk)
-
     data['data_phif2_kk'] = onp.einsum("jkl,j->jkl", data['data_phif2_kk'], regular_phif2_kk)
     data['mc_phif2_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif2_kk'], regular_phif2_kk)
     data['truth_phif2_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif2_kk'], regular_phif2_kk)
-
     data['data_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['data_u_kst2_r_kk'], regular_u_kst2_r_kk)
     data['mc_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['mc_u_kst2_r_kk'], regular_u_kst2_r_kk)
     data['truth_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['truth_u_kst2_r_kk'], regular_u_kst2_r_kk)
-
     data['data_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['data_u_kst2_l_kk'], regular_u_kst2_l_kk)
     data['mc_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['mc_u_kst2_l_kk'], regular_u_kst2_l_kk)
     data['truth_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['truth_u_kst2_l_kk'], regular_u_kst2_l_kk)
@@ -225,47 +222,37 @@ def component_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_pa
     result = dplex_deinsum("ljk,lj->ljk", result, propagator_combined)
     return result
 
-def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_theta1, Amplitude_param_theta2):
+def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
     propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    const_ph = dplex_dconstruct(
-        np.array([Amplitude_param_const1, Amplitude_param_const2]),
-        np.array([Amplitude_param_theta1, Amplitude_param_theta2])
-    )
-    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
-    return result
-
-def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_theta1, Amplitude_param_theta2):
-    A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
-    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    const_ph = dplex_dconstruct(
-        np.array([Amplitude_param_const1, Amplitude_param_const2]),
-        np.array([Amplitude_param_theta1, Amplitude_param_theta2])
-    )
-    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
-    return result
-
-def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5, Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5):
-    A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator = flatte1270(B_mass, B_width, f_kk)
-    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    Amplitude_param_const = np.array([[Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5]])
-    Amplitude_param_theta = np.array([[Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5]])
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
     return result
 
-def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5, Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5):
+def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
+    return result
+
+def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte1270(B_mass, B_width, f_kk)
     propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    Amplitude_param_const = np.array([[Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5]])
-    Amplitude_param_theta = np.array([[Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5]])
+    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
+    return result
+
+def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte1270(B_mass, B_width, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
@@ -1003,7 +990,7 @@ def data_likelihood_kk(args):
     data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
         params['phi_mass'], params['phi_width'], data_phi_kk,
         params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], data_f_kk,
-        data_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
+        data_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
     )
     data_phif0_kk_BW_BW = calculate_BW_BW(
         params['phi_mass'], params['phi_width'], data_phi_kk,
@@ -1013,7 +1000,7 @@ def data_likelihood_kk(args):
     data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
         params['phi_mass'], params['phi_width'], data_phi_kk,
         params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], data_f_kk,
-        data_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
+        data_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
     )
     data_phif2_kk_BW_BW = calculate_BW_BW(
         params['phi_mass'], params['phi_width'], data_phi_kk,
@@ -1033,7 +1020,7 @@ def data_likelihood_kk(args):
     component_data_phif0_kk_BW_flatte980 = component_BW_flatte980(
         params['phi_mass'], params['phi_width'], truth_phi_kk,
         params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], truth_f_kk,
-        truth_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
+        truth_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
     )
     component_data_phif0_kk_BW_BW = component_BW_BW(
         params['phi_mass'], params['phi_width'], truth_phi_kk,
@@ -1043,7 +1030,7 @@ def data_likelihood_kk(args):
     component_data_phif2_kk_BW_flatte1270 = component_BW_flatte1270(
         params['phi_mass'], params['phi_width'], truth_phi_kk,
         params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], truth_f_kk,
-        truth_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
+        truth_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
     )
     component_data_phif2_kk_BW_BW = component_BW_BW(
         params['phi_mass'], params['phi_width'], truth_phi_kk,
@@ -1075,7 +1062,26 @@ def data_likelihood_kk(args):
     frac_u_kst2_r_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_r_kk_BW_BW)) / sum_frac)
     frac_u_kst2_l_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_l_kk_BW_BW)) / sum_frac)
     total_frac = frac_phif0_flatte980 + frac_phif0_BW + frac_phif2_flatte1270 + frac_phif2_BW + frac_u_kst2_r_BW + frac_u_kst2_l_BW
-    step_function = np.power(total_frac - 1.03, 2.0) * constraint_strength
+    step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength
+    step_function = step_function + np.power(0.98 - args[0], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(1.704 - args[5], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(0.123 - args[6], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(1.2755 - args[11], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(0.1867 - args[12], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(1.517 - args[23], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(0.086 - args[24], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(2.157 - args[35], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(0.152 - args[36], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(2.345 - args[47], 2) / np.power(0.01, 2) / 2.0
+    step_function = step_function + np.power(0.322 - args[48], 2) / np.power(1.0, 2) / 2.0
+    step_function = step_function + np.power(2.47 - args[59], 2) / np.power(0.007, 2) / 2.0
+    step_function = step_function + np.power(0.075 - args[60], 2) / np.power(0.011, 2) / 2.0
+    step_function = step_function + np.power(2.1 - args[65], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(0.1 - args[66], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(1.819 - args[71], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(0.264 - args[72], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(2.247 - args[77], 2) / np.power(10.0, 2) / 2.0
+    step_function = step_function + np.power(0.18 - args[78], 2) / np.power(10.0, 2) / 2.0
     total_amplitude = data_phif0_kk_BW_flatte980
     total_amplitude = total_amplitude + data_phif0_kk_BW_BW
     total_amplitude = total_amplitude + data_phif2_kk_BW_flatte1270
@@ -1090,7 +1096,7 @@ def mc_likelihood_kk(args):
     total_mc = calculate_BW_flatte980(
         params['phi_mass'], params['phi_width'], mc_phi_kk,
         params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], mc_f_kk,
-        mc_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
+        mc_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
     )
     total_mc = total_mc + calculate_BW_BW(
         params['phi_mass'], params['phi_width'], mc_phi_kk,
@@ -1100,7 +1106,7 @@ def mc_likelihood_kk(args):
     total_mc = total_mc + calculate_BW_flatte1270(
         params['phi_mass'], params['phi_width'], mc_phi_kk,
         params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], mc_f_kk,
-        mc_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
+        mc_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
     )
     total_mc = total_mc + calculate_BW_BW(
         params['phi_mass'], params['phi_width'], mc_phi_kk,
@@ -1173,9 +1179,11 @@ if __name__  == "__main__":
     logger = setup_logging()
     logger.info("开始HVP优化版PWA拟合（Newton-CG方法）")
 
+    import jax.numpy as np
     config.update("jax_enable_x64", True)
 
     constraint_strength = 0.0
+    total_frac_kk = 1.0
     args_list = make_initial_args()
 
     logger.info("编译JAX函数（HVP版本）...")
