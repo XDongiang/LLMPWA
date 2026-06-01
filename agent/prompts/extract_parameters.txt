@@ -1,23 +1,77 @@
-### 1. 任务目标
-你的任务是：
-1. 根据输入部分的参数列表信息生成函数模板中args_list列表，整理得到根据输入信息的args_list列表。
-2. 理解函数模板中extract_parameters的内容，思考如何将args_list中的数据做为输入参数输入到extract_parameters函数中。
-    - 按照args_list的参数顺序，从args中提取对应的值，并赋给相应的变量名。
-    - 如果参数是二维数组，则在提取时保持二维数组的形状。
-3. 根据输入部分中的固定参数列表的信息，修改args_list列表，将该参数从args_list中移除。
-4. 根据输入部分中的固定参数列表的信息，修改extract_parameters函数，将固定参数改为参数列表中对应的值，并调整args的编号。
-5. 根据上面整理出的思路，生成修改后的args_list、extract_parameters，要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。不要添加任何 #=== 或 #====== 形式的分隔符注释。
-6. 参数列表是从完整配置文件中提取，args_list是从参数列表中提取的，写一个函数将args_list中的参数重新填回配置文件的数据结构中的函数，函数签名为 build_config(args, errors=None)，输出为完整配置文件的数据结构，因此需要在函数中定义相同的配置文件数据结构。每个可自由浮动的参数字段（fixed=False）都有对应的 'error' 字段：当 errors 不为 None 时，按照与 args 相同的索引顺序从 errors 中取对应值填入 'error' 字段；当 errors 为 None 时，'error' 字段填 0.0。固定参数（fixed=True）的 'error' 字段始终为 0.0。要求返回的内容只包含python代码字符串，不包含解释、注释或额外文本，缩进和函数组织方式与函数例子一致。并且输出时不要使用 Markdown 代码块。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+### 任务
 
-### 2. 函数模板：
-{prepare_data_parameters}
+根据下方的参数分组信息，生成 `extract_parameters(args)` 函数，返回一个 dict。
 
-### 3. 输入部分
-参数列表:
-{args_list}
+### 输出格式规则
 
-固定参数列表：
-{fixed_list}
+函数签名：`def extract_parameters(args):`，返回 dict。
 
-完整配置文件内容：
-{full_config}
+每个 amp_key（如 `phif0_kk_BW_flatte980`）对应 dict 中若干 key，命名规则：
+
+**传播子参数**（来自 `B_propagator.*`）：
+- 单个共振态：`{{amp_key}}_{{field}}` → 标量 `np.array([...])`
+  - 例：`phif0_kk_BW_flatte980_mass`、`phif0_kk_BW_flatte980_g_kk`
+- 多个共振态：`{{amp_key}}_{{field}}` → 向量 `np.array([v0, v1, ...])`
+  - 例：`phif2_kk_BW_BW_mass`（3个共振态 → shape (3,)）
+
+**振幅参数**（来自 `Amplitude.parameters`，按 `parameter_names` 中 const/theta 分组）：
+- `{{amp_key}}_const` → 所有 const 列拼成二维数组，`reshape(-1, N_const)`
+- `{{amp_key}}_theta` → 所有 theta 列拼成二维数组，`reshape(-1, N_theta)`
+- 每行对应一个共振态，每列对应一个 const 或 theta 参数
+- 固定值直接写数值，自由参数写 `args[i]`（i 为 `arg_index`）
+
+**固定参数**（`phi_mass`、`phi_width`）：
+- 所有 amp_key 共用同一个 A_propagator，在 dict 最前面输出一次：
+  - `'phi_mass': np.array([{{A_propagator.mass[0]}}])`
+  - `'phi_width': np.array([{{A_propagator.width[0]}}])`
+
+### 示例
+
+输入（单共振态，2 const + 2 theta，其中 const1/theta1 固定为 0.1）：
+```
+amp_key: phif0_kk_BW_flatte980
+A_propagator.mass: [1.02]  A_propagator.width: [0.004]
+B_propagator.mass: [arg_index=0]  B_propagator.g_kk: [arg_index=1]  B_propagator.rg: [arg_index=2]
+Amplitude.parameter_names: [const1, const2, theta1, theta2]
+Amplitude.parameters: [[0.1, arg_index=3, 0.1, arg_index=4]]
+```
+
+输出：
+```python
+'phi_mass': np.array([1.02]),
+'phi_width': np.array([0.004]),
+'phif0_kk_BW_flatte980_mass': np.array([args[0]]),
+'phif0_kk_BW_flatte980_g_kk': np.array([args[1]]),
+'phif0_kk_BW_flatte980_rg': np.array([args[2]]),
+'phif0_kk_BW_flatte980_const': np.array([0.1, args[3]]).reshape(-1, 2),
+'phif0_kk_BW_flatte980_theta': np.array([0.1, args[4]]).reshape(-1, 2),
+```
+
+输入（3个共振态，5 const + 5 theta）：
+```
+amp_key: phif2_kk_BW_BW
+B_propagator.mass: [arg_index=23, arg_index=35, arg_index=47]
+B_propagator.width: [arg_index=24, arg_index=36, arg_index=48]
+Amplitude.parameter_names: [const1..const5, theta1..theta5]
+Amplitude.parameters: [[arg25..arg29, arg30..arg34], [arg37..arg41, arg42..arg46], [arg49..arg53, arg54..arg58]]
+```
+
+输出：
+```python
+'phif2_kk_BW_BW_mass': np.array([args[23], args[35], args[47]]),
+'phif2_kk_BW_BW_width': np.array([args[24], args[36], args[48]]),
+'phif2_kk_BW_BW_const': np.array([args[25], args[26], args[27], args[28], args[29],
+                                    args[37], args[38], args[39], args[40], args[41],
+                                    args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
+'phif2_kk_BW_BW_theta': np.array([args[30], args[31], args[32], args[33], args[34],
+                                    args[42], args[43], args[44], args[45], args[46],
+                                    args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
+```
+
+### 输出要求
+
+只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。
+
+### 参数分组信息
+
+{parameter_lists}

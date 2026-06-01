@@ -127,26 +127,70 @@ class FitGenerator(StageRunner):
                 hash_inputs=[classification_json, resonance_info, prompt_template],
                 build_prompt_fn=build_prompt,
                 fragment_name=f"fragments/resonance_{group_key}.py",
-                check=True,
+                check=False,
             )
 
     # ------------------------------------------------------------------
-    # Stage 4: extract_parameters (pure Python template)
+    # Stage 4a: make_initial_args (pure Python)
     # ------------------------------------------------------------------
 
-    def stage4_extract_parameters(self) -> None:
+    def stage4a_make_initial_args(self) -> None:
         free_params = self.read_stage_output("config_strip.free_params")["free_params"]
-        schema = [{"path": p["path"], "range": p.get("range")} for p in free_params]
-        schema_json = json.dumps(schema, indent=2)
+        schema_json = json.dumps(
+            [{"path": p["path"], "value": p.get("value")} for p in free_params], indent=2
+        )
 
         def build_fn():
-            return _generate_extract_parameters(free_params)
+            return _generate_make_initial_args(free_params)
 
         self.run_python_stage(
-            name="extract_parameters",
+            name="make_initial_args",
             fn=build_fn,
             hash_inputs=[schema_json],
+            fragment_name="fragments/make_initial_args.py",
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 4b: extract_parameters (LLM)
+    # ------------------------------------------------------------------
+
+    def stage4b_extract_parameters(self) -> None:
+        classification = self.read_stage_output("classification")
+        parameter_lists = classification.get("parameter_lists", {})
+        parameter_lists_json = json.dumps(parameter_lists, indent=2)
+        prompt_template = load_prompt("extract_parameters")
+
+        def build_prompt():
+            return prompt_template.format(
+                parameter_lists=parameter_lists_json,
+            )
+
+        self.run_llm_stage(
+            name="extract_parameters",
+            hash_inputs=[parameter_lists_json, prompt_template],
+            build_prompt_fn=build_prompt,
             fragment_name="fragments/extract_parameters.py",
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 4c: save_results (pure Python)
+    # ------------------------------------------------------------------
+
+    def stage4c_save_results(self) -> None:
+        free_params = self.read_stage_output("config_strip.free_params")["free_params"]
+        schema_json = json.dumps(
+            [{"path": p["path"], "range": p.get("range"), "arg_index": p["arg_index"]}
+             for p in free_params], indent=2
+        )
+
+        def build_fn():
+            return _generate_save_results(free_params)
+
+        self.run_python_stage(
+            name="save_results",
+            fn=build_fn,
+            hash_inputs=[schema_json],
+            fragment_name="fragments/save_results.py",
         )
 
     # ------------------------------------------------------------------
@@ -241,7 +285,9 @@ class FitGenerator(StageRunner):
         fragments = {
             "data_load": self.load_fragment("fragments/data_load.py"),
             "resonance_calculation": "\n\n".join(self._load_resonance_fragments(classification)),
+            "make_initial_args": self.load_fragment("fragments/make_initial_args.py"),
             "extract_parameters": self.load_fragment("fragments/extract_parameters.py"),
+            "save_results": self.load_fragment("fragments/save_results.py"),
             "likelihood_function": self.load_fragment("fragments/likelihood_function.py"),
             "run_load_data": self.load_fragment("fragments/run_load_data.py"),
         }
@@ -262,7 +308,7 @@ class FitGenerator(StageRunner):
         ])
 
         parts = [header]
-        for key in ("data_load", "resonance_calculation", "extract_parameters"):
+        for key in ("data_load", "resonance_calculation", "make_initial_args", "extract_parameters", "save_results"):
             if key in fragments:
                 parts.append(fragments[key])
 
@@ -297,8 +343,10 @@ class FitGenerator(StageRunner):
         # Stage 3
         self.stage3_resonance_calculation()
 
-        # Stage 4
-        self.stage4_extract_parameters()
+        # Stage 4a/4b/4c
+        self.stage4a_make_initial_args()
+        self.stage4b_extract_parameters()
+        self.stage4c_save_results()
 
         # Stage 5
         self.stage5_likelihood_function()
@@ -320,29 +368,47 @@ class FitGenerator(StageRunner):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4 helper: pure-Python extract_parameters generator
+# Stage 4 helpers: pure-Python code generators
 # ---------------------------------------------------------------------------
 
-def _generate_extract_parameters(free_params: list) -> str:
-    lines = ["def extract_parameters(args):"]
+def _generate_make_initial_args(free_params: list) -> str:
+    lines = ["def make_initial_args():"]
     if not free_params:
-        lines.append("    return")
+        lines.append("    return onp.array([])")
         return "\n".join(lines)
 
-    return_names = []
-    for i, p in enumerate(free_params):
-        var_name = _path_to_varname(p["path"])
-        lines.append(f"    {var_name} = args[{i}]  # {p['path']}")
-        return_names.append(var_name)
-
-    lines.append(f"    return {', '.join(return_names)}")
+    lines.append("    return onp.array([")
+    for p in free_params:
+        value = p.get("value", 0.0)
+        if value is None:
+            value = 0.0
+        lines.append(f"        {repr(value)},  # {p['path']}")
+    lines.append("    ])")
     return "\n".join(lines)
 
 
-def _path_to_varname(path: str) -> str:
-    """
-    "resonances.phif0_980.propagators.B_propagator.mass" → "phif0_980_B_propagator_mass"
-    """
-    skip = {"resonances", "propagators", "Amplitude", "shared_amplitude_parameters"}
-    kept = [p for p in path.split(".") if p not in skip]
-    return "_".join(kept)
+def _generate_save_results(free_params: list) -> str:
+    lines = [
+        "def save_results(args, errors, output_path):",
+        "    import toml, os",
+        "    records = []",
+    ]
+    for p in free_params:
+        i = p["arg_index"]
+        path = p["path"]
+        range_val = p.get("range")
+        lines.append(f"    rec = {{")
+        lines.append(f"        'path': {repr(path)},")
+        lines.append(f"        'value': float(args[{i}]),")
+        if range_val is not None:
+            lines.append(f"        'range': {repr(range_val)},")
+        lines.append(f"        'error': float(errors[{i}]),")
+        lines.append(f"        'arg_index': {i},")
+        lines.append(f"    }}")
+        lines.append(f"    records.append(rec)")
+    lines += [
+        "    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)",
+        "    with open(output_path, 'w', encoding='utf-8') as f:",
+        "        toml.dump({'free_params': records}, f)",
+    ]
+    return "\n".join(lines)

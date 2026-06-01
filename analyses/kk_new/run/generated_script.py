@@ -182,12 +182,15 @@ def normalize_data(data):
     data['data_phif0_kk'] = onp.einsum("jkl,j->jkl", data['data_phif0_kk'], regular_phif0_kk)
     data['mc_phif0_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif0_kk'], regular_phif0_kk)
     data['truth_phif0_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif0_kk'], regular_phif0_kk)
+
     data['data_phif2_kk'] = onp.einsum("jkl,j->jkl", data['data_phif2_kk'], regular_phif2_kk)
     data['mc_phif2_kk'] = onp.einsum("jkl,j->jkl", data['mc_phif2_kk'], regular_phif2_kk)
     data['truth_phif2_kk'] = onp.einsum("jkl,j->jkl", data['truth_phif2_kk'], regular_phif2_kk)
+
     data['data_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['data_u_kst2_r_kk'], regular_u_kst2_r_kk)
     data['mc_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['mc_u_kst2_r_kk'], regular_u_kst2_r_kk)
     data['truth_u_kst2_r_kk'] = onp.einsum("jkl,j->jkl", data['truth_u_kst2_r_kk'], regular_u_kst2_r_kk)
+
     data['data_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['data_u_kst2_l_kk'], regular_u_kst2_l_kk)
     data['mc_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['mc_u_kst2_l_kk'], regular_u_kst2_l_kk)
     data['truth_u_kst2_l_kk'] = onp.einsum("jkl,j->jkl", data['truth_u_kst2_l_kk'], regular_u_kst2_l_kk)
@@ -222,360 +225,897 @@ def component_BW_BW(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_pa
     result = dplex_deinsum("ljk,lj->ljk", result, propagator_combined)
     return result
 
-def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+def calculate_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_theta1, Amplitude_param_theta2):
     A_propagator = BW(A_mass, A_width, phi_kk)
     B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
     propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    const_ph = dplex_dconstruct(
+        np.array([Amplitude_param_const1, Amplitude_param_const2]),
+        np.array([Amplitude_param_theta1, Amplitude_param_theta2])
+    )
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
+    return result
+
+def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_theta1, Amplitude_param_theta2):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    const_ph = dplex_dconstruct(
+        np.array([Amplitude_param_const1, Amplitude_param_const2]),
+        np.array([Amplitude_param_theta1, Amplitude_param_theta2])
+    )
+    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
+    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
+    return result
+
+def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5, Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5):
+    A_propagator = BW(A_mass, A_width, phi_kk)
+    B_propagator = flatte1270(B_mass, B_width, f_kk)
+    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    Amplitude_param_const = np.array([[Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5]])
+    Amplitude_param_theta = np.array([[Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5]])
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
     return result
 
-def component_BW_flatte980(A_mass, A_width, phi_kk, B_mass, B_g_kk, B_rg, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
+def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5, Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5):
     A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator = flatte980(B_mass, B_g_kk, B_rg, f_kk)
+    B_propagator = flatte1270(B_mass, B_width, f_kk)
     propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
+    Amplitude_param_const = np.array([[Amplitude_param_const1, Amplitude_param_const2, Amplitude_param_const3, Amplitude_param_const4, Amplitude_param_const5]])
+    Amplitude_param_theta = np.array([[Amplitude_param_theta1, Amplitude_param_theta2, Amplitude_param_theta3, Amplitude_param_theta4, Amplitude_param_theta5]])
     const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
     result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
     result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
     return result
 
-def calculate_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
-    A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator = flatte1270(B_mass, B_width, f_kk)
-    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
-    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,j->jk", result, propagator_combined)
-    return result
+def make_initial_args():
+    return onp.array([
+        0.9794812115574156,  # resonances.phif0_980.propagators.B_propagator.mass
+        0.10678616326827592,  # resonances.phif0_980.propagators.B_propagator.g_kk
+        8.570187550432664,  # resonances.phif0_980.propagators.B_propagator.rg
+        0.1065182971468388,  # resonances.phif0_980.Amplitude.const2
+        0.03807025376236671,  # resonances.phif0_980.Amplitude.theta2
+        1.6761965590304995,  # resonances.phif0_1710.propagators.B_propagator.mass
+        0.16270071108440043,  # resonances.phif0_1710.propagators.B_propagator.width
+        0.02201375198386279,  # resonances.phif0_1710.Amplitude.const1
+        0.007433204877151768,  # resonances.phif0_1710.Amplitude.const2
+        0.008302300118288414,  # resonances.phif0_1710.Amplitude.theta1
+        -0.018544178045626723,  # resonances.phif0_1710.Amplitude.theta2
+        1.2896149318644679,  # resonances.phif2_1270.propagators.B_propagator.mass
+        0.1959796900380022,  # resonances.phif2_1270.propagators.B_propagator.width
+        -0.013533706721054747,  # resonances.phif2_1270.Amplitude.const1
+        -0.01650921272412254,  # resonances.phif2_1270.Amplitude.const2
+        0.015339403283337268,  # resonances.phif2_1270.Amplitude.const3
+        0.029798824827026338,  # resonances.phif2_1270.Amplitude.const4
+        0.020982478502465995,  # resonances.phif2_1270.Amplitude.const5
+        0.05458389002821978,  # resonances.phif2_1270.Amplitude.theta1
+        0.016032334798079934,  # resonances.phif2_1270.Amplitude.theta2
+        0.017179622009723918,  # resonances.phif2_1270.Amplitude.theta3
+        -0.050143087437086675,  # resonances.phif2_1270.Amplitude.theta4
+        -0.008718872479379924,  # resonances.phif2_1270.Amplitude.theta5
+        1.5222602842746435,  # resonances.phif2_1525.propagators.B_propagator.mass
+        0.08576525399315078,  # resonances.phif2_1525.propagators.B_propagator.width
+        -0.005345214125595505,  # resonances.phif2_1525.Amplitude.const1
+        0.0031770703345810553,  # resonances.phif2_1525.Amplitude.const2
+        -0.0036743677603351056,  # resonances.phif2_1525.Amplitude.const3
+        0.004813366936315499,  # resonances.phif2_1525.Amplitude.const4
+        0.010000673114238258,  # resonances.phif2_1525.Amplitude.const5
+        -0.010529063356530807,  # resonances.phif2_1525.Amplitude.theta1
+        0.003910028530572422,  # resonances.phif2_1525.Amplitude.theta2
+        0.0031787953173277725,  # resonances.phif2_1525.Amplitude.theta3
+        0.0333658928584713,  # resonances.phif2_1525.Amplitude.theta4
+        -0.006053516058970728,  # resonances.phif2_1525.Amplitude.theta5
+        2.1619576785269476,  # resonances.phif2_2150.propagators.B_propagator.mass
+        0.15906049251159413,  # resonances.phif2_2150.propagators.B_propagator.width
+        0.004643720949518616,  # resonances.phif2_2150.Amplitude.const1
+        -0.0009682564746806725,  # resonances.phif2_2150.Amplitude.const2
+        -0.0029804674908844213,  # resonances.phif2_2150.Amplitude.const3
+        0.008315390493289363,  # resonances.phif2_2150.Amplitude.const4
+        0.0005819695034846763,  # resonances.phif2_2150.Amplitude.const5
+        0.00545992748088964,  # resonances.phif2_2150.Amplitude.theta1
+        -0.012498776031677225,  # resonances.phif2_2150.Amplitude.theta2
+        0.002196563552197887,  # resonances.phif2_2150.Amplitude.theta3
+        -0.016814307435916394,  # resonances.phif2_2150.Amplitude.theta4
+        -0.007232946300343621,  # resonances.phif2_2150.Amplitude.theta5
+        2.547889297662712,  # resonances.phif2_2340.propagators.B_propagator.mass
+        0.324001266488012,  # resonances.phif2_2340.propagators.B_propagator.width
+        -0.15266341362240637,  # resonances.phif2_2340.Amplitude.const1
+        -0.05030214288962155,  # resonances.phif2_2340.Amplitude.const2
+        -0.01856511044577769,  # resonances.phif2_2340.Amplitude.const3
+        0.0908719088071242,  # resonances.phif2_2340.Amplitude.const4
+        0.029544599934778714,  # resonances.phif2_2340.Amplitude.const5
+        0.06277085590848677,  # resonances.phif2_2340.Amplitude.theta1
+        -0.0031366601030189344,  # resonances.phif2_2340.Amplitude.theta2
+        0.13756083806604205,  # resonances.phif2_2340.Amplitude.theta3
+        -0.0033564526519642953,  # resonances.phif2_2340.Amplitude.theta4
+        0.06849361819185686,  # resonances.phif2_2340.Amplitude.theta5
+        2.57497529295397,  # resonances.phif0_2470.propagators.B_propagator.mass
+        0.15761784400243628,  # resonances.phif0_2470.propagators.B_propagator.width
+        -0.345074426966773,  # resonances.phif0_2470.Amplitude.const1
+        -0.15428119408751656,  # resonances.phif0_2470.Amplitude.const2
+        0.2290031973516395,  # resonances.phif0_2470.Amplitude.theta1
+        -0.13412740539296167,  # resonances.phif0_2470.Amplitude.theta2
+        2.0945745764239794,  # resonances.K2100.propagators.B_propagator.mass
+        0.1111549213189184,  # resonances.K2100.propagators.B_propagator.width
+        0.00668002974985798,  # resonances.K2100.shared_amplitude_parameters.const1
+        0.004965565274392332,  # resonances.K2100.shared_amplitude_parameters.const2
+        -0.014345480981877965,  # resonances.K2100.shared_amplitude_parameters.theta1
+        -0.004182231968927211,  # resonances.K2100.shared_amplitude_parameters.theta2
+        1.8192837147853098,  # resonances.K1820.propagators.B_propagator.mass
+        0.2552907595714486,  # resonances.K1820.propagators.B_propagator.width
+        0.05353392339205181,  # resonances.K1820.shared_amplitude_parameters.const1
+        -0.013515632832936594,  # resonances.K1820.shared_amplitude_parameters.const2
+        -0.029170417788916315,  # resonances.K1820.shared_amplitude_parameters.theta1
+        0.008796315351616747,  # resonances.K1820.shared_amplitude_parameters.theta2
+        2.228180871519652,  # resonances.K2250.propagators.B_propagator.mass
+        0.22526773581883117,  # resonances.K2250.propagators.B_propagator.width
+        -0.021627369735391727,  # resonances.K2250.shared_amplitude_parameters.const1
+        0.0034149684028485067,  # resonances.K2250.shared_amplitude_parameters.const2
+        -0.03739773648153083,  # resonances.K2250.shared_amplitude_parameters.theta1
+        0.005079738018594662,  # resonances.K2250.shared_amplitude_parameters.theta2
+    ])
 
-def component_BW_flatte1270(A_mass, A_width, phi_kk, B_mass, B_width, f_kk, Amplitude_param_AMP, Amplitude_param_const, Amplitude_param_theta):
-    A_propagator = BW(A_mass, A_width, phi_kk)
-    B_propagator = flatte1270(B_mass, B_width, f_kk)
-    propagator_combined = dplex_deinsum("j, j->j", A_propagator, B_propagator)
-    const_ph = dplex_dconstruct(Amplitude_param_const, Amplitude_param_theta)
-    result = dplex_deinsum_ord("ijk,li->ljk", Amplitude_param_AMP, const_ph)
-    result = dplex_deinsum("ljk,j->ljk", result, propagator_combined)
-    return result
+import numpy as np
 
 def extract_parameters(args):
-    phif0_980_B_propagator_mass = args[0]  # resonances.phif0_980.propagators.B_propagator.mass
-    phif0_980_B_propagator_g_kk = args[1]  # resonances.phif0_980.propagators.B_propagator.g_kk
-    phif0_980_B_propagator_rg = args[2]  # resonances.phif0_980.propagators.B_propagator.rg
-    phif0_980_const2 = args[3]  # resonances.phif0_980.Amplitude.const2
-    phif0_980_theta2 = args[4]  # resonances.phif0_980.Amplitude.theta2
-    phif0_1710_B_propagator_mass = args[5]  # resonances.phif0_1710.propagators.B_propagator.mass
-    phif0_1710_B_propagator_width = args[6]  # resonances.phif0_1710.propagators.B_propagator.width
-    phif0_1710_const1 = args[7]  # resonances.phif0_1710.Amplitude.const1
-    phif0_1710_const2 = args[8]  # resonances.phif0_1710.Amplitude.const2
-    phif0_1710_theta1 = args[9]  # resonances.phif0_1710.Amplitude.theta1
-    phif0_1710_theta2 = args[10]  # resonances.phif0_1710.Amplitude.theta2
-    phif2_1270_B_propagator_mass = args[11]  # resonances.phif2_1270.propagators.B_propagator.mass
-    phif2_1270_B_propagator_width = args[12]  # resonances.phif2_1270.propagators.B_propagator.width
-    phif2_1270_const1 = args[13]  # resonances.phif2_1270.Amplitude.const1
-    phif2_1270_const2 = args[14]  # resonances.phif2_1270.Amplitude.const2
-    phif2_1270_const3 = args[15]  # resonances.phif2_1270.Amplitude.const3
-    phif2_1270_const4 = args[16]  # resonances.phif2_1270.Amplitude.const4
-    phif2_1270_const5 = args[17]  # resonances.phif2_1270.Amplitude.const5
-    phif2_1270_theta1 = args[18]  # resonances.phif2_1270.Amplitude.theta1
-    phif2_1270_theta2 = args[19]  # resonances.phif2_1270.Amplitude.theta2
-    phif2_1270_theta3 = args[20]  # resonances.phif2_1270.Amplitude.theta3
-    phif2_1270_theta4 = args[21]  # resonances.phif2_1270.Amplitude.theta4
-    phif2_1270_theta5 = args[22]  # resonances.phif2_1270.Amplitude.theta5
-    phif2_1525_B_propagator_mass = args[23]  # resonances.phif2_1525.propagators.B_propagator.mass
-    phif2_1525_B_propagator_width = args[24]  # resonances.phif2_1525.propagators.B_propagator.width
-    phif2_1525_const1 = args[25]  # resonances.phif2_1525.Amplitude.const1
-    phif2_1525_const2 = args[26]  # resonances.phif2_1525.Amplitude.const2
-    phif2_1525_const3 = args[27]  # resonances.phif2_1525.Amplitude.const3
-    phif2_1525_const4 = args[28]  # resonances.phif2_1525.Amplitude.const4
-    phif2_1525_const5 = args[29]  # resonances.phif2_1525.Amplitude.const5
-    phif2_1525_theta1 = args[30]  # resonances.phif2_1525.Amplitude.theta1
-    phif2_1525_theta2 = args[31]  # resonances.phif2_1525.Amplitude.theta2
-    phif2_1525_theta3 = args[32]  # resonances.phif2_1525.Amplitude.theta3
-    phif2_1525_theta4 = args[33]  # resonances.phif2_1525.Amplitude.theta4
-    phif2_1525_theta5 = args[34]  # resonances.phif2_1525.Amplitude.theta5
-    phif2_2150_B_propagator_mass = args[35]  # resonances.phif2_2150.propagators.B_propagator.mass
-    phif2_2150_B_propagator_width = args[36]  # resonances.phif2_2150.propagators.B_propagator.width
-    phif2_2150_const1 = args[37]  # resonances.phif2_2150.Amplitude.const1
-    phif2_2150_const2 = args[38]  # resonances.phif2_2150.Amplitude.const2
-    phif2_2150_const3 = args[39]  # resonances.phif2_2150.Amplitude.const3
-    phif2_2150_const4 = args[40]  # resonances.phif2_2150.Amplitude.const4
-    phif2_2150_const5 = args[41]  # resonances.phif2_2150.Amplitude.const5
-    phif2_2150_theta1 = args[42]  # resonances.phif2_2150.Amplitude.theta1
-    phif2_2150_theta2 = args[43]  # resonances.phif2_2150.Amplitude.theta2
-    phif2_2150_theta3 = args[44]  # resonances.phif2_2150.Amplitude.theta3
-    phif2_2150_theta4 = args[45]  # resonances.phif2_2150.Amplitude.theta4
-    phif2_2150_theta5 = args[46]  # resonances.phif2_2150.Amplitude.theta5
-    phif2_2340_B_propagator_mass = args[47]  # resonances.phif2_2340.propagators.B_propagator.mass
-    phif2_2340_B_propagator_width = args[48]  # resonances.phif2_2340.propagators.B_propagator.width
-    phif2_2340_const1 = args[49]  # resonances.phif2_2340.Amplitude.const1
-    phif2_2340_const2 = args[50]  # resonances.phif2_2340.Amplitude.const2
-    phif2_2340_const3 = args[51]  # resonances.phif2_2340.Amplitude.const3
-    phif2_2340_const4 = args[52]  # resonances.phif2_2340.Amplitude.const4
-    phif2_2340_const5 = args[53]  # resonances.phif2_2340.Amplitude.const5
-    phif2_2340_theta1 = args[54]  # resonances.phif2_2340.Amplitude.theta1
-    phif2_2340_theta2 = args[55]  # resonances.phif2_2340.Amplitude.theta2
-    phif2_2340_theta3 = args[56]  # resonances.phif2_2340.Amplitude.theta3
-    phif2_2340_theta4 = args[57]  # resonances.phif2_2340.Amplitude.theta4
-    phif2_2340_theta5 = args[58]  # resonances.phif2_2340.Amplitude.theta5
-    phif0_2470_B_propagator_mass = args[59]  # resonances.phif0_2470.propagators.B_propagator.mass
-    phif0_2470_B_propagator_width = args[60]  # resonances.phif0_2470.propagators.B_propagator.width
-    phif0_2470_const1 = args[61]  # resonances.phif0_2470.Amplitude.const1
-    phif0_2470_const2 = args[62]  # resonances.phif0_2470.Amplitude.const2
-    phif0_2470_theta1 = args[63]  # resonances.phif0_2470.Amplitude.theta1
-    phif0_2470_theta2 = args[64]  # resonances.phif0_2470.Amplitude.theta2
-    K2100_B_propagator_mass = args[65]  # resonances.K2100.propagators.B_propagator.mass
-    K2100_B_propagator_width = args[66]  # resonances.K2100.propagators.B_propagator.width
-    K2100_const1 = args[67]  # resonances.K2100.shared_amplitude_parameters.const1
-    K2100_const2 = args[68]  # resonances.K2100.shared_amplitude_parameters.const2
-    K2100_theta1 = args[69]  # resonances.K2100.shared_amplitude_parameters.theta1
-    K2100_theta2 = args[70]  # resonances.K2100.shared_amplitude_parameters.theta2
-    K1820_B_propagator_mass = args[71]  # resonances.K1820.propagators.B_propagator.mass
-    K1820_B_propagator_width = args[72]  # resonances.K1820.propagators.B_propagator.width
-    K1820_const1 = args[73]  # resonances.K1820.shared_amplitude_parameters.const1
-    K1820_const2 = args[74]  # resonances.K1820.shared_amplitude_parameters.const2
-    K1820_theta1 = args[75]  # resonances.K1820.shared_amplitude_parameters.theta1
-    K1820_theta2 = args[76]  # resonances.K1820.shared_amplitude_parameters.theta2
-    K2250_B_propagator_mass = args[77]  # resonances.K2250.propagators.B_propagator.mass
-    K2250_B_propagator_width = args[78]  # resonances.K2250.propagators.B_propagator.width
-    K2250_const1 = args[79]  # resonances.K2250.shared_amplitude_parameters.const1
-    K2250_const2 = args[80]  # resonances.K2250.shared_amplitude_parameters.const2
-    K2250_theta1 = args[81]  # resonances.K2250.shared_amplitude_parameters.theta1
-    K2250_theta2 = args[82]  # resonances.K2250.shared_amplitude_parameters.theta2
-    return phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, phif0_980_const2, phif0_980_theta2, phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, phif0_1710_const1, phif0_1710_const2, phif0_1710_theta1, phif0_1710_theta2, phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, phif2_1270_const1, phif2_1270_const2, phif2_1270_const3, phif2_1270_const4, phif2_1270_const5, phif2_1270_theta1, phif2_1270_theta2, phif2_1270_theta3, phif2_1270_theta4, phif2_1270_theta5, phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, phif2_1525_const1, phif2_1525_const2, phif2_1525_const3, phif2_1525_const4, phif2_1525_const5, phif2_1525_theta1, phif2_1525_theta2, phif2_1525_theta3, phif2_1525_theta4, phif2_1525_theta5, phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, phif2_2150_const1, phif2_2150_const2, phif2_2150_const3, phif2_2150_const4, phif2_2150_const5, phif2_2150_theta1, phif2_2150_theta2, phif2_2150_theta3, phif2_2150_theta4, phif2_2150_theta5, phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, phif2_2340_const1, phif2_2340_const2, phif2_2340_const3, phif2_2340_const4, phif2_2340_const5, phif2_2340_theta1, phif2_2340_theta2, phif2_2340_theta3, phif2_2340_theta4, phif2_2340_theta5, phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, phif0_2470_const1, phif0_2470_const2, phif0_2470_theta1, phif0_2470_theta2, K2100_B_propagator_mass, K2100_B_propagator_width, K2100_const1, K2100_const2, K2100_theta1, K2100_theta2, K1820_B_propagator_mass, K1820_B_propagator_width, K1820_const1, K1820_const2, K1820_theta1, K1820_theta2, K2250_B_propagator_mass, K2250_B_propagator_width, K2250_const1, K2250_const2, K2250_theta1, K2250_theta2
+    return {
+        'phi_mass': np.array([1.02]),
+        'phi_width': np.array([0.004]),
+        'u_kst2_r_kk_BW_BW_mass': np.array([args[65], args[71], args[77]]),
+        'u_kst2_r_kk_BW_BW_width': np.array([args[66], args[72], args[78]]),
+        'u_kst2_r_kk_BW_BW_const': np.array([args[67], args[68], args[73], args[74], args[79], args[80]]).reshape(-1, 2),
+        'u_kst2_r_kk_BW_BW_theta': np.array([args[69], args[70], args[75], args[76], args[81], args[82]]).reshape(-1, 2),
+        'u_kst2_l_kk_BW_BW_mass': np.array([args[65], args[71], args[77]]),
+        'u_kst2_l_kk_BW_BW_width': np.array([args[66], args[72], args[78]]),
+        'u_kst2_l_kk_BW_BW_const': np.array([args[67], args[68], args[73], args[74], args[79], args[80]]).reshape(-1, 2),
+        'u_kst2_l_kk_BW_BW_theta': np.array([args[69], args[70], args[75], args[76], args[81], args[82]]).reshape(-1, 2),
+        'phif0_kk_BW_flatte980_mass': np.array([args[0]]),
+        'phif0_kk_BW_flatte980_g_kk': np.array([args[1]]),
+        'phif0_kk_BW_flatte980_rg': np.array([args[2]]),
+        'phif0_kk_BW_flatte980_const': np.array([0.1, args[3]]).reshape(-1, 2),
+        'phif0_kk_BW_flatte980_theta': np.array([0.1, args[4]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_mass': np.array([args[5], args[59]]),
+        'phif0_kk_BW_BW_width': np.array([args[6], args[60]]),
+        'phif0_kk_BW_BW_const': np.array([args[7], args[8], args[61], args[62]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_theta': np.array([args[9], args[10], args[63], args[64]]).reshape(-1, 2),
+        'phif2_kk_BW_flatte1270_mass': np.array([args[11]]),
+        'phif2_kk_BW_flatte1270_width': np.array([args[12]]),
+        'phif2_kk_BW_flatte1270_const': np.array([args[13], args[14], args[15], args[16], args[17]]).reshape(-1, 5),
+        'phif2_kk_BW_flatte1270_theta': np.array([args[18], args[19], args[20], args[21], args[22]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_mass': np.array([args[23], args[35], args[47]]),
+        'phif2_kk_BW_BW_width': np.array([args[24], args[36], args[48]]),
+        'phif2_kk_BW_BW_const': np.array([args[25], args[26], args[27], args[28], args[29], args[37], args[38], args[39], args[40], args[41], args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_theta': np.array([args[30], args[31], args[32], args[33], args[34], args[42], args[43], args[44], args[45], args[46], args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
+    }
+
+def save_results(args, errors, output_path):
+    import toml, os
+    records = []
+    rec = {
+        'path': 'resonances.phif0_980.propagators.B_propagator.mass',
+        'value': float(args[0]),
+        'range': [0.98, 10.0],
+        'error': float(errors[0]),
+        'arg_index': 0,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_980.propagators.B_propagator.g_kk',
+        'value': float(args[1]),
+        'error': float(errors[1]),
+        'arg_index': 1,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_980.propagators.B_propagator.rg',
+        'value': float(args[2]),
+        'error': float(errors[2]),
+        'arg_index': 2,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_980.Amplitude.const2',
+        'value': float(args[3]),
+        'error': float(errors[3]),
+        'arg_index': 3,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_980.Amplitude.theta2',
+        'value': float(args[4]),
+        'error': float(errors[4]),
+        'arg_index': 4,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.propagators.B_propagator.mass',
+        'value': float(args[5]),
+        'range': [1.704, 1.0],
+        'error': float(errors[5]),
+        'arg_index': 5,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.propagators.B_propagator.width',
+        'value': float(args[6]),
+        'range': [0.123, 1.0],
+        'error': float(errors[6]),
+        'arg_index': 6,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.Amplitude.const1',
+        'value': float(args[7]),
+        'error': float(errors[7]),
+        'arg_index': 7,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.Amplitude.const2',
+        'value': float(args[8]),
+        'error': float(errors[8]),
+        'arg_index': 8,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.Amplitude.theta1',
+        'value': float(args[9]),
+        'error': float(errors[9]),
+        'arg_index': 9,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_1710.Amplitude.theta2',
+        'value': float(args[10]),
+        'error': float(errors[10]),
+        'arg_index': 10,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.propagators.B_propagator.mass',
+        'value': float(args[11]),
+        'range': [1.2755, 1.0],
+        'error': float(errors[11]),
+        'arg_index': 11,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.propagators.B_propagator.width',
+        'value': float(args[12]),
+        'range': [0.1867, 1.0],
+        'error': float(errors[12]),
+        'arg_index': 12,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.const1',
+        'value': float(args[13]),
+        'error': float(errors[13]),
+        'arg_index': 13,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.const2',
+        'value': float(args[14]),
+        'error': float(errors[14]),
+        'arg_index': 14,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.const3',
+        'value': float(args[15]),
+        'error': float(errors[15]),
+        'arg_index': 15,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.const4',
+        'value': float(args[16]),
+        'error': float(errors[16]),
+        'arg_index': 16,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.const5',
+        'value': float(args[17]),
+        'error': float(errors[17]),
+        'arg_index': 17,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.theta1',
+        'value': float(args[18]),
+        'error': float(errors[18]),
+        'arg_index': 18,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.theta2',
+        'value': float(args[19]),
+        'error': float(errors[19]),
+        'arg_index': 19,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.theta3',
+        'value': float(args[20]),
+        'error': float(errors[20]),
+        'arg_index': 20,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.theta4',
+        'value': float(args[21]),
+        'error': float(errors[21]),
+        'arg_index': 21,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1270.Amplitude.theta5',
+        'value': float(args[22]),
+        'error': float(errors[22]),
+        'arg_index': 22,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.propagators.B_propagator.mass',
+        'value': float(args[23]),
+        'range': [1.517, 1.0],
+        'error': float(errors[23]),
+        'arg_index': 23,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.propagators.B_propagator.width',
+        'value': float(args[24]),
+        'range': [0.086, 1.0],
+        'error': float(errors[24]),
+        'arg_index': 24,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.const1',
+        'value': float(args[25]),
+        'error': float(errors[25]),
+        'arg_index': 25,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.const2',
+        'value': float(args[26]),
+        'error': float(errors[26]),
+        'arg_index': 26,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.const3',
+        'value': float(args[27]),
+        'error': float(errors[27]),
+        'arg_index': 27,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.const4',
+        'value': float(args[28]),
+        'error': float(errors[28]),
+        'arg_index': 28,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.const5',
+        'value': float(args[29]),
+        'error': float(errors[29]),
+        'arg_index': 29,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.theta1',
+        'value': float(args[30]),
+        'error': float(errors[30]),
+        'arg_index': 30,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.theta2',
+        'value': float(args[31]),
+        'error': float(errors[31]),
+        'arg_index': 31,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.theta3',
+        'value': float(args[32]),
+        'error': float(errors[32]),
+        'arg_index': 32,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.theta4',
+        'value': float(args[33]),
+        'error': float(errors[33]),
+        'arg_index': 33,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_1525.Amplitude.theta5',
+        'value': float(args[34]),
+        'error': float(errors[34]),
+        'arg_index': 34,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.propagators.B_propagator.mass',
+        'value': float(args[35]),
+        'range': [2.157, 1.0],
+        'error': float(errors[35]),
+        'arg_index': 35,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.propagators.B_propagator.width',
+        'value': float(args[36]),
+        'range': [0.152, 1.0],
+        'error': float(errors[36]),
+        'arg_index': 36,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.const1',
+        'value': float(args[37]),
+        'error': float(errors[37]),
+        'arg_index': 37,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.const2',
+        'value': float(args[38]),
+        'error': float(errors[38]),
+        'arg_index': 38,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.const3',
+        'value': float(args[39]),
+        'error': float(errors[39]),
+        'arg_index': 39,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.const4',
+        'value': float(args[40]),
+        'error': float(errors[40]),
+        'arg_index': 40,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.const5',
+        'value': float(args[41]),
+        'error': float(errors[41]),
+        'arg_index': 41,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.theta1',
+        'value': float(args[42]),
+        'error': float(errors[42]),
+        'arg_index': 42,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.theta2',
+        'value': float(args[43]),
+        'error': float(errors[43]),
+        'arg_index': 43,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.theta3',
+        'value': float(args[44]),
+        'error': float(errors[44]),
+        'arg_index': 44,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.theta4',
+        'value': float(args[45]),
+        'error': float(errors[45]),
+        'arg_index': 45,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2150.Amplitude.theta5',
+        'value': float(args[46]),
+        'error': float(errors[46]),
+        'arg_index': 46,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.propagators.B_propagator.mass',
+        'value': float(args[47]),
+        'range': [2.345, 0.01],
+        'error': float(errors[47]),
+        'arg_index': 47,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.propagators.B_propagator.width',
+        'value': float(args[48]),
+        'range': [0.322, 1.0],
+        'error': float(errors[48]),
+        'arg_index': 48,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.const1',
+        'value': float(args[49]),
+        'error': float(errors[49]),
+        'arg_index': 49,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.const2',
+        'value': float(args[50]),
+        'error': float(errors[50]),
+        'arg_index': 50,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.const3',
+        'value': float(args[51]),
+        'error': float(errors[51]),
+        'arg_index': 51,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.const4',
+        'value': float(args[52]),
+        'error': float(errors[52]),
+        'arg_index': 52,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.const5',
+        'value': float(args[53]),
+        'error': float(errors[53]),
+        'arg_index': 53,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.theta1',
+        'value': float(args[54]),
+        'error': float(errors[54]),
+        'arg_index': 54,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.theta2',
+        'value': float(args[55]),
+        'error': float(errors[55]),
+        'arg_index': 55,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.theta3',
+        'value': float(args[56]),
+        'error': float(errors[56]),
+        'arg_index': 56,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.theta4',
+        'value': float(args[57]),
+        'error': float(errors[57]),
+        'arg_index': 57,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif2_2340.Amplitude.theta5',
+        'value': float(args[58]),
+        'error': float(errors[58]),
+        'arg_index': 58,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.propagators.B_propagator.mass',
+        'value': float(args[59]),
+        'range': [2.47, 0.007],
+        'error': float(errors[59]),
+        'arg_index': 59,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.propagators.B_propagator.width',
+        'value': float(args[60]),
+        'range': [0.075, 0.011],
+        'error': float(errors[60]),
+        'arg_index': 60,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.Amplitude.const1',
+        'value': float(args[61]),
+        'error': float(errors[61]),
+        'arg_index': 61,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.Amplitude.const2',
+        'value': float(args[62]),
+        'error': float(errors[62]),
+        'arg_index': 62,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.Amplitude.theta1',
+        'value': float(args[63]),
+        'error': float(errors[63]),
+        'arg_index': 63,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.phif0_2470.Amplitude.theta2',
+        'value': float(args[64]),
+        'error': float(errors[64]),
+        'arg_index': 64,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.propagators.B_propagator.mass',
+        'value': float(args[65]),
+        'range': [2.1, 10.0],
+        'error': float(errors[65]),
+        'arg_index': 65,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.propagators.B_propagator.width',
+        'value': float(args[66]),
+        'range': [0.1, 10.0],
+        'error': float(errors[66]),
+        'arg_index': 66,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.shared_amplitude_parameters.const1',
+        'value': float(args[67]),
+        'error': float(errors[67]),
+        'arg_index': 67,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.shared_amplitude_parameters.const2',
+        'value': float(args[68]),
+        'error': float(errors[68]),
+        'arg_index': 68,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.shared_amplitude_parameters.theta1',
+        'value': float(args[69]),
+        'error': float(errors[69]),
+        'arg_index': 69,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2100.shared_amplitude_parameters.theta2',
+        'value': float(args[70]),
+        'error': float(errors[70]),
+        'arg_index': 70,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.propagators.B_propagator.mass',
+        'value': float(args[71]),
+        'range': [1.819, 10.0],
+        'error': float(errors[71]),
+        'arg_index': 71,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.propagators.B_propagator.width',
+        'value': float(args[72]),
+        'range': [0.264, 10.0],
+        'error': float(errors[72]),
+        'arg_index': 72,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.shared_amplitude_parameters.const1',
+        'value': float(args[73]),
+        'error': float(errors[73]),
+        'arg_index': 73,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.shared_amplitude_parameters.const2',
+        'value': float(args[74]),
+        'error': float(errors[74]),
+        'arg_index': 74,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.shared_amplitude_parameters.theta1',
+        'value': float(args[75]),
+        'error': float(errors[75]),
+        'arg_index': 75,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K1820.shared_amplitude_parameters.theta2',
+        'value': float(args[76]),
+        'error': float(errors[76]),
+        'arg_index': 76,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.propagators.B_propagator.mass',
+        'value': float(args[77]),
+        'range': [2.247, 10.0],
+        'error': float(errors[77]),
+        'arg_index': 77,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.propagators.B_propagator.width',
+        'value': float(args[78]),
+        'range': [0.18, 10.0],
+        'error': float(errors[78]),
+        'arg_index': 78,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.shared_amplitude_parameters.const1',
+        'value': float(args[79]),
+        'error': float(errors[79]),
+        'arg_index': 79,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.shared_amplitude_parameters.const2',
+        'value': float(args[80]),
+        'error': float(errors[80]),
+        'arg_index': 80,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.shared_amplitude_parameters.theta1',
+        'value': float(args[81]),
+        'error': float(errors[81]),
+        'arg_index': 81,
+    }
+    records.append(rec)
+    rec = {
+        'path': 'resonances.K2250.shared_amplitude_parameters.theta2',
+        'value': float(args[82]),
+        'error': float(errors[82]),
+        'arg_index': 82,
+    }
+    records.append(rec)
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        toml.dump({'free_params': records}, f)
 
 def data_likelihood_kk(args):
     params = extract_parameters(args)
-    phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, phif0_980_const2, phif0_980_theta2, phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, phif0_1710_const1, phif0_1710_const2, phif0_1710_theta1, phif0_1710_theta2, phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, phif2_1270_const1, phif2_1270_const2, phif2_1270_const3, phif2_1270_const4, phif2_1270_const5, phif2_1270_theta1, phif2_1270_theta2, phif2_1270_theta3, phif2_1270_theta4, phif2_1270_theta5, phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, phif2_1525_const1, phif2_1525_const2, phif2_1525_const3, phif2_1525_const4, phif2_1525_const5, phif2_1525_theta1, phif2_1525_theta2, phif2_1525_theta3, phif2_1525_theta4, phif2_1525_theta5, phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, phif2_2150_const1, phif2_2150_const2, phif2_2150_const3, phif2_2150_const4, phif2_2150_const5, phif2_2150_theta1, phif2_2150_theta2, phif2_2150_theta3, phif2_2150_theta4, phif2_2150_theta5, phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, phif2_2340_const1, phif2_2340_const2, phif2_2340_const3, phif2_2340_const4, phif2_2340_const5, phif2_2340_theta1, phif2_2340_theta2, phif2_2340_theta3, phif2_2340_theta4, phif2_2340_theta5, phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, phif0_2470_const1, phif0_2470_const2, phif0_2470_theta1, phif0_2470_theta2, K2100_B_propagator_mass, K2100_B_propagator_width, K2100_const1, K2100_const2, K2100_theta1, K2100_theta2, K1820_B_propagator_mass, K1820_B_propagator_width, K1820_const1, K1820_const2, K1820_theta1, K1820_theta2, K2250_B_propagator_mass, K2250_B_propagator_width, K2250_const1, K2250_const2, K2250_theta1, K2250_theta2 = params
-    phif0_980_const = np.array([1.0, phif0_980_const2])
-    phif0_980_theta = np.array([0.0, phif0_980_theta2])
-    phif0_1710_const = np.array([phif0_1710_const1, phif0_1710_const2])
-    phif0_1710_theta = np.array([phif0_1710_theta1, phif0_1710_theta2])
-    phif2_1270_const = np.array([phif2_1270_const1, phif2_1270_const2, phif2_1270_const3, phif2_1270_const4, phif2_1270_const5])
-    phif2_1270_theta = np.array([phif2_1270_theta1, phif2_1270_theta2, phif2_1270_theta3, phif2_1270_theta4, phif2_1270_theta5])
-    phif2_1525_const = np.array([phif2_1525_const1, phif2_1525_const2, phif2_1525_const3, phif2_1525_const4, phif2_1525_const5])
-    phif2_1525_theta = np.array([phif2_1525_theta1, phif2_1525_theta2, phif2_1525_theta3, phif2_1525_theta4, phif2_1525_theta5])
-    phif2_2150_const = np.array([phif2_2150_const1, phif2_2150_const2, phif2_2150_const3, phif2_2150_const4, phif2_2150_const5])
-    phif2_2150_theta = np.array([phif2_2150_theta1, phif2_2150_theta2, phif2_2150_theta3, phif2_2150_theta4, phif2_2150_theta5])
-    phif2_2340_const = np.array([phif2_2340_const1, phif2_2340_const2, phif2_2340_const3, phif2_2340_const4, phif2_2340_const5])
-    phif2_2340_theta = np.array([phif2_2340_theta1, phif2_2340_theta2, phif2_2340_theta3, phif2_2340_theta4, phif2_2340_theta5])
-    phif0_2470_const = np.array([phif0_2470_const1, phif0_2470_const2])
-    phif0_2470_theta = np.array([phif0_2470_theta1, phif0_2470_theta2])
-    K2100_const = np.array([K2100_const1, K2100_const2])
-    K2100_theta = np.array([K2100_theta1, K2100_theta2])
-    K1820_const = np.array([K1820_const1, K1820_const2])
-    K1820_theta = np.array([K1820_theta1, K1820_theta2])
-    K2250_const = np.array([K2250_const1, K2250_const2])
-    K2250_theta = np.array([K2250_theta1, K2250_theta2])
-    data_phif0_980 = calculate_BW_flatte980(
-        phi_mass, phi_width, data_phi_kk,
-        phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, data_f_kk,
-        data_phif0_kk, phif0_980_const, phif0_980_theta
+    data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], data_f_kk,
+        data_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
     )
-    data_phif0_1710 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, data_f_kk,
-        data_phif0_kk, phif0_1710_const, phif0_1710_theta
+    data_phif0_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], data_f_kk,
+        data_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
     )
-    data_phif2_1270 = calculate_BW_flatte1270(
-        phi_mass, phi_width, data_phi_kk,
-        phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, data_f_kk,
-        data_phif2_kk, phif2_1270_const, phif2_1270_theta
+    data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], data_f_kk,
+        data_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
     )
-    data_phif2_1525 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, data_f_kk,
-        data_phif2_kk, phif2_1525_const, phif2_1525_theta
+    data_phif2_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], data_f_kk,
+        data_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
     )
-    data_phif2_2150 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, data_f_kk,
-        data_phif2_kk, phif2_2150_const, phif2_2150_theta
+    data_u_kst2_r_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['u_kst2_r_kk_BW_BW_mass'], params['u_kst2_r_kk_BW_BW_width'], data_f_kk,
+        data_u_kst2_r_kk, params['u_kst2_r_kk_BW_BW_const'], params['u_kst2_r_kk_BW_BW_theta']
     )
-    data_phif2_2340 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, data_f_kk,
-        data_phif2_kk, phif2_2340_const, phif2_2340_theta
+    data_u_kst2_l_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], data_phi_kk,
+        params['u_kst2_l_kk_BW_BW_mass'], params['u_kst2_l_kk_BW_BW_width'], data_f_kk,
+        data_u_kst2_l_kk, params['u_kst2_l_kk_BW_BW_const'], params['u_kst2_l_kk_BW_BW_theta']
     )
-    data_phif0_2470 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, data_f_kk,
-        data_phif0_kk, phif0_2470_const, phif0_2470_theta
+    component_data_phif0_kk_BW_flatte980 = component_BW_flatte980(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], truth_f_kk,
+        truth_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
     )
-    data_K2100 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        K2100_B_propagator_mass, K2100_B_propagator_width, data_f_kk,
-        data_K2100, K2100_const, K2100_theta
+    component_data_phif0_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], truth_f_kk,
+        truth_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
     )
-    data_K1820 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        K1820_B_propagator_mass, K1820_B_propagator_width, data_f_kk,
-        data_K1820, K1820_const, K1820_theta
+    component_data_phif2_kk_BW_flatte1270 = component_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], truth_f_kk,
+        truth_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
     )
-    data_K2250 = calculate_BW_BW(
-        phi_mass, phi_width, data_phi_kk,
-        K2250_B_propagator_mass, K2250_B_propagator_width, data_f_kk,
-        data_K2250, K2250_const, K2250_theta
+    component_data_phif2_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], truth_f_kk,
+        truth_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
     )
-    component_data_phif0_980 = component_BW_flatte980(
-        phi_mass, phi_width, truth_phi_kk,
-        phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, truth_f_kk,
-        truth_phif0_kk, phif0_980_const, phif0_980_theta
+    component_data_u_kst2_r_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['u_kst2_r_kk_BW_BW_mass'], params['u_kst2_r_kk_BW_BW_width'], truth_f_kk,
+        truth_u_kst2_r_kk, params['u_kst2_r_kk_BW_BW_const'], params['u_kst2_r_kk_BW_BW_theta']
     )
-    component_data_phif0_1710 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, truth_f_kk,
-        truth_phif0_kk, phif0_1710_const, phif0_1710_theta
-    )
-    component_data_phif2_1270 = component_BW_flatte1270(
-        phi_mass, phi_width, truth_phi_kk,
-        phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, truth_f_kk,
-        truth_phif2_kk, phif2_1270_const, phif2_1270_theta
-    )
-    component_data_phif2_1525 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, truth_f_kk,
-        truth_phif2_kk, phif2_1525_const, phif2_1525_theta
-    )
-    component_data_phif2_2150 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, truth_f_kk,
-        truth_phif2_kk, phif2_2150_const, phif2_2150_theta
-    )
-    component_data_phif2_2340 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, truth_f_kk,
-        truth_phif2_kk, phif2_2340_const, phif2_2340_theta
-    )
-    component_data_phif0_2470 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, truth_f_kk,
-        truth_phif0_kk, phif0_2470_const, phif0_2470_theta
-    )
-    component_data_K2100 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        K2100_B_propagator_mass, K2100_B_propagator_width, truth_f_kk,
-        truth_K2100, K2100_const, K2100_theta
-    )
-    component_data_K1820 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        K1820_B_propagator_mass, K1820_B_propagator_width, truth_f_kk,
-        truth_K1820, K1820_const, K1820_theta
-    )
-    component_data_K2250 = component_BW_BW(
-        phi_mass, phi_width, truth_phi_kk,
-        K2250_B_propagator_mass, K2250_B_propagator_width, truth_f_kk,
-        truth_K2250, K2250_const, K2250_theta
+    component_data_u_kst2_l_kk_BW_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], truth_phi_kk,
+        params['u_kst2_l_kk_BW_BW_mass'], params['u_kst2_l_kk_BW_BW_width'], truth_f_kk,
+        truth_u_kst2_l_kk, params['u_kst2_l_kk_BW_BW_const'], params['u_kst2_l_kk_BW_BW_theta']
     )
     sum_frac = np.sum(dplex_dabs(
-        np.einsum("mljk->mjk", component_data_phif0_980) +
-        np.einsum("mljk->mjk", component_data_phif0_1710) +
-        np.einsum("mljk->mjk", component_data_phif2_1270) +
-        np.einsum("mljk->mjk", component_data_phif2_1525) +
-        np.einsum("mljk->mjk", component_data_phif2_2150) +
-        np.einsum("mljk->mjk", component_data_phif2_2340) +
-        np.einsum("mljk->mjk", component_data_phif0_2470) +
-        np.einsum("mljk->mjk", component_data_K2100) +
-        np.einsum("mljk->mjk", component_data_K1820) +
-        np.einsum("mljk->mjk", component_data_K2250)
+        np.einsum("mljk->mjk", component_data_phif0_kk_BW_flatte980) +
+        np.einsum("mljk->mjk", component_data_phif0_kk_BW_BW) +
+        np.einsum("mljk->mjk", component_data_phif2_kk_BW_flatte1270) +
+        np.einsum("mljk->mjk", component_data_phif2_kk_BW_BW) +
+        np.einsum("mljk->mjk", component_data_u_kst2_r_kk_BW_BW) +
+        np.einsum("mljk->mjk", component_data_u_kst2_l_kk_BW_BW)
     ))
-    frac_phif0_980 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_980)) / sum_frac)
-    frac_phif0_1710 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_1710)) / sum_frac)
-    frac_phif2_1270 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_1270)) / sum_frac)
-    frac_phif2_1525 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_1525)) / sum_frac)
-    frac_phif2_2150 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_2150)) / sum_frac)
-    frac_phif2_2340 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_2340)) / sum_frac)
-    frac_phif0_2470 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_2470)) / sum_frac)
-    frac_K2100 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_K2100)) / sum_frac)
-    frac_K1820 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_K1820)) / sum_frac)
-    frac_K2250 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_K2250)) / sum_frac)
-    total_frac = frac_phif0_980 + frac_phif0_1710 + frac_phif2_1270 + frac_phif2_1525 + frac_phif2_2150 + frac_phif2_2340 + frac_phif0_2470 + frac_K2100 + frac_K1820 + frac_K2250
+    frac_phif0_flatte980 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_flatte980)) / sum_frac)
+    frac_phif0_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_BW)) / sum_frac)
+    frac_phif2_flatte1270 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
+    frac_phif2_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_BW)) / sum_frac)
+    frac_u_kst2_r_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_r_kk_BW_BW)) / sum_frac)
+    frac_u_kst2_l_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_l_kk_BW_BW)) / sum_frac)
+    total_frac = frac_phif0_flatte980 + frac_phif0_BW + frac_phif2_flatte1270 + frac_phif2_BW + frac_u_kst2_r_BW + frac_u_kst2_l_BW
     step_function = np.power(total_frac - 1.03, 2.0) * constraint_strength
-    total_amplitude = data_phif0_980
-    total_amplitude = total_amplitude + data_phif0_1710
-    total_amplitude = total_amplitude + data_phif2_1270
-    total_amplitude = total_amplitude + data_phif2_1525
-    total_amplitude = total_amplitude + data_phif2_2150
-    total_amplitude = total_amplitude + data_phif2_2340
-    total_amplitude = total_amplitude + data_phif0_2470
-    total_amplitude = total_amplitude + data_K2100
-    total_amplitude = total_amplitude + data_K1820
-    total_amplitude = total_amplitude + data_K2250
+    total_amplitude = data_phif0_kk_BW_flatte980
+    total_amplitude = total_amplitude + data_phif0_kk_BW_BW
+    total_amplitude = total_amplitude + data_phif2_kk_BW_flatte1270
+    total_amplitude = total_amplitude + data_phif2_kk_BW_BW
+    total_amplitude = total_amplitude + data_u_kst2_r_kk_BW_BW
+    total_amplitude = total_amplitude + data_u_kst2_l_kk_BW_BW
     likelihood = -np.sum(np.log(np.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
     return likelihood
 
 def mc_likelihood_kk(args):
     params = extract_parameters(args)
-    phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, phif0_980_const2, phif0_980_theta2, phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, phif0_1710_const1, phif0_1710_const2, phif0_1710_theta1, phif0_1710_theta2, phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, phif2_1270_const1, phif2_1270_const2, phif2_1270_const3, phif2_1270_const4, phif2_1270_const5, phif2_1270_theta1, phif2_1270_theta2, phif2_1270_theta3, phif2_1270_theta4, phif2_1270_theta5, phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, phif2_1525_const1, phif2_1525_const2, phif2_1525_const3, phif2_1525_const4, phif2_1525_const5, phif2_1525_theta1, phif2_1525_theta2, phif2_1525_theta3, phif2_1525_theta4, phif2_1525_theta5, phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, phif2_2150_const1, phif2_2150_const2, phif2_2150_const3, phif2_2150_const4, phif2_2150_const5, phif2_2150_theta1, phif2_2150_theta2, phif2_2150_theta3, phif2_2150_theta4, phif2_2150_theta5, phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, phif2_2340_const1, phif2_2340_const2, phif2_2340_const3, phif2_2340_const4, phif2_2340_const5, phif2_2340_theta1, phif2_2340_theta2, phif2_2340_theta3, phif2_2340_theta4, phif2_2340_theta5, phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, phif0_2470_const1, phif0_2470_const2, phif0_2470_theta1, phif0_2470_theta2, K2100_B_propagator_mass, K2100_B_propagator_width, K2100_const1, K2100_const2, K2100_theta1, K2100_theta2, K1820_B_propagator_mass, K1820_B_propagator_width, K1820_const1, K1820_const2, K1820_theta1, K1820_theta2, K2250_B_propagator_mass, K2250_B_propagator_width, K2250_const1, K2250_const2, K2250_theta1, K2250_theta2 = params
-    phif0_980_const = np.array([1.0, phif0_980_const2])
-    phif0_980_theta = np.array([0.0, phif0_980_theta2])
-    phif0_1710_const = np.array([phif0_1710_const1, phif0_1710_const2])
-    phif0_1710_theta = np.array([phif0_1710_theta1, phif0_1710_theta2])
-    phif2_1270_const = np.array([phif2_1270_const1, phif2_1270_const2, phif2_1270_const3, phif2_1270_const4, phif2_1270_const5])
-    phif2_1270_theta = np.array([phif2_1270_theta1, phif2_1270_theta2, phif2_1270_theta3, phif2_1270_theta4, phif2_1270_theta5])
-    phif2_1525_const = np.array([phif2_1525_const1, phif2_1525_const2, phif2_1525_const3, phif2_1525_const4, phif2_1525_const5])
-    phif2_1525_theta = np.array([phif2_1525_theta1, phif2_1525_theta2, phif2_1525_theta3, phif2_1525_theta4, phif2_1525_theta5])
-    phif2_2150_const = np.array([phif2_2150_const1, phif2_2150_const2, phif2_2150_const3, phif2_2150_const4, phif2_2150_const5])
-    phif2_2150_theta = np.array([phif2_2150_theta1, phif2_2150_theta2, phif2_2150_theta3, phif2_2150_theta4, phif2_2150_theta5])
-    phif2_2340_const = np.array([phif2_2340_const1, phif2_2340_const2, phif2_2340_const3, phif2_2340_const4, phif2_2340_const5])
-    phif2_2340_theta = np.array([phif2_2340_theta1, phif2_2340_theta2, phif2_2340_theta3, phif2_2340_theta4, phif2_2340_theta5])
-    phif0_2470_const = np.array([phif0_2470_const1, phif0_2470_const2])
-    phif0_2470_theta = np.array([phif0_2470_theta1, phif0_2470_theta2])
-    K2100_const = np.array([K2100_const1, K2100_const2])
-    K2100_theta = np.array([K2100_theta1, K2100_theta2])
-    K1820_const = np.array([K1820_const1, K1820_const2])
-    K1820_theta = np.array([K1820_theta1, K1820_theta2])
-    K2250_const = np.array([K2250_const1, K2250_const2])
-    K2250_theta = np.array([K2250_theta1, K2250_theta2])
     total_mc = calculate_BW_flatte980(
-        phi_mass, phi_width, mc_phi_kk,
-        phif0_980_B_propagator_mass, phif0_980_B_propagator_g_kk, phif0_980_B_propagator_rg, mc_f_kk,
-        mc_phif0_kk, phif0_980_const, phif0_980_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'], params['phif0_kk_BW_flatte980_rg'], mc_f_kk,
+        mc_phif0_kk, params['phif0_kk_BW_flatte980_const'][0, 0], params['phif0_kk_BW_flatte980_const'][0, 1], params['phif0_kk_BW_flatte980_theta'][0, 0], params['phif0_kk_BW_flatte980_theta'][0, 1]
     )
     total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        phif0_1710_B_propagator_mass, phif0_1710_B_propagator_width, mc_f_kk,
-        mc_phif0_kk, phif0_1710_const, phif0_1710_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], mc_f_kk,
+        mc_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
     )
     total_mc = total_mc + calculate_BW_flatte1270(
-        phi_mass, phi_width, mc_phi_kk,
-        phif2_1270_B_propagator_mass, phif2_1270_B_propagator_width, mc_f_kk,
-        mc_phif2_kk, phif2_1270_const, phif2_1270_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], mc_f_kk,
+        mc_phif2_kk, params['phif2_kk_BW_flatte1270_const'][0, 0], params['phif2_kk_BW_flatte1270_const'][0, 1], params['phif2_kk_BW_flatte1270_const'][0, 2], params['phif2_kk_BW_flatte1270_const'][0, 3], params['phif2_kk_BW_flatte1270_const'][0, 4], params['phif2_kk_BW_flatte1270_theta'][0, 0], params['phif2_kk_BW_flatte1270_theta'][0, 1], params['phif2_kk_BW_flatte1270_theta'][0, 2], params['phif2_kk_BW_flatte1270_theta'][0, 3], params['phif2_kk_BW_flatte1270_theta'][0, 4]
     )
     total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        phif2_1525_B_propagator_mass, phif2_1525_B_propagator_width, mc_f_kk,
-        mc_phif2_kk, phif2_1525_const, phif2_1525_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], mc_f_kk,
+        mc_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
     )
     total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        phif2_2150_B_propagator_mass, phif2_2150_B_propagator_width, mc_f_kk,
-        mc_phif2_kk, phif2_2150_const, phif2_2150_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['u_kst2_r_kk_BW_BW_mass'], params['u_kst2_r_kk_BW_BW_width'], mc_f_kk,
+        mc_u_kst2_r_kk, params['u_kst2_r_kk_BW_BW_const'], params['u_kst2_r_kk_BW_BW_theta']
     )
     total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        phif2_2340_B_propagator_mass, phif2_2340_B_propagator_width, mc_f_kk,
-        mc_phif2_kk, phif2_2340_const, phif2_2340_theta
-    )
-    total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        phif0_2470_B_propagator_mass, phif0_2470_B_propagator_width, mc_f_kk,
-        mc_phif0_kk, phif0_2470_const, phif0_2470_theta
-    )
-    total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        K2100_B_propagator_mass, K2100_B_propagator_width, mc_f_kk,
-        mc_K2100, K2100_const, K2100_theta
-    )
-    total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        K1820_B_propagator_mass, K1820_B_propagator_width, mc_f_kk,
-        mc_K1820, K1820_const, K1820_theta
-    )
-    total_mc = total_mc + calculate_BW_BW(
-        phi_mass, phi_width, mc_phi_kk,
-        K2250_B_propagator_mass, K2250_B_propagator_width, mc_f_kk,
-        mc_K2250, K2250_const, K2250_theta
+        params['phi_mass'], params['phi_width'], mc_phi_kk,
+        params['u_kst2_l_kk_BW_BW_mass'], params['u_kst2_l_kk_BW_BW_width'], mc_f_kk,
+        mc_u_kst2_l_kk, params['u_kst2_l_kk_BW_BW_const'], params['u_kst2_l_kk_BW_BW_theta']
     )
     return np.mean(np.sum(dplex_dabs(total_mc), axis=1))
 
@@ -636,6 +1176,7 @@ if __name__  == "__main__":
     config.update("jax_enable_x64", True)
 
     constraint_strength = 0.0
+    args_list = make_initial_args()
 
     logger.info("编译JAX函数（HVP版本）...")
     jit_likelihood = jit(combined_likelihood)
@@ -698,7 +1239,5 @@ if __name__  == "__main__":
     onp.save("output/fit/fit_result_errors.npy", ferror)
     logger.info("参数已保存至 output/fit/fit_result_values.npy")
 
-    result_config = build_config(result.x, ferror)
-    with open("output/fit/fit_result_config.json", "w", encoding="utf-8") as f:
-        json.dump(result_config, f, indent=4)
-    logger.info("配置已保存至 output/fit/fit_result_config.json")
+    save_results(result.x, ferror, "output/fit/fit_result_config.toml")
+    logger.info("配置已保存至 output/fit/fit_result_config.toml")

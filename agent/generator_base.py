@@ -130,7 +130,9 @@ class StageRunner:
 
         self._cache_dir = os.path.join(self.workdir, "cache")
         self._fragments_dir = os.path.join(self._cache_dir, "fragments")
+        self._prompts_dir = os.path.join(self._cache_dir, "prompts")
         os.makedirs(self._fragments_dir, exist_ok=True)
+        os.makedirs(self._prompts_dir, exist_ok=True)
 
     # ------------------------------------------------------------------
     # TOML helpers
@@ -306,8 +308,25 @@ class StageRunner:
         time.sleep(1)
 
         self.save_fragment(fragment_name, code)
+
+        # Save prompt and response as markdown under cache/prompts/
+        prompt_log_rel = f"prompts/{name.replace('.', '_')}.md"
+        prompt_log_abs = os.path.join(self._cache_dir, prompt_log_rel)
+        os.makedirs(os.path.dirname(prompt_log_abs), exist_ok=True)
+        with open(prompt_log_abs, "w", encoding="utf-8") as f:
+            f.write(f"# Stage: {name}\n\n")
+            f.write("## Prompt\n\n")
+            f.write("```\n")
+            f.write(prompt)
+            f.write("\n```\n\n")
+            f.write("## Response\n\n")
+            f.write("```python\n")
+            f.write(code)
+            f.write("\n```\n")
+
         manifest = self.load_manifest()
-        _nested_set(manifest, {"input_schema_hash": current_hash, "fragment": fragment_name},
+        _nested_set(manifest, {"input_schema_hash": current_hash, "fragment": fragment_name,
+                                "prompt_log": prompt_log_rel},
                     "stages", *name.split("."))
         self.save_manifest(manifest)
         return code
