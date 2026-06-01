@@ -45,7 +45,7 @@ class DrawGenerator(FitGenerator):
     # ------------------------------------------------------------------
 
     def stage_draw_load_data(self) -> None:
-        stripped_config = self.read_stage_output("config_strip")["stripped_config"]
+        stripped_config = self.read_stage_output("config_strip.stripped_config")
         stripped_json = json.dumps(stripped_config.get("resonances", {}), indent=2)
         sbc, amp = self.get_all_resonance_data()
         extra_sbc = self.get_draw_extra_sbc()
@@ -72,7 +72,7 @@ class DrawGenerator(FitGenerator):
 
     def stage_draw_weight_function(self) -> None:
         classification = self.read_stage_output("classification")
-        free_params = self.read_stage_output("config_strip")["free_params"]
+        free_params = self.read_stage_output("config_strip.free_params")["free_params"]
         resonance_fragments = self._load_resonance_fragments(classification)
         extract_parameters_code = self.load_fragment("fragments/extract_parameters.py")
 

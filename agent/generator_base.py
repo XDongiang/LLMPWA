@@ -171,17 +171,43 @@ class StageRunner:
     def read_stage_output(self, name: str) -> Any:
         """Read a stage's structured output from manifest.toml.
 
-        Stages are forbidden from passing data through function arguments;
-        every stage's output must be persisted here and read back by
-        downstream stages via this method.
+        If the stored value is a fragment reference ``{"_fragment_ref": "..."}``
+        the file is loaded transparently and its contents returned.
+        Stages never need to know whether the data is inline or on disk.
         """
         manifest = self.load_manifest()
-        return _nested_get(manifest, "stages", *name.split("."), "output")
+        value = _nested_get(manifest, "stages", *name.split("."), "output")
+        if isinstance(value, dict) and "_fragment_ref" in value:
+            ref = value["_fragment_ref"]
+            abs_path = self._fragment_abs(ref)
+            if ref.endswith(".json"):
+                with open(abs_path, encoding="utf-8") as f:
+                    return json.load(f)
+            return self._load_toml(abs_path)
+        return value
 
-    def write_stage_output(self, name: str, output: Any) -> None:
-        """Persist a stage's structured output to manifest.toml."""
+    def write_stage_output(self, name: str, output: Any,
+                           fragment_path: Optional[str] = None) -> None:
+        """Persist a stage's structured output.
+
+        If *fragment_path* is given the data is serialised to that fragment
+        file (relative to cache/) and only a ``{"_fragment_ref": path}``
+        pointer is stored in manifest.toml, keeping the manifest small.
+        Otherwise the data is written inline into the manifest.
+        """
+        if fragment_path is not None:
+            abs_path = self._fragment_abs(fragment_path)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            tmp = abs_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                toml.dump(output, f)
+            os.replace(tmp, abs_path)
+            stored: Any = {"_fragment_ref": fragment_path}
+        else:
+            stored = output
+
         manifest = self.load_manifest()
-        _nested_set(manifest, output, "stages", *name.split("."), "output")
+        _nested_set(manifest, stored, "stages", *name.split("."), "output")
         self.save_manifest(manifest)
 
     # ------------------------------------------------------------------

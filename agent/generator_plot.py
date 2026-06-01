@@ -55,7 +55,7 @@ class PlotGenerator(FitGenerator):
     # ------------------------------------------------------------------
 
     def stage_per_resonance_plot(self, resonance_name: str) -> None:
-        stripped_config = self.read_stage_output("config_strip")["stripped_config"]
+        stripped_config = self.read_stage_output("config_strip.stripped_config")
         classification = self.read_stage_output("classification")
         resonance_info = json.dumps(
             stripped_config.get("resonances", {}).get(resonance_name, {}), indent=2
