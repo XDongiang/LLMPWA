@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Read(//home/caihao/PWACG/rendered_scripts/**)",
-      "Read(//home/caihao/PWACG/run/**)"
+      "Read(//home/caihao/PWACG/run/**)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('agent/generator_base.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('agent/generator_draw.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(conda activate *)",
+      "Bash(python -c \"import toml; print\\(toml.__version__\\)\")",
+      "Bash(ls /home/caihao/miniconda3/envs/ 2>/dev/null | head -20)",
+      "Read(//home/caihao/miniconda3/envs/**)",
+      "Bash(/home/caihao/miniconda3/envs/pwacg/bin/python -c \"import toml; print\\('toml', toml.__version__\\); import jax; print\\('jax', jax.__version__\\)\")",
+      "Bash(conda env *)",
+      "Bash(/home/caihao/miniconda3/envs/pwacg/bin/python -c ' *)"
     ]
   }
 }
