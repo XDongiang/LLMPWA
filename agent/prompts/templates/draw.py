@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+from shared import 
 # SECTION: LOGGING_CONFIG
 def setup_logging():
     """Setup logging configuration"""

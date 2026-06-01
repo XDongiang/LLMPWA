@@ -295,3 +295,8 @@ parameter_ref = "shared_amplitude_parameters"
 
 [draw]
 extra_sbc = ["b123_kk", "b124_kk"]
+
+[fit]
+total_frac = 1.1
+lambda_tfc = 1000
+boundary = true
