@@ -35,16 +35,16 @@ class FitGenerator(StageRunner):
         """Strip free-param values from raw_config; persist two fragment files."""
         stripped_config, free_params, _ = parse_config(self.raw_config)
 
-        # Fragment 1: free_params list — {path, value, range, error, arg_index}
-        self.write_stage_output(
-            "config_strip.free_params",
+        # field: free_params — {path, value, range, error, arg_index}
+        self.write_stage_field(
+            "config_strip", "free_params",
             {"free_params": free_params},
             fragment_path="fragments/free_params.toml",
         )
 
-        # Fragment 2: stripped_config — free fields replaced with {arg_index = i}
-        self.write_stage_output(
-            "config_strip.stripped_config",
+        # field: stripped_config — free fields replaced with {arg_index = i}
+        self.write_stage_field(
+            "config_strip", "stripped_config",
             stripped_config,
             fragment_path="fragments/stripped_config.toml",
         )
@@ -54,7 +54,7 @@ class FitGenerator(StageRunner):
     # ------------------------------------------------------------------
 
     def stage1_classification(self) -> None:
-        stripped_config = self.read_stage_output("config_strip.stripped_config")
+        stripped_config = self.read_stage_output("config_strip", field="stripped_config")
         stripped_json = json.dumps(stripped_config.get("resonances", {}), indent=2)
         prompt_template = load_prompt("analysis_toml_config")
 
@@ -71,14 +71,12 @@ class FitGenerator(StageRunner):
             check=False,
         )
 
-        self.write_stage_output("classification", {"_fragment_ref": "fragments/classification.json"})
-
     # ------------------------------------------------------------------
     # Stage 2: data_load (LLM)
     # ------------------------------------------------------------------
 
     def stage2_data_load(self) -> None:
-        stripped_config = self.read_stage_output("config_strip.stripped_config")
+        stripped_config = self.read_stage_output("config_strip", field="stripped_config")
         stripped_json = json.dumps(stripped_config.get("resonances", {}), indent=2)
         sbc, amp = self.get_all_resonance_data()
         prompt_template = load_prompt("load_data")
@@ -102,7 +100,7 @@ class FitGenerator(StageRunner):
     # ------------------------------------------------------------------
 
     def stage3_resonance_calculation(self) -> None:
-        stripped_config = self.read_stage_output("config_strip.stripped_config")
+        stripped_config = self.read_stage_output("config_strip", field="stripped_config")
         classification = self.read_stage_output("classification")
         prop_classification = classification.get("propagator_classification", {})
         classification_json = json.dumps(prop_classification, indent=2)
@@ -137,7 +135,7 @@ class FitGenerator(StageRunner):
     # ------------------------------------------------------------------
 
     def stage4a_make_initial_args(self) -> None:
-        free_params = self.read_stage_output("config_strip.free_params")["free_params"]
+        free_params = self.read_stage_output("config_strip", field="free_params")["free_params"]
         schema_json = json.dumps(
             [{"path": p["path"], "value": p.get("value")} for p in free_params], indent=2
         )
@@ -179,7 +177,7 @@ class FitGenerator(StageRunner):
     # ------------------------------------------------------------------
 
     def stage4c_save_results(self) -> None:
-        free_params = self.read_stage_output("config_strip.free_params")["free_params"]
+        free_params = self.read_stage_output("config_strip", field="free_params")["free_params"]
         schema_json = json.dumps(
             [{"path": p["path"], "range": p.get("range"), "arg_index": p["arg_index"]}
              for p in free_params], indent=2
@@ -201,7 +199,7 @@ class FitGenerator(StageRunner):
 
     def stage5_likelihood_function(self) -> None:
         classification = self.read_stage_output("classification")
-        free_params = self.read_stage_output("config_strip.free_params")["free_params"]
+        free_params = self.read_stage_output("config_strip", field="free_params")["free_params"]
         resonance_fragments = self._load_resonance_fragments(classification)
         extract_parameters_code = self.load_fragment("fragments/extract_parameters.py")
 

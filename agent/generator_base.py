@@ -162,7 +162,7 @@ class StageRunner:
         p = self._manifest_path()
         tmp = p + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            toml.dump(manifest, f)
+            f.write(_dump_manifest(manifest))
         os.replace(tmp, p)
         print(f"manifest.toml saved: {p}")
 
@@ -170,32 +170,42 @@ class StageRunner:
     # Stage output helpers (read/write manifest.stages.<name>.output)
     # ------------------------------------------------------------------
 
-    def read_stage_output(self, name: str) -> Any:
-        """Read a stage's structured output from manifest.toml.
+    def read_stage_output(self, name: str, field: str = "output") -> Any:
+        """Read a stage field from manifest.toml.
 
-        If the stored value is a fragment reference ``{"_fragment_ref": "..."}``
-        the file is loaded transparently and its contents returned.
-        Stages never need to know whether the data is inline or on disk.
+        *field* defaults to ``"output"`` for normal stages. For stages that
+        store multiple file refs as sibling fields (e.g. config_strip), pass
+        the field name directly (e.g. ``field="free_params"``).
+
+        A ``{"type": "file", "path": "..."}`` value is transparently loaded
+        from disk. Legacy ``{"_fragment_ref": "..."}`` is also supported.
         """
         manifest = self.load_manifest()
-        value = _nested_get(manifest, "stages", *name.split("."), "output")
-        if isinstance(value, dict) and "_fragment_ref" in value:
-            ref = value["_fragment_ref"]
-            abs_path = self._fragment_abs(ref)
-            if ref.endswith(".json"):
-                with open(abs_path, encoding="utf-8") as f:
-                    return json.load(f)
-            return self._load_toml(abs_path)
+        value = _nested_get(manifest, "stages", *name.split("."), field)
+        if isinstance(value, dict):
+            if value.get("type") == "file" and "path" in value:
+                ref = value["path"]
+                abs_path = self._fragment_abs(ref)
+                if ref.endswith(".json"):
+                    with open(abs_path, encoding="utf-8") as f:
+                        return json.load(f)
+                return self._load_toml(abs_path)
+            if "_fragment_ref" in value:
+                ref = value["_fragment_ref"]
+                abs_path = self._fragment_abs(ref)
+                if ref.endswith(".json"):
+                    with open(abs_path, encoding="utf-8") as f:
+                        return json.load(f)
+                return self._load_toml(abs_path)
         return value
 
-    def write_stage_output(self, name: str, output: Any,
-                           fragment_path: Optional[str] = None) -> None:
-        """Persist a stage's structured output.
+    def write_stage_field(self, name: str, field: str, output: Any,
+                          fragment_path: Optional[str] = None) -> None:
+        """Write an arbitrary field into a stage's manifest node.
 
-        If *fragment_path* is given the data is serialised to that fragment
-        file (relative to cache/) and only a ``{"_fragment_ref": path}``
-        pointer is stored in manifest.toml, keeping the manifest small.
-        Otherwise the data is written inline into the manifest.
+        If *fragment_path* is given the data is serialised to disk and a
+        ``{"type": "file", "path": path}`` pointer is stored under *field*.
+        Otherwise *output* is stored inline.
         """
         if fragment_path is not None:
             abs_path = self._fragment_abs(fragment_path)
@@ -204,13 +214,22 @@ class StageRunner:
             with open(tmp, "w", encoding="utf-8") as f:
                 toml.dump(output, f)
             os.replace(tmp, abs_path)
-            stored: Any = {"_fragment_ref": fragment_path}
+            stored: Any = {"type": "file", "path": fragment_path}
         else:
             stored = output
 
         manifest = self.load_manifest()
-        _nested_set(manifest, stored, "stages", *name.split("."), "output")
+        # ensure the stage node has input_schema_hash (stage0 uses "")
+        stage_node = _nested_get(manifest, "stages", *name.split(".")) or {}
+        if "input_schema_hash" not in stage_node:
+            _nested_set(manifest, "", "stages", *name.split("."), "input_schema_hash")
+        _nested_set(manifest, stored, "stages", *name.split("."), field)
         self.save_manifest(manifest)
+
+    def write_stage_output(self, name: str, output: Any,
+                           fragment_path: Optional[str] = None) -> None:
+        """Shorthand for write_stage_field(..., field='output')."""
+        self.write_stage_field(name, "output", output, fragment_path=fragment_path)
 
     # ------------------------------------------------------------------
     # Hash helpers
@@ -311,7 +330,16 @@ class StageRunner:
                 stage_parts = parts[1:out_idx]  # keys between "stages" and "output"
                 sub_parts = parts[out_idx + 1:]  # keys after "output"
                 raw_out = _nested_get(manifest, "stages", *stage_parts, "output")
-                if isinstance(raw_out, dict) and "_fragment_ref" in raw_out:
+                if isinstance(raw_out, dict) and raw_out.get("type") == "file" and "path" in raw_out:
+                    ref = raw_out["path"]
+                    abs_path = self._fragment_abs(ref)
+                    if ref.endswith(".json"):
+                        import json as _json
+                        with open(abs_path, encoding="utf-8") as f:
+                            raw_out = _json.load(f)
+                    else:
+                        raw_out = self._load_toml(abs_path)
+                elif isinstance(raw_out, dict) and "_fragment_ref" in raw_out:
                     ref = raw_out["_fragment_ref"]
                     abs_path = self._fragment_abs(ref)
                     if ref.endswith(".json"):
@@ -350,14 +378,14 @@ class StageRunner:
         input_schema_hash: str,
         prompt_log_rel: str,
     ) -> None:
-        """Write stage metadata (hash, fragment path, prompt log) into manifest."""
+        """Write stage metadata (hash, output, prompt_log) into manifest."""
         manifest = self.load_manifest()
         _nested_set(
             manifest,
             {
                 "input_schema_hash": input_schema_hash,
-                "fragment": fragment_name,
-                "prompt_log": prompt_log_rel,
+                "output": {"type": "file", "path": fragment_name},
+                "prompt_log": {"type": "file", "path": prompt_log_rel},
             },
             "stages",
             *name.split("."),
@@ -386,18 +414,21 @@ class StageRunner:
         stage_meta = _nested_get(manifest, "stages", *name.split("."))
 
         if stage_meta and stage_meta.get("input_schema_hash") == current_hash:
-            frag_path = stage_meta.get("fragment", fragment_name)
+            out = stage_meta.get("output")
+            if isinstance(out, dict) and out.get("type") == "file":
+                frag_path = out["path"]
+            else:
+                frag_path = stage_meta.get("fragment", fragment_name)
             if os.path.exists(self._fragment_abs(frag_path)):
                 print(f"Cache hit: {name}")
                 return self.load_fragment(frag_path)
 
-        print(f"Cache: {name} — calling LLM")
+        print(f"Cache miss: {name} — calling LLM")
         code = self.llm_call(prompt, check=check)
         time.sleep(1)
 
         self.save_fragment(fragment_name, code)
 
-        # Save prompt and response as markdown under cache/prompts/
         prompt_log_rel = f"prompts/{name.replace('.', '_')}.md"
         prompt_log_abs = os.path.join(self._cache_dir, prompt_log_rel)
         os.makedirs(os.path.dirname(prompt_log_abs), exist_ok=True)
@@ -433,7 +464,11 @@ class StageRunner:
         stage_meta = _nested_get(manifest, "stages", *name.split("."))
 
         if stage_meta and stage_meta.get("input_schema_hash") == current_hash:
-            frag_path = stage_meta.get("fragment", fragment_name)
+            out = stage_meta.get("output")
+            if isinstance(out, dict) and out.get("type") == "file":
+                frag_path = out["path"]
+            else:
+                frag_path = stage_meta.get("fragment", fragment_name)
             if os.path.exists(self._fragment_abs(frag_path)):
                 print(f"Cache hit: {name}")
                 return self.load_fragment(frag_path)
@@ -443,8 +478,11 @@ class StageRunner:
 
         self.save_fragment(fragment_name, code)
         manifest = self.load_manifest()
-        _nested_set(manifest, {"input_schema_hash": current_hash, "fragment": fragment_name},
-                    "stages", *name.split("."))
+        _nested_set(
+            manifest,
+            {"input_schema_hash": current_hash, "output": {"type": "file", "path": fragment_name}},
+            "stages", *name.split("."),
+        )
         self.save_manifest(manifest)
         return code
 
@@ -536,3 +574,86 @@ def _nested_set(d: dict, value: Any, *keys: str) -> None:
     for k in keys[:-1]:
         d = d.setdefault(k, {})
     d[keys[-1]] = value
+
+
+def _toml_scalar(v: Any) -> str:
+    """Serialize a scalar or list value to a TOML literal."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        return str(v)
+    if isinstance(v, list):
+        items = ", ".join(_toml_scalar(i) for i in v)
+        return f"[{items}]"
+    escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toml_inline_table(d: dict) -> str:
+    """Serialize a flat dict as a TOML inline table."""
+    pairs = ", ".join(f"{k} = {_toml_scalar(v)}" for k, v in d.items())
+    return "{ " + pairs + " }"
+
+
+_STAGE_OPTIONAL_KEYS = {"output", "prompt_log", "free_params", "sbc_and_amp", "text"}
+
+
+def _is_stage_node(d: dict) -> bool:
+    """True if d is a stage metadata block (must have input_schema_hash)."""
+    return "input_schema_hash" in d
+
+
+def _emit_stage_block(lines: List[str], header: str, data: dict) -> None:
+    lines.append(f"[{header}]")
+    if "input_schema_hash" in data:
+        lines.append(f"input_schema_hash = {_toml_scalar(data['input_schema_hash'])}")
+    for k, v in data.items():
+        if k == "input_schema_hash":
+            continue
+        if isinstance(v, dict):
+            # inline table: values must be scalars or lists of scalars
+            pairs = []
+            for dk, dv in v.items():
+                pairs.append(f"{dk} = {_toml_scalar(dv)}")
+            lines.append(f"{k} = {{ {', '.join(pairs)} }}")
+        else:
+            lines.append(f"{k} = {_toml_scalar(v)}")
+    lines.append("")
+
+
+def _walk_stages(lines: List[str], prefix: str, node: dict) -> None:
+    if _is_stage_node(node):
+        # This node is a stage block — emit it directly, dict values as inline tables
+        _emit_stage_block(lines, prefix, node)
+    else:
+        # This node is a grouping level (e.g. resonance_calculation) — recurse
+        for k, v in node.items():
+            if isinstance(v, dict):
+                _walk_stages(lines, f"{prefix}.{k}", v)
+            else:
+                # scalar at grouping level — unlikely but handle gracefully
+                lines.append(f"# {prefix}.{k} = {_toml_scalar(v)}")
+
+
+def _dump_manifest(manifest: dict) -> str:
+    """Serialize manifest to TOML with stages in order and output fields inlined."""
+    lines: List[str] = []
+
+    for k, v in manifest.items():
+        if k == "stages":
+            continue
+        if isinstance(v, dict):
+            lines.append(f"[{k}]")
+            for ik, iv in v.items():
+                lines.append(f"{ik} = {_toml_scalar(iv)}")
+            lines.append("")
+        else:
+            lines.append(f"{k} = {_toml_scalar(v)}")
+
+    for stage_name, stage_data in manifest.get("stages", {}).items():
+        if isinstance(stage_data, dict):
+            _walk_stages(lines, f"stages.{stage_name}", stage_data)
+
+    return "\n".join(lines)

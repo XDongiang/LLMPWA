@@ -61,6 +61,8 @@ def dplex_ddivide(a, bb):
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import jax.numpy as np
+
 # ==============================================================================
 # SECTION: PHYSICS_FUNCTIONS
 # Physics calculation functions (resonance shape functions)
@@ -68,7 +70,7 @@ def dplex_ddivide(a, bb):
 # directory as physics_functions.py and keep only the functions you need.
 # ==============================================================================
 
-import jax.numpy as np
+
 
 
 def BW(m_, w_, Sbc):
@@ -353,12 +355,20 @@ def extract_parameters(args):
         'phi_width': np.array([0.004]),
         'u_kst2_r_kk_BW_BW_mass': np.array([args[65], args[71], args[77]]),
         'u_kst2_r_kk_BW_BW_width': np.array([args[66], args[72], args[78]]),
-        'u_kst2_r_kk_BW_BW_const': np.array([args[67], args[68], args[73], args[74], args[79], args[80]]).reshape(-1, 2),
-        'u_kst2_r_kk_BW_BW_theta': np.array([args[69], args[70], args[75], args[76], args[81], args[82]]).reshape(-1, 2),
+        'u_kst2_r_kk_BW_BW_const': np.array([args[67], args[68],
+                                             args[73], args[74],
+                                             args[79], args[80]]).reshape(-1, 2),
+        'u_kst2_r_kk_BW_BW_theta': np.array([args[69], args[70],
+                                             args[75], args[76],
+                                             args[81], args[82]]).reshape(-1, 2),
         'u_kst2_l_kk_BW_BW_mass': np.array([args[65], args[71], args[77]]),
         'u_kst2_l_kk_BW_BW_width': np.array([args[66], args[72], args[78]]),
-        'u_kst2_l_kk_BW_BW_const': np.array([args[67], args[68], args[73], args[74], args[79], args[80]]).reshape(-1, 2),
-        'u_kst2_l_kk_BW_BW_theta': np.array([args[69], args[70], args[75], args[76], args[81], args[82]]).reshape(-1, 2),
+        'u_kst2_l_kk_BW_BW_const': np.array([args[67], args[68],
+                                             args[73], args[74],
+                                             args[79], args[80]]).reshape(-1, 2),
+        'u_kst2_l_kk_BW_BW_theta': np.array([args[69], args[70],
+                                             args[75], args[76],
+                                             args[81], args[82]]).reshape(-1, 2),
         'phif0_kk_BW_flatte980_mass': np.array([args[0]]),
         'phif0_kk_BW_flatte980_g_kk': np.array([args[1]]),
         'phif0_kk_BW_flatte980_rg': np.array([args[2]]),
@@ -366,16 +376,22 @@ def extract_parameters(args):
         'phif0_kk_BW_flatte980_theta': np.array([0.1, args[4]]).reshape(-1, 2),
         'phif0_kk_BW_BW_mass': np.array([args[5], args[59]]),
         'phif0_kk_BW_BW_width': np.array([args[6], args[60]]),
-        'phif0_kk_BW_BW_const': np.array([args[7], args[8], args[61], args[62]]).reshape(-1, 2),
-        'phif0_kk_BW_BW_theta': np.array([args[9], args[10], args[63], args[64]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_const': np.array([args[7], args[8],
+                                          args[61], args[62]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_theta': np.array([args[9], args[10],
+                                          args[63], args[64]]).reshape(-1, 2),
         'phif2_kk_BW_flatte1270_mass': np.array([args[11]]),
         'phif2_kk_BW_flatte1270_width': np.array([args[12]]),
         'phif2_kk_BW_flatte1270_const': np.array([args[13], args[14], args[15], args[16], args[17]]).reshape(-1, 5),
         'phif2_kk_BW_flatte1270_theta': np.array([args[18], args[19], args[20], args[21], args[22]]).reshape(-1, 5),
         'phif2_kk_BW_BW_mass': np.array([args[23], args[35], args[47]]),
         'phif2_kk_BW_BW_width': np.array([args[24], args[36], args[48]]),
-        'phif2_kk_BW_BW_const': np.array([args[25], args[26], args[27], args[28], args[29], args[37], args[38], args[39], args[40], args[41], args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
-        'phif2_kk_BW_BW_theta': np.array([args[30], args[31], args[32], args[33], args[34], args[42], args[43], args[44], args[45], args[46], args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_const': np.array([args[25], args[26], args[27], args[28], args[29],
+                                          args[37], args[38], args[39], args[40], args[41],
+                                          args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_theta': np.array([args[30], args[31], args[32], args[33], args[34],
+                                          args[42], args[43], args[44], args[45], args[46],
+                                          args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
     }
 
 def save_results(args, errors, output_path):
@@ -1180,6 +1196,7 @@ if __name__  == "__main__":
     logger.info("开始HVP优化版PWA拟合（Newton-CG方法）")
 
     import jax.numpy as np
+
     config.update("jax_enable_x64", True)
 
     constraint_strength = 0.0
