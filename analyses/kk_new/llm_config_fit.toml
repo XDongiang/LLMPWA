@@ -1,9 +1,126 @@
+# llm_config.toml是LLM分析的核心配置文件，定义了整个分析流程中使用到的代码模板、数据输入输出方式、以及每个stage的处理方式等关键信息。通过合理配置这个文件，可以灵活地控制分析流程，方便地进行代码生成和结果保存。
+# llm_config.toml与cache/manifest.toml的关系：
+# llm_config.toml定义了输出字段，实际访问的内容由manifest.toml中的字段决定
+# llm_config.toml                               -----  mainfest.toml
+# ref.xxx                                       -----  ref.xxx
+# 无对应                                         -----  input_schema_hash，llm_log
+# kind,handler,output_type,prompt,human_prompt  -----  无对应
+# output.xxx                                    -----  xxx
+#                  
+# 1.我在llm_config.toml中定义的字段在python代码，prompt中如何访问
+# 在python代码中，通过输入的config参数来访问，read_config(config.stages.config_strip.free_params)来访问对应字段，
+# read_config函数检测是否是file类型，自动读取文件
+# 在prompt中，通过{stages.config_strip.free_params}来访问对应字段，系统会自动读取文件内容并替换到prompt中，注意其他部分不要使用{}，使用{{}}代替
+
+
+
+
+[ref]
+# 使用到的python代码模板，通过注释# section: xxx来分割不同代码片段
+# 可以使用{ref.code_template.xxx}来引用对应的代码片段
+code_template = ["templates/fit.py","templates/shared.py","templates/physics_functions.py"]
+# 原始的共振态信息
+resonances_config = {"type" = "file", "path" = "resonances_config.toml"}
+
+
+
+
+[stages.config_strip]
+# kind 是stage的类型，支持python llm等，python类型会调用handler指定的函数进行处理
+# handler指定处理函数，支持python 
+# 对于python函数，需要接受config作为输入参数，输入为resonances_config.toml的配置内容，
+kind = "python"
+handler = {"type" = "file", "path" = "handlers/config_strip_handler.py", "function" = "config_strip_handler"}
+# 输出支持"json","python"
+output_type = "json"
+# 对于json输出，我们会将其字段保存到文件，保存方式由后缀决定，支持"toml""json""py"，其余保存为纯文本
+output.free_params = {"type" = "file", "path" = "fragments/free_params.toml"}
+output.stripped_config = {"type" = "file", "path" = "fragments/stripped_config.toml"}
+output.make_initial_args = {"type" = "file", "path" = "fragments/make_initial_args.py"}
+output.save_results = {"type" = "file", "path" = "fragments/save_results.py"}
+# 直接输出到cache的resonances_config.toml文件，方便后续引用
+# 支持类型{},[],"" 等，禁止嵌套
+output.all_sbc = {"type" = "direct"}
+output.all_amp = {"type" = "direct"}
+#对应的manifest.toml字段
+# [stages.config_strip]
+# input_schema_hash = ""
+# free_params = { type = "file", path = "fragments/free_params.toml" }
+# stripped_config = { type = "file", path = "fragments/stripped_config.toml" }
+# make_initial_args = { type = "file", path = "fragments/make_initial_args.py" }
+# save_results = { type = "file", path = "fragments/save_results.py" }
+# all_sbc = ["xxx","xxx"]
+# all_amp = ["xxx","xxx"]
+
+
+[stages.classification]
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/classification_prompt.txt"}
+output_type = "json"
+# 这里直接将整个json输出到文件，文件路径由path指定
+output.all = {"type" = "file", "path" = "fragments/classification.json"}
+# 同时输出分类结果到cache中
+# 对于嵌套的{},只会保存第一层的字段
+# 对于嵌套的[],只保留列表的长度
+output.propagator_classification = {"type" = "direct"}
+
+[stages.data_load]
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/data_load_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/data_load.py"}
+
 [stages.resonance_calculation]
-human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。"
+kind = "llm"
+# 支持循环结构，stage会以stages.resonance_calculation.xxx命名，xxx为循环变量的值，循环变量的值由foreach指定，foreach支持从前面stage的输出中获取，也支持直接指定一个列表，列表中的每个元素会依次赋值给循环变量，进行循环。循环变量可以在prompt和human_prompt中使用。
+# foreach = {"type" = "list", "values" = ["propagator1","propagator2","propagator3"]}
+# foreach = {"type" = "file", "path" = "fragments/classification.json", "field" = "propagator_classification"}
+foreach = {"type" = "ref", path = "stages.classification.propagator_classification"}
+# prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
+prompt = {"type" = "file", "path" = "resonance_calculation_prompt.txt"}
+# human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
+human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。propagator_type: {key}"
+output_type = "python"
+# 在启用foreach循环的情况下，可以使用{key}来表示循环变量的值
+# 当没有{key}时，会默认将输入追加插入到同一个文件中
+#output.all = {"type" = "file", "path" = "fragments/resonance_calculation_{key}.py"}
+output.all = {"type" = "file", "path" = "fragments/resonance_calculation.py"}
+
+
+
+[stages.extract_parameters]
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/extract_parameters_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/extract_parameters.py"}
+
+
 
 
 [stages.likelihood_function]
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/likelihood_function_prompt.txt"}
 human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + 对于range存在的参数加上边界约束np.power(range[i][0]-args[i],2)/np.power(range[i][1],2)/2.0（直接填充range的数值）"
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/likelihood_function.py"}
+
+
+[stages.run_load_data]
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/run_load_data_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/run_load_data.py"}
+
 
 [stages.main_section]
-human_prmopt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。"
+kind = "llm"
+prompt = {"type" = "file", "path" = "prompts/main_section_prompt.txt"}
+human_prompt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。"
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/main_section.py"}
+
+[stages.assemble_final_code]
+kind = "python"
+handler = {"type" = "file", "path" = "handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
+output_type = "file"
+output.final_code = {"type" = "file", "path" = "run/fit_script.py"}
