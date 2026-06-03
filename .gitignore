@@ -137,3 +137,5 @@ venv.bak/
 
 .vscode/
 .claude/
+fragments/
+llm_logs/

@@ -1,3 +1,19 @@
+# 工作目录文件夹介绍
+# resonances_config.toml: 存储共振态的原始信息，包括共振态的名称、质量、宽度等参数，这些信息将作为输入提供给分析流程中的各个stage。
+# llm_config.toml: 定义了整个分析流程的配置，包括使用到的代码模板、每个stage的处理方式、输入输出方式等关键信息。
+# run/xxx.py : 最终生成的分析脚本，包含了整个分析流程的代码实现，可以直接运行得到分析结果。
+# config/logconfig_xxx.json : 定义了日志记录的配置，包括日志的格式、输出位置、日志级别等信息，方便在分析过程中记录关键信息和调试信息。
+# logs/ 日志文件夹
+# data/ 数据文件夹
+# gen/ 代码生成文件夹
+# gen/fragments/ stages输出的中间过程文件夹
+# gen/handlers/ python stage使用的处理函数文件夹
+# gen/prompts/ llm stage使用的prompt文件夹
+# gen/templates/ 发送给llm参考的代码文件，不会直接运行
+# gen/llm_logs/ llm交互日志文件夹
+
+
+
 # llm_config.toml是LLM分析的核心配置文件，定义了整个分析流程中使用到的代码模板、数据输入输出方式、以及每个stage的处理方式等关键信息。通过合理配置这个文件，可以灵活地控制分析流程，方便地进行代码生成和结果保存。
 # llm_config.toml与cache/manifest.toml的关系：
 # llm_config.toml定义了输出字段，实际访问的内容由manifest.toml中的字段决定
@@ -10,7 +26,7 @@
 # 1.我在llm_config.toml中定义的字段在python代码，prompt中如何访问
 # 在python代码中，通过输入的config参数来访问，read_config(config.stages.config_strip.free_params)来访问对应字段，
 # read_config函数检测是否是file类型，自动读取文件
-# 在prompt中，通过{stages.config_strip.free_params}来访问对应字段，系统会自动读取文件内容并替换到prompt中，注意其他部分不要使用{}，使用{{}}代替
+# 在prompt中，通过<<stages.config_strip.free_params>>来访问对应字段，系统会自动读取文件内容并替换到prompt中
 
 
 
@@ -36,7 +52,6 @@ output_type = "json"
 # 对于json输出，我们会将其字段保存到文件，保存方式由后缀决定，支持"toml""json""py"，其余保存为纯文本
 output.free_params = {"type" = "file", "path" = "fragments/free_params.toml"}
 output.stripped_config = {"type" = "file", "path" = "fragments/stripped_config.toml"}
-output.make_initial_args = {"type" = "file", "path" = "fragments/make_initial_args.py"}
 output.save_results = {"type" = "file", "path" = "fragments/save_results.py"}
 # 直接输出到cache的resonances_config.toml文件，方便后续引用
 # 支持类型{},[],"" 等，禁止嵌套
@@ -46,12 +61,21 @@ output.all_amp = {"type" = "direct"}
 # [stages.config_strip]
 # input_schema_hash = ""
 # free_params = { type = "file", path = "fragments/free_params.toml" }
-# stripped_config = { type = "file", path = "fragments/stripped_config.toml" }
-# make_initial_args = { type = "file", path = "fragments/make_initial_args.py" }
 # save_results = { type = "file", path = "fragments/save_results.py" }
 # all_sbc = ["xxx","xxx"]
 # all_amp = ["xxx","xxx"]
 
+[stages.make_initial_args]
+kind = "python"
+handler = {"type" = "file", "path" = "handlers/make_initial_args_handler.py", "function" = "make_initial_args_handler"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/make_initial_args.py"}
+
+[stages.save_results]
+kind = "python"
+handler = {"type" = "file", "path" = "handlers/save_results_handler.py", "function" = "save_results_handler"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "fragments/save_results.py"}
 
 [stages.classification]
 kind = "llm"
@@ -77,14 +101,13 @@ kind = "llm"
 # foreach = {"type" = "file", "path" = "fragments/classification.json", "field" = "propagator_classification"}
 foreach = {"type" = "ref", path = "stages.classification.propagator_classification"}
 # prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
+# 引用时，解析器支持[*],["xxx"]等方式来访问循环结构的结果
 prompt = {"type" = "file", "path" = "resonance_calculation_prompt.txt"}
 # human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
-human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。propagator_type: {key}"
+human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。propagator_type: <<key>>"
 output_type = "python"
-# 在启用foreach循环的情况下，可以使用{key}来表示循环变量的值
-# 当没有{key}时，会默认将输入追加插入到同一个文件中
-#output.all = {"type" = "file", "path" = "fragments/resonance_calculation_{key}.py"}
-output.all = {"type" = "file", "path" = "fragments/resonance_calculation.py"}
+# 在启用foreach循环的情况下，使用{key}来表示循环变量的值
+output.all = {"type" = "file", "path" = "fragments/resonance_calculation_{key}.py"}
 
 
 
@@ -122,5 +145,5 @@ output.all = {"type" = "file", "path" = "fragments/main_section.py"}
 [stages.assemble_final_code]
 kind = "python"
 handler = {"type" = "file", "path" = "handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
-output_type = "file"
-output.final_code = {"type" = "file", "path" = "run/fit_script.py"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "../run/fit_script.py"}

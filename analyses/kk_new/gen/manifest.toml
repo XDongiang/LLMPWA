@@ -1,0 +1,57 @@
+[stages.config_strip]
+input_schema_hash = ""
+free_params = { type = "file", path = "fragments/free_params.toml" }
+stripped_config = { type = "file", path = "fragments/stripped_config.toml" }
+
+[stages.classification]
+input_schema_hash = "b1100b59af2b13326c107387b1eef7c1e2714030d0244f8ca3ad5c1446208db9"
+output = { type = "file", path = "fragments/classification.json" }
+prompt_log = { type = "file", path = "prompts/classification.md" }
+
+[stages.data_load]
+input_schema_hash = "409b1c10c0299a78e714ecda2f7f8307332c423c106d831750b0926fc2305fee"
+output = { type = "file", path = "fragments/data_load.py" }
+prompt_log = { type = "file", path = "prompts/data_load.md" }
+
+[stages.resonance_calculation.BW_BW]
+input_schema_hash = "e3fc1622e02d8f5bb3630bb85b11b4d61f60dfba9e43d05f80e98d273b5f6b2e"
+output = { type = "file", path = "fragments/resonance_BW_BW.py" }
+prompt_log = { type = "file", path = "prompts/resonance_calculation_BW_BW.md" }
+
+[stages.resonance_calculation.BW_flatte980]
+input_schema_hash = "3bf2ea11c3aa579ed23cc8a1075871f4a06ed74c6198d3b056d192ce5209097e"
+output = { type = "file", path = "fragments/resonance_BW_flatte980.py" }
+prompt_log = { type = "file", path = "prompts/resonance_calculation_BW_flatte980.md" }
+
+[stages.resonance_calculation.BW_flatte1270]
+input_schema_hash = "f33b6f63024ecaa251d18011702021d4e79d73e147f5453d753d4493dee77d10"
+output = { type = "file", path = "fragments/resonance_BW_flatte1270.py" }
+prompt_log = { type = "file", path = "prompts/resonance_calculation_BW_flatte1270.md" }
+
+[stages.make_initial_args]
+input_schema_hash = "0181811a5f7b15a463bed9ab38001e3f0172896e350fa1eb5dab3f47d2e24818"
+output = { type = "file", path = "fragments/make_initial_args.py" }
+
+[stages.extract_parameters]
+input_schema_hash = "4b4b432377e8d98e4de1bc709a4700b8a37b48b99007c621c573be5142743a22"
+output = { type = "file", path = "fragments/extract_parameters.py" }
+prompt_log = { type = "file", path = "prompts/extract_parameters.md" }
+
+[stages.save_results]
+input_schema_hash = "922b5901195367e9827571e08bc17887803b2cb01dc609fa0190f0cc25d63862"
+output = { type = "file", path = "fragments/save_results.py" }
+
+[stages.likelihood_function]
+input_schema_hash = "f71c99b0e7df26cbd302be6efb7efe9d3993eefa7a5e12e1d1e8595feab51a20"
+output = { type = "file", path = "fragments/likelihood_function.py" }
+prompt_log = { type = "file", path = "prompts/likelihood_function.md" }
+
+[stages.run_load_data]
+input_schema_hash = "c018dde14b57936d87926bb3ac2066177871bf08b1bd228273f24fdd12c8123c"
+output = { type = "file", path = "fragments/run_load_data.py" }
+prompt_log = { type = "file", path = "prompts/run_load_data.md" }
+
+[stages.main_section]
+input_schema_hash = "dbdf080981b852191d23094669dbae3fe61cd58226f4fafceba68ec3db846abe"
+output = { type = "file", path = "fragments/main_section.py" }
+prompt_log = { type = "file", path = "prompts/main_section.md" }
