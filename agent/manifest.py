@@ -4,7 +4,7 @@ manifest.py — manifest.toml 读写，原子写入。
 manifest 结构：
   [stages.<stage_name>]
   prompt_hash = "..."
-  [stages.<stage_name>.output]
+  [stages.<stage_name>.all]
   type = "file"
   path = "gen/fragments/xxx.py"
 """
@@ -91,7 +91,7 @@ class Manifest:
             return False
         if node.get("prompt_hash") != prompt_hash:
             return False
-        out = node.get("output")
+        out = node.get("all")
         if isinstance(out, dict) and out.get("type") == "file":
             return (workdir / out["path"]).exists()
         return out is not None
@@ -99,7 +99,7 @@ class Manifest:
     def load_cached(self, stage: str) -> Any:
         node = self.get_stage(stage)
         if node:
-            return node.get("output")
+            return node.get("all")
         return None
 
     # ------------------------------------------------------------------

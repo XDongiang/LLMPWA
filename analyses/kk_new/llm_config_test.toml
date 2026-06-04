@@ -67,3 +67,54 @@ output.all_amp = {"type" = "direct"}
 # all_sbc = ["xxx","xxx"]
 # all_amp = ["xxx","xxx"]
 
+[stages.make_initial_args]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/make_initial_args_handler.py", "function" = "make_initial_args_handler"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/make_initial_args.py"}
+
+[stages.save_results]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/save_results_handler.py", "function" = "save_results_handler"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/save_results.py"}
+
+[stages.classification]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/classification_prompt.txt"}
+human_prompt = "使用传入的{\"arg_index\": n}代替parameter_lists中变量的具体值,输出纯json，不要包含注释"
+output_type = "json"
+# 这里直接将整个json输出到文件，文件路径由path指定
+output.all = {"type" = "file", "path" = "gen/fragments/classification.json"}
+# 同时输出分类结果到cache中
+# 对于嵌套的{},只会保存第一层的字段
+# 对于嵌套的[],只保留列表的长度
+output.propagator_classification = {"type" = "direct"}
+
+[stages.data_load]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/data_load_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/data_load.py"}
+
+[stages.resonance_calculation]
+kind = "llm"
+# 支持循环结构，stage会以stages.resonance_calculation.xxx命名，xxx为循环变量的值，循环变量的值由foreach指定，foreach支持从前面stage的输出中获取，也支持直接指定一个列表，列表中的每个元素会依次赋值给循环变量，进行循环。循环变量可以在prompt和human_prompt中使用。
+# foreach = {"type" = "list", "values" = ["propagator1","propagator2","propagator3"]}
+# foreach = {"type" = "file", "path" = "fragments/classification.json", "field" = "propagator_classification"}
+foreach = {"type" = "ref", path = "stages.classification.propagator_classification"}
+# prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
+# 引用时，解析器支持[*],["xxx"]等方式来访问循环结构的结果
+prompt = {"type" = "file", "path" = "gen/prompts/resonance_calculation_prompt.txt"}
+# human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
+human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值"
+output_type = "python"
+# 在启用foreach循环的情况下，使用{key}来表示循环变量的值
+output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_{key}.py"}
+
+[stages.extract_parameters]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters.py"}
+

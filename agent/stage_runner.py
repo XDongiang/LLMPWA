@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Optional
+import json
 
 from config_loader import StageConfig
 from manifest import Manifest
@@ -119,12 +120,12 @@ class StageRunner:
 
         raw_outputs: dict = {"all": code}
         if self.stage_cfg.output_type == "json":
-            import json as _json
             try:
-                parsed = _json.loads(code)
+                parsed = json.loads(code)
                 if isinstance(parsed, dict):
+                    raw_outputs["all"] = parsed
                     raw_outputs.update(parsed)
-            except _json.JSONDecodeError:
+            except json.JSONDecodeError:
                 print(f"[llm] {self.name} — output_type=json but response is not valid JSON, skipping sub-field extraction")
 
         decls = self.stage_cfg.output
