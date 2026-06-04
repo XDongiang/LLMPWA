@@ -19,10 +19,6 @@
 
 <<ref.code_template.PHYSICS_FUNCTIONS>>
 
-<<stages.config_strip.make_initial_args>>
-
-<<stages.config_strip.save_results>>
-
 <<stages[*].output>>
 
 
