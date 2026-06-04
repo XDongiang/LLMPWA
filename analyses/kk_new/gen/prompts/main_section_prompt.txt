@@ -19,7 +19,7 @@
 
 <<ref.code_template.PHYSICS_FUNCTIONS>>
 
-<<stages[*].output>>
+<<stages[*].all>>
 
 
 

@@ -29,7 +29,11 @@ class Engine:
         gen_dir = self.workdir / "gen"
         gen_dir.mkdir(parents=True, exist_ok=True)
 
-        self.manifest = Manifest(gen_dir / "manifest.toml")
+        # manifest 文件名跟随 config 文件名，例如 llm_config_test.toml → manifest_test.toml
+        config_stem = Path(config_name).stem  # e.g. "llm_config_test"
+        suffix = config_stem[len("llm_config"):]  # e.g. "_test" or "_fit" or ""
+        manifest_name = f"manifest{suffix}.toml"
+        self.manifest = Manifest(gen_dir / manifest_name)
         self.resolver = Resolver(self.workdir, self.manifest, self.config)
         self.validator = Validator(self.config, self.workdir)
         self.llm_client = LLMClient(model=model, model_check=model_check)

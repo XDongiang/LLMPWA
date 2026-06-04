@@ -93,6 +93,7 @@ class StageConfig:
 
         self.input = raw.get("input", {})
         self.output: dict = raw.get("output", {})
+        self.output_type: Optional[str] = raw.get("output_type")
         self.check: bool = raw.get("check", False)
 
     def __repr__(self) -> str:

@@ -139,3 +139,4 @@ venv.bak/
 .claude/
 fragments/
 llm_logs/
+manifes*.toml

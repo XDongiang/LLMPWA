@@ -79,12 +79,24 @@ class StageRunner:
         cfg_accessor = ConfigAccessor(self.stage_cfg, self.resolver, self.workdir)
 
         print(f"[python] {self.name}")
-        result = handler_fn(cfg_accessor, self.resolver)
+        result = handler_fn(cfg_accessor)
+
+        out_type = self.stage_cfg.output_type
+        if isinstance(result, dict) and out_type == "json":
+            raw_outputs = {"all": result, **result}
+        elif isinstance(result, dict):
+            raw_outputs = result
+        else:
+            raw_outputs = {"all": result}
+
+        decls = self.stage_cfg.output
+        # 只保留 llm_config 中声明的字段；若无任何声明则保留 all 作为兜底
+        outputs = {k: v for k, v in raw_outputs.items() if k in decls} if decls else raw_outputs
 
         self.manifest.write_stage_output(
             stage=self.name,
-            outputs=result,
-            output_decls=self.stage_cfg.output,
+            outputs=outputs,
+            output_decls=decls,
             workdir=self.workdir,
             prompt_hash="",
         )
@@ -105,10 +117,23 @@ class StageRunner:
         code = self.engine.llm_client.call(prompt, check=self.stage_cfg.check)
         time.sleep(1)
 
+        raw_outputs: dict = {"all": code}
+        if self.stage_cfg.output_type == "json":
+            import json as _json
+            try:
+                parsed = _json.loads(code)
+                if isinstance(parsed, dict):
+                    raw_outputs.update(parsed)
+            except _json.JSONDecodeError:
+                print(f"[llm] {self.name} — output_type=json but response is not valid JSON, skipping sub-field extraction")
+
+        decls = self.stage_cfg.output
+        outputs = {k: v for k, v in raw_outputs.items() if k in decls} if decls else raw_outputs
+
         self.manifest.write_stage_output(
             stage=self.name,
-            outputs={"all": code},
-            output_decls=self.stage_cfg.output,
+            outputs=outputs,
+            output_decls=decls,
             workdir=self.workdir,
             prompt_hash=prompt_hash,
         )

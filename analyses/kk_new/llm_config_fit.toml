@@ -154,7 +154,7 @@ input = ["config.ref.code_template.COMMON_UTILITIES",
          "config.ref.code_template.LOGGING_CONFIG",
          "config.ref.code_template.DPLEX_FUNCTIONS",
          "config.ref.code_template.PHYSICS_FUNCTIONS",
-         "config.stages[*].output"
+         "config.stages[*].all"
         ]
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/fit_script.py"}

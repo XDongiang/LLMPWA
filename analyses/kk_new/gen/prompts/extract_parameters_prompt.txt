@@ -74,4 +74,4 @@ Amplitude.parameters: [[arg25..arg29, arg30..arg34], [arg37..arg41, arg42..arg46
 
 ### 参数分组信息
 
-<<stages.classification.output.parameter_lists>>
+<<stages.classification.all.parameter_lists>>

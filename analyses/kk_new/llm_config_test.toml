@@ -1,0 +1,69 @@
+# 工作目录文件夹介绍
+# resonances_config.toml: 存储共振态的原始信息，包括共振态的名称、质量、宽度等参数，这些信息将作为输入提供给分析流程中的各个stage。
+# llm_config.toml: 定义了整个分析流程的配置，包括使用到的代码模板、每个stage的处理方式、输入输出方式等关键信息。
+# run/xxx.py : 最终生成的分析脚本，包含了整个分析流程的代码实现，可以直接运行得到分析结果。
+# config/logconfig_xxx.json : 定义了日志记录的配置，包括日志的格式、输出位置、日志级别等信息，方便在分析过程中记录关键信息和调试信息。
+# logs/ 日志文件夹
+# data/ 数据文件夹
+# gen/ 代码生成文件夹
+# gen/fragments/ stages输出的中间过程文件夹
+# gen/handlers/ python stage使用的处理函数文件夹
+# gen/prompts/ llm stage使用的prompt文件夹
+# gen/templates/ 发送给llm参考的代码文件，不会直接运行
+# gen/llm_logs/ llm交互日志文件夹
+
+# llm_config.toml所有使用的路径均相对于work_dir
+
+
+
+# llm_config.toml是LLM分析的核心配置文件，定义了整个分析流程中使用到的代码模板、数据输入输出方式、以及每个stage的处理方式等关键信息。通过合理配置这个文件，可以灵活地控制分析流程，方便地进行代码生成和结果保存。
+# llm_config.toml与cache/manifest.toml的关系：
+# llm_config.toml定义了输出字段，实际访问的内容由manifest.toml中的字段决定
+# llm_config.toml                               -----  mainfest.toml
+# ref.xxx                                       -----  ref.xxx
+# 无对应                                         -----  input_schema_hash，llm_log
+# kind,handler,output_type,prompt,human_prompt  -----  无对应
+# output.xxx                                    -----  xxx  (注意output.all代表该stage的所有输出，在mainfest.toml中为output)
+#                  
+# 1.我在llm_config.toml中定义的字段在python代码，prompt中如何访问
+# 在python代码中，通过输入的config参数来访问，read_config(config.stages.config_strip.free_params)来访问对应字段，
+# read_config函数检测是否是file类型，自动读取文件
+# 在prompt中，通过<<stages.config_strip.free_params>>来访问对应字段，系统会自动读取文件内容并替换到prompt中
+
+
+
+
+[ref]
+# 使用到的python代码模板，通过注释# section: xxx来分割不同代码片段
+# 可以使用<<ref.code_template.xxx>>来引用对应的代码片段
+code_template = ["gen/templates/fit.py","gen/templates/shared.py","gen/templates/physics_functions.py"]
+# 原始的共振态信息
+resonances_config = {"type" = "file", "path" = "resonances_config.toml"}
+
+
+
+
+[stages.config_strip]
+# kind 是stage的类型，支持python llm等，python类型会调用handler指定的函数进行处理
+# handler指定处理函数，支持python 
+# 对于python函数，需要接受config作为输入参数，输入为resonances_config.toml的配置内容，
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/config_strip_handler.py", "function" = "config_strip_handler"}
+# 输出支持"json","python"
+output_type = "json"
+# 对于json输出，我们会将其字段保存到文件，保存方式由后缀决定，支持"toml""json""py"，其余保存为纯文本
+# free_param输出到run文件夹中，方便fit程序调用
+output.free_params = {"type" = "file", "path" = "run/free_params.toml"}
+output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_config.toml"}
+# 直接输出到cache的resonances_config.toml文件，方便后续引用
+# 支持类型{},[],"" 等，禁止嵌套
+output.all_sbc = {"type" = "direct"}
+output.all_amp = {"type" = "direct"}
+#对应的manifest.toml字段
+# [stages.config_strip]
+# input_schema_hash = ""
+# free_params = { type = "file", path = "run/free_params.toml" }
+# save_results = { type = "file", path = "gen/fragments/save_results.py" }
+# all_sbc = ["xxx","xxx"]
+# all_amp = ["xxx","xxx"]
+

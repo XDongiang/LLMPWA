@@ -10,4 +10,4 @@
 ### 3. 输入部分
 
 load data 函数:
-<<stages.data_load.output>>
+<<stages.data_load.all>>
