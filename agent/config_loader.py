@@ -42,6 +42,25 @@ class ConfigError(Exception):
     pass
 
 
+def _foreach_to_dotpath(foreach_raw: dict) -> Optional[str]:
+    """把 foreach dict 转换为 resolver 可解析的 dotpath。
+
+    支持的形式：
+      {type="ref", path="stages.classification.propagator_classification"}
+      {type="file", path="...", field="propagator_classification"}
+      {type="list", values=["a","b"]}  → 返回 None，由调用方直接用 values
+    """
+    t = foreach_raw.get("type", "ref")
+    if t == "ref":
+        return foreach_raw.get("path")
+    if t == "file":
+        # 用 resolver 的 file-field 穿透语法暂不支持，暂时记为 None
+        return None
+    if t == "list":
+        return None  # values 直接存在 foreach_raw["values"]
+    return foreach_raw.get("path")
+
+
 class StageConfig:
     """单个 stage 的配置。"""
 
@@ -49,11 +68,30 @@ class StageConfig:
         self.name = name
         self.raw = raw
         self.kind: str = raw.get("kind", "")
-        self.handler: Optional[str] = raw.get("handler")
+
+        # handler 可以是字符串路径，也可以是 {type, path, function} dict
+        handler_raw = raw.get("handler")
+        if isinstance(handler_raw, dict):
+            self.handler: Optional[str] = handler_raw.get("path")
+            self.handler_function: Optional[str] = handler_raw.get("function")
+        else:
+            self.handler = handler_raw
+            self.handler_function = None
+
         self.prompt: Optional[Any] = raw.get("prompt")
         self.human_prompt: Optional[str] = raw.get("human_prompt")
-        self.foreach_source: Optional[str] = raw.get("foreach_source")
-        self.input: dict = raw.get("input", {})
+
+        # foreach 可以是字符串（foreach_source）或 dict（{type, path/values, field?}）
+        foreach_raw = raw.get("foreach") or raw.get("foreach_source")
+        self.foreach_raw = foreach_raw  # 保留原始值供 stage_runner 用
+        if isinstance(foreach_raw, dict):
+            self.foreach_source: Optional[str] = _foreach_to_dotpath(foreach_raw)
+            self.foreach_values = foreach_raw.get("values")  # list 模式直接取值
+        else:
+            self.foreach_source = foreach_raw
+            self.foreach_values = None
+
+        self.input = raw.get("input", {})
         self.output: dict = raw.get("output", {})
         self.check: bool = raw.get("check", False)
 
@@ -111,18 +149,12 @@ class ConfigLoader:
             if not isinstance(stage, dict):
                 raise ConfigError(f"{path}: stage '{name}' must be a table, got {type(stage)}")
             kind = stage.get("kind", "")
-            if kind not in ("python", "llm", "foreach"):
+            if kind not in ("python", "llm"):
                 raise ConfigError(
                     f"{path}: stage '{name}' has invalid kind={kind!r}. "
-                    f"Expected one of: python, llm, foreach"
+                    f"Expected one of: python, llm"
                 )
             if kind == "python" and not stage.get("handler"):
                 raise ConfigError(f"{path}: stage '{name}' (python) missing 'handler'")
-            if kind in ("llm", "foreach") and not stage.get("prompt"):
-                raise ConfigError(
-                    f"{path}: stage '{name}' ({kind}) missing 'prompt'"
-                )
-            if kind == "foreach" and not stage.get("foreach_source"):
-                raise ConfigError(
-                    f"{path}: stage '{name}' (foreach) missing 'foreach_source'"
-                )
+            if kind == "llm" and not stage.get("prompt"):
+                raise ConfigError(f"{path}: stage '{name}' (llm) missing 'prompt'")

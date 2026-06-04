@@ -55,12 +55,15 @@ class StageRunner:
 
     def execute(self) -> None:
         kind = self.stage_cfg.kind
+        is_foreach = bool(
+            self.stage_cfg.foreach_source or self.stage_cfg.foreach_values
+        )
         if kind == "python":
             self._execute_python()
+        elif kind == "llm" and is_foreach:
+            self._execute_foreach()
         elif kind == "llm":
             self._execute_llm()
-        elif kind == "foreach":
-            self._execute_foreach()
         else:
             raise ValueError(f"Unknown stage kind: {kind!r}")
 
@@ -116,8 +119,13 @@ class StageRunner:
     # ------------------------------------------------------------------
 
     def _execute_foreach(self) -> None:
-        source = self.stage_cfg.foreach_source
-        keys_or_dict = self.resolver.resolve(source)
+        # 优先用 foreach_values（list 模式），否则通过 resolver 解析
+        if self.stage_cfg.foreach_values is not None:
+            keys_or_dict = self.stage_cfg.foreach_values
+        elif self.stage_cfg.foreach_source:
+            keys_or_dict = self.resolver.resolve(self.stage_cfg.foreach_source)
+        else:
+            raise ValueError(f"Stage '{self.name}': no foreach source defined")
 
         if isinstance(keys_or_dict, dict):
             keys = list(keys_or_dict.keys())
@@ -125,12 +133,12 @@ class StageRunner:
             keys = keys_or_dict
         else:
             raise ValueError(
-                f"foreach_source '{source}' resolved to {type(keys_or_dict).__name__}, "
-                f"expected dict or list"
+                f"foreach source for '{self.name}' resolved to "
+                f"{type(keys_or_dict).__name__}, expected dict or list"
             )
 
         if not keys:
-            raise ValueError(f"foreach_source '{source}' is empty")
+            raise ValueError(f"foreach source for '{self.name}' is empty")
 
         print(f"[foreach] {self.name} — keys: {keys}")
         for key in keys:
