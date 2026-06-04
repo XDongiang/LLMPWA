@@ -5,7 +5,7 @@
 目录结构
 ```
 analyses/kk_new/
-├── llm_config_fit.toml          # 流程配置，唯一入口
+├── llm_config_fit.toml          # 流程配置
 ├── resonances_config.toml       # 物理输入
 ├── gen/
 │   ├── manifest.toml            # 运行时状态（引擎自动维护）
@@ -264,11 +264,11 @@ def config_strip_handler(cfg: ConfigAccessor, resolver) -> dict:
 # 用法
 python -m agent.cli --workdir analyses/kk_new --config llm_config_fit.toml
 
-# 支持单独重跑某个 stage（跳过缓存）
-python -m agent.cli --workdir analyses/kk_new --stage likelihood_function --force
-
 # 静态检查（不实际运行）
-python -m agent.cli --workdir analyses/kk_new --check-only
+python -m agent.cli --workdir analyses/kk_new --config llm_config_fit.toml --check-only
+
+# 逐个stage运行，方便排查
+python -m agent.cli --workdir analyses/kk_new --config llm_config_fit.toml --stage
 ```
 
 ## 与现有代码的关系
