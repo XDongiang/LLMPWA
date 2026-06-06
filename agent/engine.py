@@ -49,11 +49,15 @@ class Engine:
         self.validator.static_check()
         print("Static check passed.")
 
+        visible: set = set()
         for name, stage_cfg in self.config.items():
+            self.resolver.current_stage = name
+            self.resolver.visible_stages = visible
             runner = StageRunner(name, stage_cfg, self)
             runner.execute()
-            # foreach 完成后 manifest 已更新，reload 供后续 stage 使用
+            # stage 完成后 reload manifest，并将其加入可见集合供后续 stage 引用
             self.manifest.reload()
+            visible.add(name)
 
         print("All stages completed.")
 

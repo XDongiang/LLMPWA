@@ -41,15 +41,24 @@ class Resolver:
         manifest: Manifest,
         config,  # Config 对象
         foreach_key: Optional[str] = None,
+        current_stage: Optional[str] = None,
+        visible_stages: Optional[set] = None,
     ) -> None:
         self.workdir = workdir
         self.manifest = manifest
         self.config = config
         self.foreach_key = foreach_key  # foreach 子 stage 注入的当前 key
+        self.current_stage = current_stage  # 当前正在运行的 stage，[*] 遍历时排除自身
+        self.visible_stages = visible_stages  # 允许被引用的 stage 集合（None = 不限制）
 
     def with_key(self, key: str) -> "Resolver":
         """返回一个注入了 foreach_key 的新 Resolver。"""
-        return Resolver(self.workdir, self.manifest, self.config, foreach_key=key)
+        return Resolver(
+            self.workdir, self.manifest, self.config,
+            foreach_key=key,
+            current_stage=self.current_stage,
+            visible_stages=self.visible_stages,
+        )
 
     # ------------------------------------------------------------------
     # 对外 API
@@ -207,6 +216,12 @@ class Resolver:
                 results = []
                 for sname, snode in all_stages.items():
                     if not isinstance(snode, dict):
+                        continue
+                    # 排除自身，防止把上次自己的输出纳入
+                    if self.current_stage and sname == self.current_stage:
+                        continue
+                    # 只允许访问已完成的 stage
+                    if self.visible_stages is not None and sname not in self.visible_stages:
                         continue
                     try:
                         val = self._descend_node(snode, remaining, f"stages.{sname}", self.workdir)
