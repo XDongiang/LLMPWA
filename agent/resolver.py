@@ -69,6 +69,11 @@ class Resolver:
 
         root_key = parts[0]
 
+        # 处理 stages[*].all 或 stages[key].all 语法（root 本身带 bracket）
+        _bracket_in_root = _BRACKET_RE.search(root_key)
+        if _bracket_in_root and root_key[: _bracket_in_root.start()] == "stages":
+            return self._resolve_stages(parts, dotpath)
+
         if root_key == "ref":
             return self._resolve_ref(parts[1:], dotpath)
         elif root_key == "stages":
@@ -114,7 +119,28 @@ class Resolver:
                 f"Available: {list(self.config.ref.keys())}"
             )
 
-        # ref 条目可以是 {type="file", path="..."} 或 {type="template", path="..."}
+        # ref 条目可以是 {type="file", path="..."} / {type="template", path="..."} / 列表 / 字符串
+        if isinstance(ref_decl, list):
+            # 列表：多个模板文件，合并所有文件的 sections，按 section_name 查找
+            if len(parts) < 2:
+                raise ResolutionError(
+                    f"Template ref '{ref_key}' (list) requires a section name: "
+                    f"<<ref.{ref_key}.SECTION_NAME>>"
+                )
+            section_name = parts[1]
+            merged: Dict[str, str] = {}
+            for raw_path in ref_decl:
+                ref_path = self.workdir / raw_path
+                if not ref_path.exists():
+                    raise ResolutionError(f"ref template file '{ref_path}' does not exist")
+                merged.update(_parse_template_sections(ref_path))
+            if section_name not in merged:
+                raise ResolutionError(
+                    f"Section '{section_name}' not found in any template in ref '{ref_key}'. "
+                    f"Available: {list(merged.keys())}"
+                )
+            return merged[section_name]
+
         if isinstance(ref_decl, dict):
             ref_type = ref_decl.get("type", "file")
             ref_path = self.workdir / ref_decl["path"]
@@ -174,6 +200,20 @@ class Resolver:
             stage_name = stage_part[: bracket_m.start()]
             bracket_key = bracket_m.group(1)  # "*" 或具体 key
             remaining = parts[1:]
+
+            # stages[*].field —— 遍历 manifest 中所有 stage
+            if stage_name == "stages" and bracket_key == "*":
+                all_stages = self.manifest.get("stages") or {}
+                results = []
+                for sname, snode in all_stages.items():
+                    if not isinstance(snode, dict):
+                        continue
+                    try:
+                        val = self._descend_node(snode, remaining, f"stages.{sname}", self.workdir)
+                        results.append(val)
+                    except ResolutionError:
+                        pass
+                return results
 
             stage_node = self.manifest.get("stages", stage_name)
             if stage_node is None:

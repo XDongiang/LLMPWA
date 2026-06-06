@@ -19,6 +19,8 @@
 
 <<ref.code_template.PHYSICS_FUNCTIONS>>
 
+<<stages.resonance_calculation[*].all>>
+
 <<stages[*].all>>
 
 

@@ -109,12 +109,51 @@ prompt = {"type" = "file", "path" = "gen/prompts/resonance_calculation_prompt.tx
 # human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
 human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值"
 output_type = "python"
-# 在启用foreach循环的情况下，使用{key}来表示循环变量的值
-output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_{key}.py"}
+# 在启用foreach循环的情况下，使用<<key>>来表示循环变量的值
+output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_<<key>>.py"}
 
 [stages.extract_parameters]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
+human_prompt ="使用已导入的import numpy as onp"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters.py"}
+
+[stages.likelihood_function]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
+human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + 参数边界约束np.power(range[i,0]-args[i],2)/np.power([i,1],2)/2.0 但range不要作为参数传入"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function.py"}
+
+
+[stages.run_load_data]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/run_load_data_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/run_load_data.py"}
+
+
+[stages.main_section]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/main_section_prompt.txt"}
+human_prompt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/main_section.py"}
+
+[stages.assemble_final_code]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
+# 可以使用input字段给python添加除config外的输入，需要在函数签名中添加对应的输入
+# 这里用来决定组装代码的顺序
+input = {"list"=["ref.code_template.COMMON_UTILITIES",
+         "ref.code_template.PATH_CONFIG",
+         "ref.code_template.LOGGING_CONFIG",
+         "ref.code_template.DPLEX_FUNCTIONS",
+         "ref.code_template.PHYSICS_FUNCTIONS",
+         "stages.resonance_calculation[*].all",
+         "stages[*].all"
+        ]}
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/fit_script.py"}
 

@@ -108,8 +108,8 @@ prompt = {"type" = "file", "path" = "gen/prompts/resonance_calculation_prompt.tx
 # human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
 human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。propagator_type: <<key>>"
 output_type = "python"
-# 在启用foreach循环的情况下，使用{key}来表示循环变量的值
-output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_{key}.py"}
+# 在启用foreach循环的情况下，使用<<key>>来表示循环变量的值
+output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_<<key>>.py"}
 
 
 
@@ -125,7 +125,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters.py"}
 [stages.likelihood_function]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
-human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength "
+human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + 参数边界约束np.power(range[i,0]-args[i],2)/np.power([i,1],2)/2.0 但range不要作为参数传入"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function.py"}
 

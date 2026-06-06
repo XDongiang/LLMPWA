@@ -129,12 +129,16 @@ class StageRunner:
                 print(f"[llm] {self.name} — output_type=json but response is not valid JSON, skipping sub-field extraction")
 
         decls = self.stage_cfg.output
+        rendered_decls = {
+            k: {**v, "path": self.resolver.render(v["path"])} if isinstance(v, dict) and "path" in v else v
+            for k, v in decls.items()
+        } if decls else decls
         outputs = {k: v for k, v in raw_outputs.items() if k in decls} if decls else raw_outputs
 
         self.manifest.write_stage_output(
             stage=self.name,
             outputs=outputs,
-            output_decls=decls,
+            output_decls=rendered_decls,
             workdir=self.workdir,
             prompt_hash=prompt_hash,
         )
