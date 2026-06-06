@@ -55,6 +55,7 @@ output_type = "json"
 # free_param输出到run文件夹中，方便fit程序调用
 output.free_params = {"type" = "file", "path" = "run/free_params.toml"}
 output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_config.toml"}
+output.free_params_range = {"type" = "file", "path" = "gen/fragments/free_params_range.toml"}
 # 直接输出到cache的resonances_config.toml文件，方便后续引用
 # 支持类型{},[],"" 等，禁止嵌套
 output.all_sbc = {"type" = "direct"}
@@ -82,6 +83,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/save_results.py"}
 [stages.classification]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/classification_prompt.txt"}
+human_prompt = "使用传入的{\"arg_index\": n}代替parameter_lists中变量的具体值,输出纯json，不要包含注释"
 output_type = "json"
 # 这里直接将整个json输出到文件，文件路径由path指定
 output.all = {"type" = "file", "path" = "gen/fragments/classification.json"}
@@ -106,26 +108,30 @@ foreach = {"type" = "ref", path = "stages.classification.propagator_classificati
 # 引用时，解析器支持[*],["xxx"]等方式来访问循环结构的结果
 prompt = {"type" = "file", "path" = "gen/prompts/resonance_calculation_prompt.txt"}
 # human_prompt支持直接输入字符串，也支持从文件读取，文件路径由path指定
-human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值。propagator_type: <<key>>"
+human_prompt = "当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值"
 output_type = "python"
 # 在启用foreach循环的情况下，使用<<key>>来表示循环变量的值
 output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_<<key>>.py"}
 
-
-
 [stages.extract_parameters]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
+human_prompt ="使用已导入的import numpy as onp"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters.py"}
 
+[stages.step_function]
+kind = "llm"
+prompt = "你的任务是生成step函数 def data_step_function(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip.free_params_range>> "
 
-
+human_prompt = "计算由已经导入的import jax.numpy as np包处理，只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/step_function.py"}
 
 [stages.likelihood_function]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
-human_prompt = "当计算data_likelihood时，step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + 参数边界约束np.power(range[i,0]-args[i],2)/np.power([i,1],2)/2.0 但range不要作为参数传入"
+human_prompt = "当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function.all>>"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function.py"}
 
@@ -149,12 +155,14 @@ kind = "python"
 handler = {"type" = "file", "path" = "gen/handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
 # 可以使用input字段给python添加除config外的输入，需要在函数签名中添加对应的输入
 # 这里用来决定组装代码的顺序
-input = ["config.ref.code_template.COMMON_UTILITIES",
-         "config.ref.code_template.PATH_CONFIG",
-         "config.ref.code_template.LOGGING_CONFIG",
-         "config.ref.code_template.DPLEX_FUNCTIONS",
-         "config.ref.code_template.PHYSICS_FUNCTIONS",
-         "config.stages[*].all"
-        ]
+input = {"list"=["ref.code_template.COMMON_UTILITIES",
+         "ref.code_template.PATH_CONFIG",
+         "ref.code_template.LOGGING_CONFIG",
+         "ref.code_template.DPLEX_FUNCTIONS",
+         "ref.code_template.PHYSICS_FUNCTIONS",
+         "stages.resonance_calculation[*].all",
+         "stages[*].all"
+        ]}
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/fit_script.py"}
+

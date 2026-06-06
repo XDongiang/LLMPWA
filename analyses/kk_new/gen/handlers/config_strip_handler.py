@@ -7,6 +7,12 @@ def config_strip_handler(cfg: ConfigAccessor):
 
     stripped_config, free_params, _ = parse_config(resonances_config)
 
+    free_params_range = []
+
+    for i in free_params:
+        if i.get("range") != None:
+            free_params_range.append({"arg_index":i["arg_index"],"range":i["range"]})
+
     # collect all_sbc and all_amp (mirrors generator_base.get_all_resonance_data)
     sbc_list = []
     amp_list = []
@@ -29,6 +35,7 @@ def config_strip_handler(cfg: ConfigAccessor):
 
     return {
         "free_params": free_params,   # → 写入 run/free_params.toml
+        "free_params_range":  free_params_range,
         "stripped_config": stripped_config,             # → 写入 gen/fragments/stripped_config.toml
         "all_sbc": all_sbc,                             # → direct，存入 manifest
         "all_amp": all_amp,                             # → direct，存入 manifest

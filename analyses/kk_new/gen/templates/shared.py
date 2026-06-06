@@ -1,6 +1,5 @@
 
 # SECTION: COMMON_UTILITIES
-import copy
 import json
 import logging
 import logging.config

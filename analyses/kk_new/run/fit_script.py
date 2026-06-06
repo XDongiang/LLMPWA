@@ -1,4 +1,3 @@
-import copy
 import json
 import logging
 import logging.config
@@ -389,7 +388,7 @@ def data_likelihood_kk(args):
     frac_f2_flatte = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
     frac_f2_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_BW)) / sum_frac)
     total_frac = frac_u_kst2_r_BW + frac_u_kst2_l_BW + frac_f0_flatte + frac_f0_BW + frac_f2_flatte + frac_f2_BW
-    step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(range[:, 0] - args, 2) / np.power(range[:, 1], 2) / 2.0)
+    step_function = data_step_function(total_frac, args)
     total_amplitude = data_u_kst2_r_kk_BW_BW
     total_amplitude = total_amplitude + data_u_kst2_l_kk_BW_BW
     total_amplitude = total_amplitude + data_phif0_kk_BW_flatte980
@@ -471,7 +470,6 @@ data_size = len(data_phi_kk)
 if __name__  == "__main__":
     """使用Newton-CG方法和HVP的拟合函数"""
     import toml
-    import builtins
 
     logger = setup_logging()
     logger.info("开始HVP优化版PWA拟合（Newton-CG方法）")
@@ -481,15 +479,13 @@ if __name__  == "__main__":
     constraint_strength = 1000.0
     total_frac_kk = 1.1
 
-    args_list, range, init_errors = make_initial_args()
-    args_list = onp.asarray(args_list, dtype=onp.float64)
-    range = onp.asarray(range, dtype=onp.float64)
+    args_list, ranges, initial_errors = make_initial_args()
 
     def combined_likelihood(args):
         return data_likelihood_kk(args) + data_size * np.log(mc_likelihood_kk(args))
 
-    def hvp_combined_likelihood(args, vector):
-        return jvp(grad(combined_likelihood), (args,), (vector,))[1]
+    def hvp_combined_likelihood(x, v):
+        return jvp(grad(combined_likelihood), (x,), (v,))[1]
 
     logger.info("编译JAX函数（HVP版本）...")
     jit_likelihood = jit(combined_likelihood)
@@ -540,7 +536,7 @@ if __name__  == "__main__":
     logger.info("计算参数误差（Hessian逆矩阵）...")
     args_size = args_list.shape[0]
     hessian_matrix = onp.zeros([args_size, args_size])
-    for i in builtins.range(args_size):
+    for i in range(args_size):
         v = onp.zeros(args_size)
         v[i] = 1.0
         hessian_matrix[:, i] = onp.array(jit_hvp(result.x, v))
@@ -554,4 +550,30 @@ if __name__  == "__main__":
 
     save_result(result.x, ferror, "output/fit/free_params_fit.toml")
     logger.info("配置已保存至 output/fit/free_params_fit.toml")
+
+def data_step_function(total_frac, args):
+    ranges = {
+        0: (0.98, 10.0),
+        5: (1.704, 1.0),
+        6: (0.123, 1.0),
+        11: (1.2755, 1.0),
+        12: (0.1867, 1.0),
+        23: (1.517, 1.0),
+        24: (0.086, 1.0),
+        35: (2.157, 1.0),
+        36: (0.152, 1.0),
+        47: (2.345, 0.01),
+        48: (0.322, 1.0),
+        59: (2.47, 0.007),
+        60: (0.075, 0.011),
+        65: (2.1, 10.0),
+        66: (0.1, 10.0),
+        71: (1.819, 10.0),
+        72: (0.264, 10.0),
+        77: (2.247, 10.0),
+        78: (0.18, 10.0),
+    }
+    step_value = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength
+    step_value += sum(np.power(center - args[i], 2.0) / np.power(width, 2.0) / 2.0 for i, (center, width) in ranges.items())
+    return step_value
 

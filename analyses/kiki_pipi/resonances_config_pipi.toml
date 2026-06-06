@@ -1,0 +1,344 @@
+# resonances_config_pipi.toml
+
+# phif0(980) resonance configuration
+[resonances.phif0_980.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif0_980.propagators.B_propagator]
+propagator_type = "flatte980"
+mass = { value = 0.9724248098676344, range = [0.9894, 0.0013], fixed = false, error = 0.00045597319542829484 }
+g_pipi = { value = 0.06201313432814033, fixed = false, error = 0.0012238250518854354 }
+rg = { value = 1.3169762577503408, fixed = false, error = 0.1161958699000806 }
+Sbc = "f_pipi"
+
+[resonances.phif0_980.Amplitude]
+AMP = "phif0_pipi"
+
+const1 = { value = 0.1, fixed = true, error = 0.0 }
+const2 = { value = 0.05556107968442361, fixed = false, error = 0.0012743090107579255 }
+
+theta1 = { value = 0.1, fixed = true, error = 0.0 }
+theta2 = { value = 0.058719694648431235, fixed = false, error = 0.0014964498584950463 }
+
+
+# phif2(long) resonance configuration
+[resonances.phif2_long.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif2_long.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 0.00011463626093534355, fixed = true }
+width = { value = 99999.999999614, fixed = true }
+Sbc = "f_pipi"
+
+[resonances.phif2_long.Amplitude]
+AMP = "phif2_pipi"
+
+const1 = { value = 0.19593799560695832, fixed = false, error = 0.24800143192199983 }
+const2 = { value = 0.012470654562124503, fixed = false, error = 0.2929856441672027 }
+const3 = { value = -0.2851953718845401, fixed = false, error = 0.15618434692987687 }
+const4 = { value = 0.06636450912056047, fixed = false, error = 0.13818614384390335 }
+const5 = { value = 0.12258876881362349, fixed = false, error = 0.1840872912503934 }
+
+theta1 = { value = -0.26548751314553765, fixed = false, error = 0.17802056528353677 }
+theta2 = { value = -0.36618769900909337, fixed = false, error = 0.18188446463779226 }
+theta3 = { value = -0.004015287851150053, fixed = false, error = 0.10436536021040116 }
+theta4 = { value = -0.10936476452402297, fixed = false, error = 0.15018296342495496 }
+theta5 = { value = 0.03974260858725838, fixed = false, error = 0.16927929790992835 }
+
+
+# phif2(1270) resonance configuration
+[resonances.phif2_1270.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif2_1270.propagators.B_propagator]
+propagator_type = "flatte1270"
+mass = { value = 1.2749385691974562, range = [1.2755, 0.0008], fixed = false, error = 0.0007685071367458856 }
+width = { value = 0.19763058070641237, range = [0.19, 0.0023], fixed = false, error = 0.0020975731161581995 }
+Sbc = "f_pipi"
+
+[resonances.phif2_1270.Amplitude]
+AMP = "phif2_pipi"
+
+const1 = { value = -0.28948044578199356, fixed = false, error = 0.016150666110579165 }
+const2 = { value = -0.2287768898373971, fixed = false, error = 0.013852868377426606 }
+const3 = { value = -0.15990707497126008, fixed = false, error = 0.008797772653280035 }
+const4 = { value = -0.3111602274560316, fixed = false, error = 0.012455276294938183 }
+const5 = { value = -0.010516980549299932, fixed = false, error = 0.012038835253022143 }
+
+theta1 = { value = 0.14018260123371015, fixed = false, error = 0.017922909219429444 }
+theta2 = { value = 0.1881222869727493, fixed = false, error = 0.01720507105848185 }
+theta3 = { value = 0.006260133696345951, fixed = false, error = 0.01016349390962459 }
+theta4 = { value = -0.13620306008300462, fixed = false, error = 0.007700290072434218 }
+theta5 = { value = -0.007470655615079892, fixed = false, error = 0.01451974338858024 }
+
+
+# phif0(500) resonance configuration
+[resonances.phif0_500.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif0_500.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 0.5354097341749176, range = [0.535, 0.001], fixed = false, error = 0.0009939101465206118 }
+width = { value = 0.64327770927252, range = [0.643, 0.001], fixed = false, error = 0.0009988769797638734 }
+Sbc = "f_pipi"
+
+[resonances.phif0_500.Amplitude]
+AMP = "phif0_pipi"
+
+const1 = { value = -0.061229252776713226, fixed = false, error = 0.0 }
+const2 = { value = 0.01321566941402248, fixed = false, error = 0.0 }
+
+theta1 = { value = -0.12302486567296148, fixed = false, error = 0.0021902115319766113 }
+theta2 = { value = -0.06914488142362417, fixed = false, error = 0.0024991454065803158 }
+
+
+# phif0(1370) resonance configuration
+[resonances.phif0_1370.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif0_1370.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.349717494883055, range = [1.35, 0.001], fixed = false, error = 0.0009968940777099384 }
+width = { value = 0.2653618704235103, range = [0.265, 0.001], fixed = false, error = 0.0009939324298758308 }
+Sbc = "f_pipi"
+
+[resonances.phif0_1370.Amplitude]
+AMP = "phif0_pipi"
+
+const1 = { value = -0.047447647225283586, fixed = false, error = 0.00330981420264212 }
+const2 = { value = -0.10167038857083334, fixed = false, error = 0.003805833002202149 }
+
+theta1 = { value = -0.026759727114845686, fixed = false, error = 0.004049272219046986 }
+theta2 = { value = 0.03449505242390819, fixed = false, error = 0.0 }
+
+
+# phif0(1710) resonance configuration
+[resonances.phif0_1710.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif0_1710.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.7429326969512242, range = [1.727, 0.013], fixed = false, error = 0.0032528849561926825 }
+width = { value = 0.1401132893965101, range = [0.168, 0.046], fixed = false, error = 0.005981655221242172 }
+Sbc = "f_pipi"
+
+[resonances.phif0_1710.Amplitude]
+AMP = "phif0_pipi"
+
+const1 = { value = -0.038003407032253446, fixed = false, error = 0.0026915112625785086 }
+const2 = { value = -0.012093629165683318, fixed = false, error = 0.0022972685646874586 }
+
+theta1 = { value = 0.009866131088933382, fixed = false, error = 0.0 }
+theta2 = { value = 0.009799190956835622, fixed = false, error = 0.004151575404029269 }
+
+
+# phif2(1525) resonance configuration
+[resonances.phif2_1525.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif2_1525.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.5136879291379208, range = [1.514, 0.0025], fixed = false, error = 0.002407051319501633 }
+width = { value = 0.08926814962664145, range = [0.0892, 0.003], fixed = false, error = 0.0029620204132716505 }
+Sbc = "f_pipi"
+
+[resonances.phif2_1525.Amplitude]
+AMP = "phif2_pipi"
+
+const1 = { value = 0.0021291008657941778, fixed = false, error = 0.002478854021357045 }
+const2 = { value = -0.0044160873247314995, fixed = false, error = 0.0025732337463481646 }
+const3 = { value = 0.005413562508201503, fixed = false, error = 0.001693792563610448 }
+const4 = { value = -0.004920641109982332, fixed = false, error = 0.0022223131720203416 }
+const5 = { value = 0.00992055101636127, fixed = false, error = 0.0018071403605808797 }
+
+theta1 = { value = 0.017861577992163716, fixed = false, error = 0.002824411647755578 }
+theta2 = { value = -0.007411316073807279, fixed = false, error = 0.0029756543096631366 }
+theta3 = { value = -0.00302031736102215, fixed = false, error = 0.0016387306517563983 }
+theta4 = { value = -0.019809040251656265, fixed = false, error = 0.0027984834646430866 }
+theta5 = { value = -0.008502812451102041, fixed = false, error = 0.0023333012085913194 }
+
+
+# phif2(2340) resonance configuration
+[resonances.phif2_2340.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif2_2340.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.358404803018378, range = [2.346, 0.015], fixed = false, error = 0.0157429841069819 }
+width = { value = 0.32230729542561604, range = [0.331, 0.005], fixed = false, error = 0.015770569761257812 }
+Sbc = "f_pipi"
+
+[resonances.phif2_2340.Amplitude]
+AMP = "phif2_pipi"
+
+const1 = { value = -0.06528885213439543, fixed = false, error = 0.04610674207647126 }
+const2 = { value = 0.04452264408456644, fixed = false, error = 0.06185261193911097 }
+const3 = { value = -0.107290680261427, fixed = false, error = 0.0261993682455362 }
+const4 = { value = 0.07691582203817222, fixed = false, error = 0.032793426056966085 }
+const5 = { value = 0.11548786065181287, fixed = false, error = 0.04413070978376142 }
+
+theta1 = { value = 0.08228768819964466, fixed = false, error = 0.0376988400370015 }
+theta2 = { value = 0.073324529135149, fixed = false, error = 0.04096208452852053 }
+theta3 = { value = 0.039490961764765124, fixed = false, error = 0.029746295014033947 }
+theta4 = { value = -0.03521763160100088, fixed = false, error = 0.029054415293921335 }
+theta5 = { value = 0.03962078781954461, fixed = false, error = 0.050774841761215384 }
+
+
+# phif0(2470) resonance configuration
+[resonances.phif0_2470.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif0_2470.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.5214487728458512, range = [2.47, 0.007], fixed = false, error = 0.003966172274506066 }
+width = { value = 0.1139925770684733, range = [0.11, 0.002], fixed = false, error = 0.0013825561866270331 }
+Sbc = "f_pipi"
+
+[resonances.phif0_2470.Amplitude]
+AMP = "phif0_pipi"
+
+const1 = { value = -0.10420112973251186, fixed = false, error = 0.00603961239291663 }
+const2 = { value = -0.010420986194312446, fixed = false, error = 0.009266977458468972 }
+
+theta1 = { value = -0.06171649795572718, fixed = false, error = 0.008035292724343782 }
+theta2 = { value = 0.06992684680461181, fixed = false, error = 0.00896995728264409 }
+
+
+# phif2(2150) resonance configuration
+[resonances.phif2_2150.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.phif2_2150.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 2.1494881684031237, range = [2.157, 0.006], fixed = false, error = 0.004103523660540442 }
+width = { value = 0.43613899293565234, range = [0.436, 0.001], fixed = false, error = 0.0007070681594935382 }
+Sbc = "f_pipi"
+
+[resonances.phif2_2150.Amplitude]
+AMP = "phif2_pipi"
+
+const1 = { value = -0.4409106534664805, fixed = false, error = 0.0 }
+const2 = { value = -0.3714689331857065, fixed = false, error = 0.027574279132698654 }
+const3 = { value = -0.0888949060128173, fixed = false, error = 0.02227302928929525 }
+const4 = { value = -0.18248648248599547, fixed = false, error = 0.02663548832031886 }
+const5 = { value = -0.1608389649959068, fixed = false, error = 0.03317307223709641 }
+
+theta1 = { value = -0.2593873741850893, fixed = false, error = 0.03264546328389421 }
+theta2 = { value = 0.06672684154071319, fixed = false, error = 0.05313745356230006 }
+theta3 = { value = -0.058567198786899484, fixed = false, error = 0.02529419363946652 }
+theta4 = { value = 0.18063025841005062, fixed = false, error = 0.023491937529203196 }
+theta5 = { value = -0.07674143610691805, fixed = false, error = 0.03426822943222774 }
+
+
+# rho(1700) shared resonance configuration
+[resonances.rho1700]
+kind = "shared_state"
+components = ["rho1700_r", "rho1700_l"]
+
+[resonances.rho1700.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.rho1700.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.8513794498613898, range = [1.8823, 0.01], fixed = false, error = 0.006169442229145059 }
+width = { value = 0.1313660735278949, range = [0.1, 0.1], fixed = false, error = 0.0 }
+
+[resonances.rho1700.shared_amplitude_parameters]
+const1 = { value = -0.009250919729243731, fixed = false, error = 0.0015427373233720594 }
+
+theta1 = { value = -0.0011602054060865681, fixed = false, error = 0.0 }
+
+[[resonances.rho1700.amplitudes]]
+name = "rho1700_r"
+AMP = "u_rho_r_pipi"
+B_Sbc = "b124_pipi"
+parameter_ref = "shared_amplitude_parameters"
+
+[[resonances.rho1700.amplitudes]]
+name = "rho1700_l"
+AMP = "u_rho_l_pipi"
+B_Sbc = "b123_pipi"
+parameter_ref = "shared_amplitude_parameters"
+
+
+# K(1830) shared resonance configuration
+[resonances.K1830]
+kind = "shared_state"
+components = ["K1830_r", "K1830_l"]
+
+[resonances.K1830.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.02, fixed = true }
+width = { value = 0.004, fixed = true }
+Sbc = "phi_pipi"
+
+[resonances.K1830.propagators.B_propagator]
+propagator_type = "BW"
+mass = { value = 1.833891806023835, range = [1.83, 0.1], fixed = false, error = 0.005188861852577167 }
+width = { value = 0.32071140616916155, range = [0.31, 0.1], fixed = false, error = 0.006168664642136837 }
+
+[resonances.K1830.shared_amplitude_parameters]
+const1 = { value = -0.09344540542076364, fixed = false, error = 0.0028154723832329895 }
+const2 = { value = -0.043136472672836886, fixed = false, error = 0.004116099097187444 }
+const3 = { value = -0.0007561936971118836, fixed = false, error = 0.004227177255360261 }
+const4 = { value = 0.018874616088269645, fixed = false, error = 0.002698150349157523 }
+
+theta1 = { value = -0.010822687421108044, fixed = false, error = 0.0037176283216583984 }
+theta2 = { value = -0.040722568342230044, fixed = false, error = 0.004982819930055716 }
+theta3 = { value = -0.026196927067868466, fixed = false, error = 0.00443751922573855 }
+theta4 = { value = -0.02641076251926599, fixed = false, error = 0.003775177971127837 }
+
+[[resonances.K1830.amplitudes]]
+name = "K1830_r"
+AMP = "u_b_r_pipi"
+B_Sbc = "b124_pipi"
+parameter_ref = "shared_amplitude_parameters"
+
+[[resonances.K1830.amplitudes]]
+name = "K1830_l"
+AMP = "u_b_l_pipi"
+B_Sbc = "b123_pipi"
+parameter_ref = "shared_amplitude_parameters"
+
+
+[draw]
+extra_sbc = ["b123_pipi", "b124_pipi"]
+
+[fit]
+total_frac = 1.1
+lambda_tfc = 1000
+boundary = true

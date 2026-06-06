@@ -1,0 +1,48 @@
+[binding.ref]
+kk = "ref.resonances_config_kk"
+pipi = "ref.resonances_config_pipi"
+
+[binding.resonances.phif0_980]
+param = [
+    # notusevalue.value = usevlaue.value + diff 
+    # also add "description" = "prompt to teach llm how to config"
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "pipi", "diff" = 0}
+]
+
+[binding.resonances.phif0_1710]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "kk"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "kk"}
+]
+
+[binding.resonances.phif0_2470]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "pipi"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "pipi"}
+]
+
+[binding.resonances.phif2_2150]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "pipi"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "pipi"}
+]
+
+[binding.resonances.phif2_2340]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "kk"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "kk"}
+]
+
+
+[binding.resonances.phif2_1525]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "kk"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "kk"}
+]
+
+[binding.resonances.phif2_1270]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "pipi"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "pipi"}
+]
+
