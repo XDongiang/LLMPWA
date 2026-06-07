@@ -46,3 +46,8 @@ param = [
     {"name" = "propagators.B_propagator.width", "usevalue" = "pipi"}
 ]
 
+[binding.resonances.K1830]
+param = [
+    {"name" = "propagators.B_propagator.mass", "usevalue" = "pipi"},
+    {"name" = "propagators.B_propagator.width", "usevalue" = "pipi"}
+]

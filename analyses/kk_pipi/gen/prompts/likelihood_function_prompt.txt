@@ -1,0 +1,19 @@
+### 1. 任务目标
+你的任务：
+1. 输入信息中包含共振态信息和函数定义，以及一个目标函数的例子。仔细理解这些内容，并理清它们之间的关系，记下你理解的内容。
+2. 理解函数定义中的calculate_xxx和component_xxx函数的内容，理解这些函数的输入、输出、以及它们之间的关系，注意这些函数是成对出现的，每一对是一个共振态的计算函数。
+3. 理解extract_parameters函数的内容，理解这个函数的输入、输出、以及它们之间的关系。
+4. 函数例子中的函数就是将extract_parameters和calculate_xxx、component_xxx结合起来，生成了一个完整的似然函数。理解这个函数例子中各个函数的调用关系。
+5. 将你理解的内容精炼的整理出来,要求 data 和 mc 包含全部输入的共振态类型。
+6. 根据你整理出来的内容和思路并根据输入信息生成函数，生成包括 data 与 mc 的两个似然函数，要求返回的内容只包含 python 代码字符串，不包含解释、注释或额外文本，缩进与函数例子一致。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+
+### 2. 输入信息
+
+函数定义(calculate_xxx和component_xxx):
+
+<<stages.resonance_calculation[*].all>>
+
+<<stages.extract_parameters.all>>
+
+函数例子：
+<<ref.code_template.likelihood_functions>>

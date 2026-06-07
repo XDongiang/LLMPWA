@@ -1,0 +1,24 @@
+# 联合拟合配置文件
+[ref]
+code_template = ["gen/templates/fit.py","gen/templates/shared.py","gen/templates/physics_functions.py"]
+# 原始的共振态信息
+resonances_config_kk = {"type" = "file", "path" = "resonances_config_kk.toml"}
+resonances_config_pipi = {"type" = "file", "path" = "resonances_config_pipi.toml"}
+resonances_config_ctrl = {"type" = "file", "path" = "resonances_config_ctrl.toml"}
+
+
+
+
+
+[stages.combine_check]
+# 检查共享参数是否在两个配置文件中均存在
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/combine_check_handler.py", "function" = "combine_check_handler"}
+output_type = "json"
+output.checked = {"type" = "direct"}
+
+[stages.config_strip_kk]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/config_strip_ctrl_handler.py", "function" = "config_strip_ctrl_handler"}
+
+output_type = "json"
