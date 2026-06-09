@@ -4,6 +4,7 @@ import json
 import logging
 import logging.config
 import os
+import toml
 # must set before importing jax
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 import time
