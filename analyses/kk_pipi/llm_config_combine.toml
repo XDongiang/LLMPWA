@@ -25,6 +25,7 @@ output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_conf
 output.free_params_range = {"type" = "file", "path" = "gen/fragments/free_params_range_kk.toml"}
 output.all_sbc = {"type" = "direct"}
 output.all_amp = {"type" = "direct"}
+output.all_sbc_amp = {"type" = "direct"}
 
 [stages.config_strip_pipi]
 kind = "python"
@@ -36,6 +37,7 @@ output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_conf
 output.free_params_range = {"type" = "file", "path" = "gen/fragments/free_params_range_pipi.toml"}
 output.all_sbc = {"type" = "direct"}
 output.all_amp = {"type" = "direct"}
+output.all_sbc_amp = {"type" = "direct"}
 
 [stages.generate_args]
 #对于联合拟合，由于存在公用参数，我们需要先将需要的参数提取出来total_args
@@ -130,7 +132,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_pipi.p
 [stages.step_function_kk]
 # likelihood_function的辅助函数
 kind = "llm"
-prompt = "你的任务是生成step函数 def data_step_function_kk(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_kk.free_params_range>> "
+prompt = "你的任务是生成step函数 def data_step_function_kk(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength_kk + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_kk.free_params_range>> "
 
 human_prompt = "计算由已经导入的import jax.numpy as np包处理，只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。"
 output_type = "python"
@@ -139,7 +141,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/step_function_kk.py"}
 [stages.step_function_pipi]
 # likelihood_function的辅助函数
 kind = "llm"
-prompt = "你的任务是生成step函数 def data_step_function_pipi(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_pipi.free_params_range>> "
+prompt = "你的任务是生成step函数 def data_step_function_pipi(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_pipi, 2.0) * constraint_strength_pipi + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_pipi.free_params_range>> "
 
 human_prompt = "计算由已经导入的import jax.numpy as np包处理，只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。"
 output_type = "python"
@@ -148,14 +150,14 @@ output.all = {"type" = "file", "path" = "gen/fragments/step_function_pipi.py"}
 [stages.likelihood_function_kk]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
-human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_kk.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_kk.all>>"
+human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_kk.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_kk.all>>\n\n amp与sbc的组合关系 \n<<stages.config_strip_kk.all_sbc_amp>>"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function_kk.py"}
 
 [stages.likelihood_function_pipi]
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
-human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_pipi.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_pipi.all>>"
+human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_pipi.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_pipi.all>>\n\n amp与sbc的组合关系 \n<<stages.config_strip_pipi.all_sbc_amp>>"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function_pipi.py"}
 
@@ -170,7 +172,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/run_load_data.py"}
 # 主函数
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/main_section_prompt.txt"}
-human_prompt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。同时总的似然函数为total_likelihood = combined_likelihood_kk +combine_likehood_pipi"
+human_prompt = "格外定义变量constraint_strength_kk = 1000.0，total_frac_kk = 1.09636 constraint_strength_pipi = 1000.0，total_frac_pipi = 1.15 作为约束强度的权重。同时总的似然函数为total_likelihood = combined_likelihood_kk +combine_likehood_pipi"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/main_section.py"}
 
