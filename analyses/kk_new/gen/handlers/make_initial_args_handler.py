@@ -3,7 +3,11 @@ from agent.config_accessor import ConfigAccessor
 
 def make_initial_args_handler(cfg: ConfigAccessor):
 
-    path = "run/free_params.toml"
+    try:
+        path = cfg.read_input("path")
+    except:
+        print("fail to get free_params.toml path from imput, fail back to default")
+        path = "run/free_params.toml"
 
     code = f"""
 def make_initial_args():

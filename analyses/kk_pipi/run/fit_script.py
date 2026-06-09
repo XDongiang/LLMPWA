@@ -420,52 +420,52 @@ def extract_parameters_pipi(args):
     }
 
 def data_step_function_kk(total_frac, args):
-    step_value = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + (
-        np.power(0.98 - args[0], 2) / np.power(10.0, 2) / 2.0
-        + np.power(1.704 - args[5], 2) / np.power(1.0, 2) / 2.0
-        + np.power(0.123 - args[6], 2) / np.power(1.0, 2) / 2.0
-        + np.power(1.2755 - args[11], 2) / np.power(1.0, 2) / 2.0
-        + np.power(0.1867 - args[12], 2) / np.power(1.0, 2) / 2.0
-        + np.power(1.517 - args[23], 2) / np.power(1.0, 2) / 2.0
-        + np.power(0.086 - args[24], 2) / np.power(1.0, 2) / 2.0
-        + np.power(2.157 - args[35], 2) / np.power(1.0, 2) / 2.0
-        + np.power(0.152 - args[36], 2) / np.power(1.0, 2) / 2.0
-        + np.power(2.345 - args[47], 2) / np.power(0.01, 2) / 2.0
-        + np.power(0.322 - args[48], 2) / np.power(1.0, 2) / 2.0
-        + np.power(2.47 - args[59], 2) / np.power(0.007, 2) / 2.0
-        + np.power(0.075 - args[60], 2) / np.power(0.011, 2) / 2.0
-        + np.power(2.1 - args[65], 2) / np.power(10.0, 2) / 2.0
-        + np.power(0.1 - args[66], 2) / np.power(10.0, 2) / 2.0
-        + np.power(1.819 - args[71], 2) / np.power(10.0, 2) / 2.0
-        + np.power(0.264 - args[72], 2) / np.power(10.0, 2) / 2.0
-        + np.power(2.247 - args[77], 2) / np.power(10.0, 2) / 2.0
-        + np.power(0.18 - args[78], 2) / np.power(10.0, 2) / 2.0
-    )
+    step_value = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength_kk
+    step_value = step_value + np.power(0.98 - args[0], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(1.704 - args[5], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.123 - args[6], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(1.2755 - args[11], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.1867 - args[12], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(1.517 - args[23], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.086 - args[24], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(2.157 - args[35], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.152 - args[36], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(2.345 - args[47], 2.0) / np.power(0.01, 2.0) / 2.0
+    step_value = step_value + np.power(0.322 - args[48], 2.0) / np.power(1.0, 2.0) / 2.0
+    step_value = step_value + np.power(2.47 - args[59], 2.0) / np.power(0.007, 2.0) / 2.0
+    step_value = step_value + np.power(0.075 - args[60], 2.0) / np.power(0.011, 2.0) / 2.0
+    step_value = step_value + np.power(2.1 - args[65], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.1 - args[66], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(1.819 - args[71], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.264 - args[72], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(2.247 - args[77], 2.0) / np.power(10.0, 2.0) / 2.0
+    step_value = step_value + np.power(0.18 - args[78], 2.0) / np.power(10.0, 2.0) / 2.0
     return step_value
 
 def data_step_function_pipi(total_frac, args):
-    step_value = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength
-    step_value = step_value + np.power(0.9894 - args[0], 2.0) / np.power(0.0013, 2.0) / 2.0
-    step_value = step_value + np.power(1.2755 - args[15], 2.0) / np.power(0.0008, 2.0) / 2.0
-    step_value = step_value + np.power(0.19 - args[16], 2.0) / np.power(0.0023, 2.0) / 2.0
-    step_value = step_value + np.power(0.535 - args[27], 2.0) / np.power(0.001, 2.0) / 2.0
-    step_value = step_value + np.power(0.643 - args[28], 2.0) / np.power(0.001, 2.0) / 2.0
-    step_value = step_value + np.power(1.35 - args[33], 2.0) / np.power(0.001, 2.0) / 2.0
-    step_value = step_value + np.power(0.265 - args[34], 2.0) / np.power(0.001, 2.0) / 2.0
-    step_value = step_value + np.power(1.727 - args[39], 2.0) / np.power(0.013, 2.0) / 2.0
-    step_value = step_value + np.power(0.168 - args[40], 2.0) / np.power(0.046, 2.0) / 2.0
-    step_value = step_value + np.power(1.514 - args[45], 2.0) / np.power(0.0025, 2.0) / 2.0
-    step_value = step_value + np.power(0.0892 - args[46], 2.0) / np.power(0.003, 2.0) / 2.0
-    step_value = step_value + np.power(2.346 - args[57], 2.0) / np.power(0.015, 2.0) / 2.0
-    step_value = step_value + np.power(0.331 - args[58], 2.0) / np.power(0.005, 2.0) / 2.0
-    step_value = step_value + np.power(2.47 - args[69], 2.0) / np.power(0.007, 2.0) / 2.0
-    step_value = step_value + np.power(0.11 - args[70], 2.0) / np.power(0.002, 2.0) / 2.0
-    step_value = step_value + np.power(2.157 - args[75], 2.0) / np.power(0.006, 2.0) / 2.0
-    step_value = step_value + np.power(0.436 - args[76], 2.0) / np.power(0.001, 2.0) / 2.0
-    step_value = step_value + np.power(1.8823 - args[87], 2.0) / np.power(0.01, 2.0) / 2.0
-    step_value = step_value + np.power(0.1 - args[88], 2.0) / np.power(0.1, 2.0) / 2.0
-    step_value = step_value + np.power(1.83 - args[91], 2.0) / np.power(0.1, 2.0) / 2.0
-    step_value = step_value + np.power(0.31 - args[92], 2.0) / np.power(0.1, 2.0) / 2.0
+    step_value = np.power(total_frac - total_frac_pipi, 2.0) * constraint_strength_pipi + (
+        np.power(0.9894 - args[0], 2.0) / np.power(0.0013, 2.0) / 2.0
+        + np.power(1.2755 - args[15], 2.0) / np.power(0.0008, 2.0) / 2.0
+        + np.power(0.19 - args[16], 2.0) / np.power(0.0023, 2.0) / 2.0
+        + np.power(0.535 - args[27], 2.0) / np.power(0.001, 2.0) / 2.0
+        + np.power(0.643 - args[28], 2.0) / np.power(0.001, 2.0) / 2.0
+        + np.power(1.35 - args[33], 2.0) / np.power(0.001, 2.0) / 2.0
+        + np.power(0.265 - args[34], 2.0) / np.power(0.001, 2.0) / 2.0
+        + np.power(1.727 - args[39], 2.0) / np.power(0.013, 2.0) / 2.0
+        + np.power(0.168 - args[40], 2.0) / np.power(0.046, 2.0) / 2.0
+        + np.power(1.514 - args[45], 2.0) / np.power(0.0025, 2.0) / 2.0
+        + np.power(0.0892 - args[46], 2.0) / np.power(0.003, 2.0) / 2.0
+        + np.power(2.346 - args[57], 2.0) / np.power(0.015, 2.0) / 2.0
+        + np.power(0.331 - args[58], 2.0) / np.power(0.005, 2.0) / 2.0
+        + np.power(2.47 - args[69], 2.0) / np.power(0.007, 2.0) / 2.0
+        + np.power(0.11 - args[70], 2.0) / np.power(0.002, 2.0) / 2.0
+        + np.power(2.157 - args[75], 2.0) / np.power(0.006, 2.0) / 2.0
+        + np.power(0.436 - args[76], 2.0) / np.power(0.001, 2.0) / 2.0
+        + np.power(1.8823 - args[87], 2.0) / np.power(0.01, 2.0) / 2.0
+        + np.power(0.1 - args[88], 2.0) / np.power(0.1, 2.0) / 2.0
+        + np.power(1.83 - args[91], 2.0) / np.power(0.1, 2.0) / 2.0
+        + np.power(0.31 - args[92], 2.0) / np.power(0.1, 2.0) / 2.0
+    )
     return step_value
 
 def data_likelihood_kk(args):
@@ -538,13 +538,13 @@ def data_likelihood_kk(args):
         np.einsum("mljk->mjk", component_data_u_kst2_r_kk_BW_BW) +
         np.einsum("mljk->mjk", component_data_u_kst2_l_kk_BW_BW)
     ))
-    frac_phif0_flatte980 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_flatte980)) / sum_frac)
-    frac_phif0_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_BW)) / sum_frac)
-    frac_phif2_flatte1270 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
-    frac_phif2_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_BW)) / sum_frac)
-    frac_u_kst2_r_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_r_kk_BW_BW)) / sum_frac)
-    frac_u_kst2_l_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_l_kk_BW_BW)) / sum_frac)
-    total_frac = frac_phif0_flatte980 + frac_phif0_BW + frac_phif2_flatte1270 + frac_phif2_BW + frac_u_kst2_r_BW + frac_u_kst2_l_BW
+    frac_phif0_kk_BW_flatte980 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_flatte980)) / sum_frac)
+    frac_phif0_kk_BW_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif0_kk_BW_BW)) / sum_frac)
+    frac_phif2_kk_BW_flatte1270 = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_flatte1270)) / sum_frac)
+    frac_phif2_kk_BW_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_phif2_kk_BW_BW)) / sum_frac)
+    frac_u_kst2_r_kk_BW_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_r_kk_BW_BW)) / sum_frac)
+    frac_u_kst2_l_kk_BW_BW = np.sum(np.einsum("ljk->l", dplex_dabs(component_data_u_kst2_l_kk_BW_BW)) / sum_frac)
+    total_frac = frac_phif0_kk_BW_flatte980 + frac_phif0_kk_BW_BW + frac_phif2_kk_BW_flatte1270 + frac_phif2_kk_BW_BW + frac_u_kst2_r_kk_BW_BW + frac_u_kst2_l_kk_BW_BW
     step_function = data_step_function_kk(total_frac, args)
     total_amplitude = data_phif0_kk_BW_flatte980
     total_amplitude = total_amplitude + data_phif0_kk_BW_BW
@@ -809,20 +809,19 @@ truth_u_b_l_pipi = jax_data['truth_u_b_l_pipi']
 
 data_size = len(data_phi_kk)
 
-if __name__  == "__main__":
+if __name__ == "__main__":
     """使用Newton-CG方法和HVP的拟合函数"""
-    import toml
-
     logger = setup_logging()
     logger.info("开始HVP优化版PWA拟合（Newton-CG方法）")
 
     config.update("jax_enable_x64", True)
 
-    constraint_strength = 1000.0
-    total_frac_kk = 1.1
+    constraint_strength_kk = 1000.0
+    total_frac_kk = 1.09636
+    constraint_strength_pipi = 1000.0
+    total_frac_pipi = 1.15
 
     args_list, args_range, args_error = make_initial_args()
-
     data_size_kk = len(data_phi_kk)
     data_size_pipi = len(data_phi_pipi)
 
@@ -835,8 +834,7 @@ if __name__  == "__main__":
         return data_likelihood_pipi(args_pipi) + data_size_pipi * np.log(mc_likelihood_pipi(args_pipi))
 
     def combined_likelihood(total_args):
-        total_likelihood = combined_likelihood_kk(total_args) + combined_likelihood_pipi(total_args)
-        return total_likelihood
+        return combined_likelihood_kk(total_args) + combined_likelihood_pipi(total_args)
 
     def hvp_combined_likelihood(x, v):
         return jvp(grad(combined_likelihood), (x,), (v,))[1]
@@ -875,8 +873,8 @@ if __name__  == "__main__":
 
     end_time = time.time()
 
-    logger.info("="*50)
-    logger.info(f"HVP优化完成!")
+    logger.info("=" * 50)
+    logger.info("HVP优化完成!")
     logger.info(f"成功: {result.success}")
     logger.info(f"最终似然值: {result.fun}")
     logger.info(f"迭代次数: {result.nit}")
@@ -885,7 +883,7 @@ if __name__  == "__main__":
     logger.info(f"Hessian调用次数: {result.nhev}")
     logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
     logger.info(f"优化信息: {result.message}")
-    logger.info("="*50)
+    logger.info("=" * 50)
 
     logger.info("计算参数误差（Hessian逆矩阵）...")
     args_size = args_list.shape[0]
@@ -895,13 +893,12 @@ if __name__  == "__main__":
         v[i] = 1.0
         hessian_matrix[:, i] = onp.array(jit_hvp(result.x, v))
     ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
-    logger.info(f"误差计算完成")
+    logger.info("误差计算完成")
 
     os.makedirs("output/fit", exist_ok=True)
     onp.save("output/fit/fit_result_values.npy", result.x)
     onp.save("output/fit/fit_result_errors.npy", ferror)
-    logger.info("参数已保存至 output/fit/fit_result_values.npy")
-
     save_result(result.x, ferror, path="output/free_params_fitted.toml")
+    logger.info("参数已保存至 output/fit/fit_result_values.npy")
     logger.info("配置已保存至 output/free_params_fitted.toml")
 

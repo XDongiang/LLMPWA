@@ -11,7 +11,7 @@ import json
 import os
 from typing import Dict, List, Optional
 
-from generator_base import StageRunner, load_prompt
+from agent.prompts.generator_base import StageRunner, load_prompt
 from generator_fit import FitGenerator
 
 
@@ -25,7 +25,7 @@ class PlotGenerator(FitGenerator):
                          model_check=model_check, config_path=config_path)
         # Override mode so template sections are loaded for plot
         self.mode = "plot"
-        from agent.generator_base import parse_template_sections
+        from agent.prompts.generator_base import parse_template_sections
         self.sections = parse_template_sections(mode="plot")
 
     # ------------------------------------------------------------------

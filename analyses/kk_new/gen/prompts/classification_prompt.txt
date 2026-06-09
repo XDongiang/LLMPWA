@@ -1,6 +1,3 @@
-toml 配置：
-<<stages.config_strip.stripped_config>>（注：此处为变量，指"所有共振信息"）
-
 预处理规则：
 - 普通 resonance：包含 propagators 和 Amplitude 的 resonance，直接作为一个共振/振幅分量参与后续分组。
 - shared_state resonance：如果某个 resonance 的 kind = "shared_state"，它不是单个振幅项，而是一个共享物理态容器。必须先把 resonances.<state>.amplitudes 中的每一项展开为一个独立的振幅分量。

@@ -13,11 +13,6 @@ def load_data():
     # MC truth data (for constraints)
     data['truth_{{var}}'] = data['mc_{{var}}'][:, 0:150000]
 
-    # Weight data
-    try:
-        data['wt_data_kk'] = onp.load("data/weight/weight_kk.npy")
-    except FileNotFoundError:
-        data['wt_data_kk'] = onp.ones_like(data['data_phi_kk'])
 
     return data
 
@@ -46,7 +41,3 @@ For variables Sbc, the truth slicing is [0:150000], variables amp the truth slic
 For normalization, use "regular_{{var}}" as the normalization factor name and only amp need normalization.
 Keep the rest of the code structure exactly the same.
 Output the final Python code string only, without extra explanations. Do not add any #=== or #====== separator comments.
-
-## Variable list:
-sbc = <<stages.config_strip.all_sbc>>
-amp = <<stages.config_strip.all_amp>>

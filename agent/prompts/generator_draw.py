@@ -13,7 +13,7 @@ import json
 import os
 from typing import Dict, List, Optional
 
-from generator_base import StageRunner, load_prompt
+from agent.prompts.generator_base import StageRunner, load_prompt
 from config_parser import parse_config
 from generator_fit import FitGenerator
 
