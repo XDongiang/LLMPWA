@@ -254,25 +254,25 @@ def prepare_data_for_jax(data, device=None):
 
 def extract_parameters(args):
     return {
-        'phi_mass': onp.array([1.02]),
-        'phi_width': onp.array([0.004]),
-        'phif0_kk_BW_flatte980_mass': onp.array([args[0]]),
-        'phif0_kk_BW_flatte980_g_kk': onp.array([args[1]]),
-        'phif0_kk_BW_flatte980_rg': onp.array([args[2]]),
-        'phif0_kk_BW_flatte980_const': onp.array([0.1, args[3]]).reshape(-1, 2),
-        'phif0_kk_BW_flatte980_theta': onp.array([0.1, args[4]]).reshape(-1, 2),
-        'phif0_kk_BW_BW_mass': onp.array([args[5], args[59]]),
-        'phif0_kk_BW_BW_width': onp.array([args[6], args[60]]),
-        'phif0_kk_BW_BW_const': onp.array([args[7], args[8], args[61], args[62]]).reshape(-1, 2),
-        'phif0_kk_BW_BW_theta': onp.array([args[9], args[10], args[63], args[64]]).reshape(-1, 2),
-        'phif2_kk_BW_flatte1270_mass': onp.array([args[11]]),
-        'phif2_kk_BW_flatte1270_width': onp.array([args[12]]),
-        'phif2_kk_BW_flatte1270_const': onp.array([args[13], args[14], args[15], args[16], args[17]]).reshape(-1, 5),
-        'phif2_kk_BW_flatte1270_theta': onp.array([args[18], args[19], args[20], args[21], args[22]]).reshape(-1, 5),
-        'phif2_kk_BW_BW_mass': onp.array([args[23], args[35], args[47]]),
-        'phif2_kk_BW_BW_width': onp.array([args[24], args[36], args[48]]),
-        'phif2_kk_BW_BW_const': onp.array([args[25], args[26], args[27], args[28], args[29], args[37], args[38], args[39], args[40], args[41], args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
-        'phif2_kk_BW_BW_theta': onp.array([args[30], args[31], args[32], args[33], args[34], args[42], args[43], args[44], args[45], args[46], args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
+        'phi_mass': np.array([1.02]),
+        'phi_width': np.array([0.004]),
+        'phif0_kk_BW_flatte980_mass': np.array([args[0]]),
+        'phif0_kk_BW_flatte980_g_kk': np.array([args[1]]),
+        'phif0_kk_BW_flatte980_rg': np.array([args[2]]),
+        'phif0_kk_BW_flatte980_const': np.array([0.1, args[3]]).reshape(-1, 2),
+        'phif0_kk_BW_flatte980_theta': np.array([0.1, args[4]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_mass': np.array([args[5], args[59]]),
+        'phif0_kk_BW_BW_width': np.array([args[6], args[60]]),
+        'phif0_kk_BW_BW_const': np.array([args[7], args[8], args[61], args[62]]).reshape(-1, 2),
+        'phif0_kk_BW_BW_theta': np.array([args[9], args[10], args[63], args[64]]).reshape(-1, 2),
+        'phif2_kk_BW_flatte1270_mass': np.array([args[11]]),
+        'phif2_kk_BW_flatte1270_width': np.array([args[12]]),
+        'phif2_kk_BW_flatte1270_const': np.array([args[13], args[14], args[15], args[16], args[17]]).reshape(-1, 5),
+        'phif2_kk_BW_flatte1270_theta': np.array([args[18], args[19], args[20], args[21], args[22]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_mass': np.array([args[23], args[35], args[47]]),
+        'phif2_kk_BW_BW_width': np.array([args[24], args[36], args[48]]),
+        'phif2_kk_BW_BW_const': np.array([args[25], args[26], args[27], args[28], args[29], args[37], args[38], args[39], args[40], args[41], args[49], args[50], args[51], args[52], args[53]]).reshape(-1, 5),
+        'phif2_kk_BW_BW_theta': np.array([args[30], args[31], args[32], args[33], args[34], args[42], args[43], args[44], args[45], args[46], args[54], args[55], args[56], args[57], args[58]]).reshape(-1, 5),
     }
 
 def data_step_function(total_frac, args):
@@ -413,6 +413,7 @@ if __name__  == "__main__":
 
     config.update("jax_enable_x64", True)
 
+    global constraint_strength, total_frac_kk
     constraint_strength = 1000.0
     total_frac_kk = 1.1
 
@@ -479,6 +480,6 @@ if __name__  == "__main__":
     onp.save("output/fit/fit_result_errors.npy", ferror)
     logger.info("参数已保存至 output/fit/fit_result_values.npy")
 
-    save_result(result.x, ferror, path="output/free_params_fitted.toml")
-    logger.info("配置已保存至 output/free_params_fitted.toml")
+    save_result(result.x, ferror, "output/fit/free_params_fitted.toml")
+    logger.info("配置已保存至 output/fit/free_params_fitted.toml")
 

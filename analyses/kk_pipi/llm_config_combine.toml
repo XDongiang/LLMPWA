@@ -116,7 +116,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_<<k
 # 依照分组结果，将一维np.array分组成dict方便调用
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
-human_prompt ="### 参数分组信息 \n<<stages.classification_kk.all.parameter_lists>>\n\n使用已导入的import numpy as onp 生成函数名为extract_parameters_kk"
+human_prompt ="### 参数分组信息 \n<<stages.classification_kk.all.parameter_lists>>\n\n使用已导入的import jax.numpy as np 生成函数名为extract_parameters_kk"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_kk.py"}
 
@@ -125,7 +125,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_kk.py"
 # np.array\to dict 的性能影响
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
-human_prompt ="### 参数分组信息 \n<<stages.classification_pipi.all.parameter_lists>>\n\n使用已导入的import numpy as onp 生成函数名为extract_parameters_pipi"
+human_prompt ="### 参数分组信息 \n<<stages.classification_pipi.all.parameter_lists>>\n\n使用已导入的import jax.numpy as np 生成函数名为extract_parameters_pipi"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_pipi.py"}
 
