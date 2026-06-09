@@ -120,6 +120,7 @@ output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_kk.py"
 
 [stages.extract_parameters_pipi]
 # 依照分组结果，将一维np.array分组成dict方便调用
+# np.array\to dict 的性能影响
 kind = "llm"
 prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
 human_prompt ="### 参数分组信息 \n<<stages.classification_pipi.all.parameter_lists>>\n\n使用已导入的import numpy as onp 生成函数名为extract_parameters_pipi"
@@ -172,3 +173,19 @@ prompt = {"type" = "file", "path" = "gen/prompts/main_section_prompt.txt"}
 human_prompt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。同时总的似然函数为total_likelihood = combined_likelihood_kk +combine_likehood_pipi"
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/main_section.py"}
+
+[stages.assemble_final_code]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
+# 可以使用input字段给python添加除config外的输入，需要在函数签名中添加对应的输入
+# 这里用来决定组装代码的顺序
+input = {"list"=["ref.code_template.COMMON_UTILITIES",
+         "ref.code_template.PATH_CONFIG",
+         "ref.code_template.LOGGING_CONFIG",
+         "ref.code_template.DPLEX_FUNCTIONS",
+         "ref.code_template.PHYSICS_FUNCTIONS",
+         "stages.resonance_calculation[*].all",
+         "stages[*].all"
+        ]}
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/fit_script.py"}
