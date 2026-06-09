@@ -22,4 +22,4 @@ function template:
 
 ### 输入信息部分
 calculation name: <<key>>
-amplitude_classification: <<stages.classification.all.amplitude_classification>>
+

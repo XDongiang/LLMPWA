@@ -1,0 +1,1237 @@
+[[data]]
+path = "resonances.phif0_980.propagators.B_propagator.g_kk"
+value = 0.10678616326827592
+error = 0.010260657247901088
+arg_index = 0
+arg_index_kk = 1
+
+[[data]]
+path = "resonances.phif0_980.propagators.B_propagator.rg"
+value = 8.570187550432664
+error = 1.348489540060868
+arg_index = 1
+arg_index_kk = 2
+
+[[data]]
+path = "resonances.phif0_980.Amplitude.const2"
+value = 0.1065182971468388
+error = 0.003833456119689838
+arg_index = 2
+arg_index_kk = 3
+
+[[data]]
+path = "resonances.phif0_980.Amplitude.theta2"
+value = 0.03807025376236671
+error = 0.0032382807585900437
+arg_index = 3
+arg_index_kk = 4
+
+[[data]]
+path = "resonances.phif0_1710.propagators.B_propagator.mass"
+value = 1.6761965590304995
+range = [ 1.704, 1.0,]
+error = 0.008608254171218993
+arg_index = 4
+arg_index_kk = 5
+arg_index_pipi = 39
+
+[[data]]
+path = "resonances.phif0_1710.propagators.B_propagator.width"
+value = 0.16270071108440043
+range = [ 0.123, 1.0,]
+error = 0.007928828044131218
+arg_index = 5
+arg_index_kk = 6
+arg_index_pipi = 40
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.const1"
+value = 0.02201375198386279
+error = 0.0028493281809777366
+arg_index = 6
+arg_index_kk = 7
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.const2"
+value = 0.007433204877151768
+error = 0.0027873338673183225
+arg_index = 7
+arg_index_kk = 8
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.theta1"
+value = 0.008302300118288414
+error = 0.003420832265462995
+arg_index = 8
+arg_index_kk = 9
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.theta2"
+value = -0.018544178045626723
+error = 0.002285070372617045
+arg_index = 9
+arg_index_kk = 10
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const1"
+value = -0.013533706721054747
+error = 0.013059446776572923
+arg_index = 10
+arg_index_kk = 13
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const2"
+value = -0.01650921272412254
+error = 0.011103610207449996
+arg_index = 11
+arg_index_kk = 14
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const3"
+value = 0.015339403283337268
+error = 0.007598401439603328
+arg_index = 12
+arg_index_kk = 15
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const4"
+value = 0.029798824827026338
+error = 0.013596613875924366
+arg_index = 13
+arg_index_kk = 16
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const5"
+value = 0.020982478502465995
+error = 0.011084121094273973
+arg_index = 14
+arg_index_kk = 17
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta1"
+value = 0.05458389002821978
+error = 0.010607053111143525
+arg_index = 15
+arg_index_kk = 18
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta2"
+value = 0.016032334798079934
+error = 0.009620235767829567
+arg_index = 16
+arg_index_kk = 19
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta3"
+value = 0.017179622009723918
+error = 0.008259678006502619
+arg_index = 17
+arg_index_kk = 20
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta4"
+value = -0.050143087437086675
+error = 0.010731665771685451
+arg_index = 18
+arg_index_kk = 21
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta5"
+value = -0.008718872479379924
+error = 0.009363006763018657
+arg_index = 19
+arg_index_kk = 22
+
+[[data]]
+path = "resonances.phif2_1525.propagators.B_propagator.mass"
+value = 1.5222602842746435
+range = [ 1.517, 1.0,]
+error = 0.0021852818767245097
+arg_index = 20
+arg_index_kk = 23
+arg_index_pipi = 45
+
+[[data]]
+path = "resonances.phif2_1525.propagators.B_propagator.width"
+value = 0.08576525399315078
+range = [ 0.086, 1.0,]
+error = 0.004480554483528854
+arg_index = 21
+arg_index_kk = 24
+arg_index_pipi = 46
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const1"
+value = -0.005345214125595505
+error = 0.002361030920067052
+arg_index = 22
+arg_index_kk = 25
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const2"
+value = 0.0031770703345810553
+error = 0.0022601284491659272
+arg_index = 23
+arg_index_kk = 26
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const3"
+value = -0.0036743677603351056
+error = 0.0018391542634132708
+arg_index = 24
+arg_index_kk = 27
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const4"
+value = 0.004813366936315499
+error = 0.0034476100080681558
+arg_index = 25
+arg_index_kk = 28
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const5"
+value = 0.010000673114238258
+error = 0.0024458295985315373
+arg_index = 26
+arg_index_kk = 29
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta1"
+value = -0.010529063356530807
+error = 0.002019182721147269
+arg_index = 27
+arg_index_kk = 30
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta2"
+value = 0.003910028530572422
+error = 0.0014883832205133188
+arg_index = 28
+arg_index_kk = 31
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta3"
+value = 0.0031787953173277725
+error = 0.0009832831099109687
+arg_index = 29
+arg_index_kk = 32
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta4"
+value = 0.0333658928584713
+error = 0.0037659511330376417
+arg_index = 30
+arg_index_kk = 33
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta5"
+value = -0.006053516058970728
+error = 0.0016345295470368193
+arg_index = 31
+arg_index_kk = 34
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const1"
+value = 0.004643720949518616
+error = 0.004293173395970161
+arg_index = 32
+arg_index_kk = 37
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const2"
+value = -0.0009682564746806725
+error = 0.004579214352357212
+arg_index = 33
+arg_index_kk = 38
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const3"
+value = -0.0029804674908844213
+error = 0.0025923332971131054
+arg_index = 34
+arg_index_kk = 39
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const4"
+value = 0.008315390493289363
+error = 0.004795045874173534
+arg_index = 35
+arg_index_kk = 40
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const5"
+value = 0.0005819695034846763
+error = 0.004151013688821708
+arg_index = 36
+arg_index_kk = 41
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta1"
+value = 0.00545992748088964
+error = 0.003178818200828604
+arg_index = 37
+arg_index_kk = 42
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta2"
+value = -0.012498776031677225
+error = 0.004094191659114589
+arg_index = 38
+arg_index_kk = 43
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta3"
+value = 0.002196563552197887
+error = 0.0024912191401879813
+arg_index = 39
+arg_index_kk = 44
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta4"
+value = -0.016814307435916394
+error = 0.0032647649405574786
+arg_index = 40
+arg_index_kk = 45
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta5"
+value = -0.007232946300343621
+error = 0.003910253340981285
+arg_index = 41
+arg_index_kk = 46
+
+[[data]]
+path = "resonances.phif2_2340.propagators.B_propagator.mass"
+value = 2.547889297662712
+range = [ 2.345, 0.01,]
+error = 0.025714265576588485
+arg_index = 42
+arg_index_kk = 47
+arg_index_pipi = 57
+
+[[data]]
+path = "resonances.phif2_2340.propagators.B_propagator.width"
+value = 0.324001266488012
+range = [ 0.322, 1.0,]
+error = 0.008869958469754202
+arg_index = 43
+arg_index_kk = 48
+arg_index_pipi = 58
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const1"
+value = -0.15266341362240637
+error = 0.0226276447864268
+arg_index = 44
+arg_index_kk = 49
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const2"
+value = -0.05030214288962155
+error = 0.01462254664631181
+arg_index = 45
+arg_index_kk = 50
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const3"
+value = -0.01856511044577769
+error = 0.01602693686543622
+arg_index = 46
+arg_index_kk = 51
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const4"
+value = 0.0908719088071242
+error = 0.015326282883084562
+arg_index = 47
+arg_index_kk = 52
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const5"
+value = 0.029544599934778714
+error = 0.014428141030373473
+arg_index = 48
+arg_index_kk = 53
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta1"
+value = 0.06277085590848677
+error = 0.01543028339321429
+arg_index = 49
+arg_index_kk = 54
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta2"
+value = -0.0031366601030189344
+error = 0.01485537124391433
+arg_index = 50
+arg_index_kk = 55
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta3"
+value = 0.13756083806604205
+error = 0.015675234074991284
+arg_index = 51
+arg_index_kk = 56
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta4"
+value = -0.0033564526519642953
+error = 0.01289703559343365
+arg_index = 52
+arg_index_kk = 57
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta5"
+value = 0.06849361819185686
+error = 0.016369611794000778
+arg_index = 53
+arg_index_kk = 58
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.const1"
+value = -0.345074426966773
+error = 0.01955694586578195
+arg_index = 54
+arg_index_kk = 61
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.const2"
+value = -0.15428119408751656
+error = 0.014870979855746012
+arg_index = 55
+arg_index_kk = 62
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.theta1"
+value = 0.2290031973516395
+error = 0.010330891827371173
+arg_index = 56
+arg_index_kk = 63
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.theta2"
+value = -0.13412740539296167
+error = 0.01384041134802183
+arg_index = 57
+arg_index_kk = 64
+
+[[data]]
+path = "resonances.K2100.propagators.B_propagator.mass"
+value = 2.0945745764239794
+range = [ 2.1, 10.0,]
+error = 0.010360304234649145
+arg_index = 58
+arg_index_kk = 65
+
+[[data]]
+path = "resonances.K2100.propagators.B_propagator.width"
+value = 0.1111549213189184
+range = [ 0.1, 10.0,]
+error = 0.007251719477040147
+arg_index = 59
+arg_index_kk = 66
+
+[[data]]
+path = "resonances.K2100.shared_amplitude_parameters.const1"
+value = 0.00668002974985798
+error = 0.000931092372072052
+arg_index = 60
+arg_index_kk = 67
+
+[[data]]
+path = "resonances.K2100.shared_amplitude_parameters.const2"
+value = 0.004965565274392332
+error = 0.0
+arg_index = 61
+arg_index_kk = 68
+
+[[data]]
+path = "resonances.K2100.shared_amplitude_parameters.theta1"
+value = -0.014345480981877965
+error = 0.001326594094840864
+arg_index = 62
+arg_index_kk = 69
+
+[[data]]
+path = "resonances.K2100.shared_amplitude_parameters.theta2"
+value = -0.004182231968927211
+error = 0.0016785526570292837
+arg_index = 63
+arg_index_kk = 70
+
+[[data]]
+path = "resonances.K1820.propagators.B_propagator.mass"
+value = 1.8192837147853098
+range = [ 1.819, 10.0,]
+error = 0.0
+arg_index = 64
+arg_index_kk = 71
+
+[[data]]
+path = "resonances.K1820.propagators.B_propagator.width"
+value = 0.2552907595714486
+range = [ 0.264, 10.0,]
+error = 0.0
+arg_index = 65
+arg_index_kk = 72
+
+[[data]]
+path = "resonances.K1820.shared_amplitude_parameters.const1"
+value = 0.05353392339205181
+error = 0.0
+arg_index = 66
+arg_index_kk = 73
+
+[[data]]
+path = "resonances.K1820.shared_amplitude_parameters.const2"
+value = -0.013515632832936594
+error = 0.00226112856864931
+arg_index = 67
+arg_index_kk = 74
+
+[[data]]
+path = "resonances.K1820.shared_amplitude_parameters.theta1"
+value = -0.029170417788916315
+error = 0.0
+arg_index = 68
+arg_index_kk = 75
+
+[[data]]
+path = "resonances.K1820.shared_amplitude_parameters.theta2"
+value = 0.008796315351616747
+error = 0.0
+arg_index = 69
+arg_index_kk = 76
+
+[[data]]
+path = "resonances.K2250.propagators.B_propagator.mass"
+value = 2.228180871519652
+range = [ 2.247, 10.0,]
+error = 0.0
+arg_index = 70
+arg_index_kk = 77
+
+[[data]]
+path = "resonances.K2250.propagators.B_propagator.width"
+value = 0.22526773581883117
+range = [ 0.18, 10.0,]
+error = 0.0
+arg_index = 71
+arg_index_kk = 78
+
+[[data]]
+path = "resonances.K2250.shared_amplitude_parameters.const1"
+value = -0.021627369735391727
+error = 0.0007050326213965233
+arg_index = 72
+arg_index_kk = 79
+
+[[data]]
+path = "resonances.K2250.shared_amplitude_parameters.const2"
+value = 0.0034149684028485067
+error = 0.0
+arg_index = 73
+arg_index_kk = 80
+
+[[data]]
+path = "resonances.K2250.shared_amplitude_parameters.theta1"
+value = -0.03739773648153083
+error = 0.00164650487132265
+arg_index = 74
+arg_index_kk = 81
+
+[[data]]
+path = "resonances.K2250.shared_amplitude_parameters.theta2"
+value = 0.005079738018594662
+error = 0.0017954208250450397
+arg_index = 75
+arg_index_kk = 82
+
+[[data]]
+path = "resonances.phif0_980.propagators.B_propagator.mass"
+value = 0.9724248098676344
+range = [ 0.9894, 0.0013,]
+error = 0.00045597319542829484
+arg_index = 76
+arg_index_kk = 0
+arg_index_pipi = 0
+
+[[data]]
+path = "resonances.phif0_980.propagators.B_propagator.g_pipi"
+value = 0.06201313432814033
+error = 0.0012238250518854354
+arg_index = 77
+arg_index_pipi = 1
+
+[[data]]
+path = "resonances.phif0_980.propagators.B_propagator.rg"
+value = 1.3169762577503408
+error = 0.1161958699000806
+arg_index = 78
+arg_index_pipi = 2
+
+[[data]]
+path = "resonances.phif0_980.Amplitude.const2"
+value = 0.05556107968442361
+error = 0.0012743090107579255
+arg_index = 79
+arg_index_pipi = 3
+
+[[data]]
+path = "resonances.phif0_980.Amplitude.theta2"
+value = 0.058719694648431235
+error = 0.0014964498584950463
+arg_index = 80
+arg_index_pipi = 4
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.const1"
+value = 0.19593799560695832
+error = 0.24800143192199983
+arg_index = 81
+arg_index_pipi = 5
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.const2"
+value = 0.012470654562124503
+error = 0.2929856441672027
+arg_index = 82
+arg_index_pipi = 6
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.const3"
+value = -0.2851953718845401
+error = 0.15618434692987687
+arg_index = 83
+arg_index_pipi = 7
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.const4"
+value = 0.06636450912056047
+error = 0.13818614384390335
+arg_index = 84
+arg_index_pipi = 8
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.const5"
+value = 0.12258876881362349
+error = 0.1840872912503934
+arg_index = 85
+arg_index_pipi = 9
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.theta1"
+value = -0.26548751314553765
+error = 0.17802056528353677
+arg_index = 86
+arg_index_pipi = 10
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.theta2"
+value = -0.36618769900909337
+error = 0.18188446463779226
+arg_index = 87
+arg_index_pipi = 11
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.theta3"
+value = -0.004015287851150053
+error = 0.10436536021040116
+arg_index = 88
+arg_index_pipi = 12
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.theta4"
+value = -0.10936476452402297
+error = 0.15018296342495496
+arg_index = 89
+arg_index_pipi = 13
+
+[[data]]
+path = "resonances.phif2_long.Amplitude.theta5"
+value = 0.03974260858725838
+error = 0.16927929790992835
+arg_index = 90
+arg_index_pipi = 14
+
+[[data]]
+path = "resonances.phif2_1270.propagators.B_propagator.mass"
+value = 1.2749385691974562
+range = [ 1.2755, 0.0008,]
+error = 0.0007685071367458856
+arg_index = 91
+arg_index_kk = 11
+arg_index_pipi = 15
+
+[[data]]
+path = "resonances.phif2_1270.propagators.B_propagator.width"
+value = 0.19763058070641237
+range = [ 0.19, 0.0023,]
+error = 0.0020975731161581995
+arg_index = 92
+arg_index_kk = 12
+arg_index_pipi = 16
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const1"
+value = -0.28948044578199356
+error = 0.016150666110579165
+arg_index = 93
+arg_index_pipi = 17
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const2"
+value = -0.2287768898373971
+error = 0.013852868377426606
+arg_index = 94
+arg_index_pipi = 18
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const3"
+value = -0.15990707497126008
+error = 0.008797772653280035
+arg_index = 95
+arg_index_pipi = 19
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const4"
+value = -0.3111602274560316
+error = 0.012455276294938183
+arg_index = 96
+arg_index_pipi = 20
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.const5"
+value = -0.010516980549299932
+error = 0.012038835253022143
+arg_index = 97
+arg_index_pipi = 21
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta1"
+value = 0.14018260123371015
+error = 0.017922909219429444
+arg_index = 98
+arg_index_pipi = 22
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta2"
+value = 0.1881222869727493
+error = 0.01720507105848185
+arg_index = 99
+arg_index_pipi = 23
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta3"
+value = 0.006260133696345951
+error = 0.01016349390962459
+arg_index = 100
+arg_index_pipi = 24
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta4"
+value = -0.13620306008300462
+error = 0.007700290072434218
+arg_index = 101
+arg_index_pipi = 25
+
+[[data]]
+path = "resonances.phif2_1270.Amplitude.theta5"
+value = -0.007470655615079892
+error = 0.01451974338858024
+arg_index = 102
+arg_index_pipi = 26
+
+[[data]]
+path = "resonances.phif0_500.propagators.B_propagator.mass"
+value = 0.5354097341749176
+range = [ 0.535, 0.001,]
+error = 0.0009939101465206118
+arg_index = 103
+arg_index_pipi = 27
+
+[[data]]
+path = "resonances.phif0_500.propagators.B_propagator.width"
+value = 0.64327770927252
+range = [ 0.643, 0.001,]
+error = 0.0009988769797638734
+arg_index = 104
+arg_index_pipi = 28
+
+[[data]]
+path = "resonances.phif0_500.Amplitude.const1"
+value = -0.061229252776713226
+error = 0.0
+arg_index = 105
+arg_index_pipi = 29
+
+[[data]]
+path = "resonances.phif0_500.Amplitude.const2"
+value = 0.01321566941402248
+error = 0.0
+arg_index = 106
+arg_index_pipi = 30
+
+[[data]]
+path = "resonances.phif0_500.Amplitude.theta1"
+value = -0.12302486567296148
+error = 0.0021902115319766113
+arg_index = 107
+arg_index_pipi = 31
+
+[[data]]
+path = "resonances.phif0_500.Amplitude.theta2"
+value = -0.06914488142362417
+error = 0.0024991454065803158
+arg_index = 108
+arg_index_pipi = 32
+
+[[data]]
+path = "resonances.phif0_1370.propagators.B_propagator.mass"
+value = 1.349717494883055
+range = [ 1.35, 0.001,]
+error = 0.0009968940777099384
+arg_index = 109
+arg_index_pipi = 33
+
+[[data]]
+path = "resonances.phif0_1370.propagators.B_propagator.width"
+value = 0.2653618704235103
+range = [ 0.265, 0.001,]
+error = 0.0009939324298758308
+arg_index = 110
+arg_index_pipi = 34
+
+[[data]]
+path = "resonances.phif0_1370.Amplitude.const1"
+value = -0.047447647225283586
+error = 0.00330981420264212
+arg_index = 111
+arg_index_pipi = 35
+
+[[data]]
+path = "resonances.phif0_1370.Amplitude.const2"
+value = -0.10167038857083334
+error = 0.003805833002202149
+arg_index = 112
+arg_index_pipi = 36
+
+[[data]]
+path = "resonances.phif0_1370.Amplitude.theta1"
+value = -0.026759727114845686
+error = 0.004049272219046986
+arg_index = 113
+arg_index_pipi = 37
+
+[[data]]
+path = "resonances.phif0_1370.Amplitude.theta2"
+value = 0.03449505242390819
+error = 0.0
+arg_index = 114
+arg_index_pipi = 38
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.const1"
+value = -0.038003407032253446
+error = 0.0026915112625785086
+arg_index = 115
+arg_index_pipi = 41
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.const2"
+value = -0.012093629165683318
+error = 0.0022972685646874586
+arg_index = 116
+arg_index_pipi = 42
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.theta1"
+value = 0.009866131088933382
+error = 0.0
+arg_index = 117
+arg_index_pipi = 43
+
+[[data]]
+path = "resonances.phif0_1710.Amplitude.theta2"
+value = 0.009799190956835622
+error = 0.004151575404029269
+arg_index = 118
+arg_index_pipi = 44
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const1"
+value = 0.0021291008657941778
+error = 0.002478854021357045
+arg_index = 119
+arg_index_pipi = 47
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const2"
+value = -0.0044160873247314995
+error = 0.0025732337463481646
+arg_index = 120
+arg_index_pipi = 48
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const3"
+value = 0.005413562508201503
+error = 0.001693792563610448
+arg_index = 121
+arg_index_pipi = 49
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const4"
+value = -0.004920641109982332
+error = 0.0022223131720203416
+arg_index = 122
+arg_index_pipi = 50
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.const5"
+value = 0.00992055101636127
+error = 0.0018071403605808797
+arg_index = 123
+arg_index_pipi = 51
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta1"
+value = 0.017861577992163716
+error = 0.002824411647755578
+arg_index = 124
+arg_index_pipi = 52
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta2"
+value = -0.007411316073807279
+error = 0.0029756543096631366
+arg_index = 125
+arg_index_pipi = 53
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta3"
+value = -0.00302031736102215
+error = 0.0016387306517563983
+arg_index = 126
+arg_index_pipi = 54
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta4"
+value = -0.019809040251656265
+error = 0.0027984834646430866
+arg_index = 127
+arg_index_pipi = 55
+
+[[data]]
+path = "resonances.phif2_1525.Amplitude.theta5"
+value = -0.008502812451102041
+error = 0.0023333012085913194
+arg_index = 128
+arg_index_pipi = 56
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const1"
+value = -0.06528885213439543
+error = 0.04610674207647126
+arg_index = 129
+arg_index_pipi = 59
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const2"
+value = 0.04452264408456644
+error = 0.06185261193911097
+arg_index = 130
+arg_index_pipi = 60
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const3"
+value = -0.107290680261427
+error = 0.0261993682455362
+arg_index = 131
+arg_index_pipi = 61
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const4"
+value = 0.07691582203817222
+error = 0.032793426056966085
+arg_index = 132
+arg_index_pipi = 62
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.const5"
+value = 0.11548786065181287
+error = 0.04413070978376142
+arg_index = 133
+arg_index_pipi = 63
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta1"
+value = 0.08228768819964466
+error = 0.0376988400370015
+arg_index = 134
+arg_index_pipi = 64
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta2"
+value = 0.073324529135149
+error = 0.04096208452852053
+arg_index = 135
+arg_index_pipi = 65
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta3"
+value = 0.039490961764765124
+error = 0.029746295014033947
+arg_index = 136
+arg_index_pipi = 66
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta4"
+value = -0.03521763160100088
+error = 0.029054415293921335
+arg_index = 137
+arg_index_pipi = 67
+
+[[data]]
+path = "resonances.phif2_2340.Amplitude.theta5"
+value = 0.03962078781954461
+error = 0.050774841761215384
+arg_index = 138
+arg_index_pipi = 68
+
+[[data]]
+path = "resonances.phif0_2470.propagators.B_propagator.mass"
+value = 2.5214487728458512
+range = [ 2.47, 0.007,]
+error = 0.003966172274506066
+arg_index = 139
+arg_index_kk = 59
+arg_index_pipi = 69
+
+[[data]]
+path = "resonances.phif0_2470.propagators.B_propagator.width"
+value = 0.1139925770684733
+range = [ 0.11, 0.002,]
+error = 0.0013825561866270331
+arg_index = 140
+arg_index_kk = 60
+arg_index_pipi = 70
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.const1"
+value = -0.10420112973251186
+error = 0.00603961239291663
+arg_index = 141
+arg_index_pipi = 71
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.const2"
+value = -0.010420986194312446
+error = 0.009266977458468972
+arg_index = 142
+arg_index_pipi = 72
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.theta1"
+value = -0.06171649795572718
+error = 0.008035292724343782
+arg_index = 143
+arg_index_pipi = 73
+
+[[data]]
+path = "resonances.phif0_2470.Amplitude.theta2"
+value = 0.06992684680461181
+error = 0.00896995728264409
+arg_index = 144
+arg_index_pipi = 74
+
+[[data]]
+path = "resonances.phif2_2150.propagators.B_propagator.mass"
+value = 2.1494881684031237
+range = [ 2.157, 0.006,]
+error = 0.004103523660540442
+arg_index = 145
+arg_index_kk = 35
+arg_index_pipi = 75
+
+[[data]]
+path = "resonances.phif2_2150.propagators.B_propagator.width"
+value = 0.43613899293565234
+range = [ 0.436, 0.001,]
+error = 0.0007070681594935382
+arg_index = 146
+arg_index_kk = 36
+arg_index_pipi = 76
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const1"
+value = -0.4409106534664805
+error = 0.0
+arg_index = 147
+arg_index_pipi = 77
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const2"
+value = -0.3714689331857065
+error = 0.027574279132698654
+arg_index = 148
+arg_index_pipi = 78
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const3"
+value = -0.0888949060128173
+error = 0.02227302928929525
+arg_index = 149
+arg_index_pipi = 79
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const4"
+value = -0.18248648248599547
+error = 0.02663548832031886
+arg_index = 150
+arg_index_pipi = 80
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.const5"
+value = -0.1608389649959068
+error = 0.03317307223709641
+arg_index = 151
+arg_index_pipi = 81
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta1"
+value = -0.2593873741850893
+error = 0.03264546328389421
+arg_index = 152
+arg_index_pipi = 82
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta2"
+value = 0.06672684154071319
+error = 0.05313745356230006
+arg_index = 153
+arg_index_pipi = 83
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta3"
+value = -0.058567198786899484
+error = 0.02529419363946652
+arg_index = 154
+arg_index_pipi = 84
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta4"
+value = 0.18063025841005062
+error = 0.023491937529203196
+arg_index = 155
+arg_index_pipi = 85
+
+[[data]]
+path = "resonances.phif2_2150.Amplitude.theta5"
+value = -0.07674143610691805
+error = 0.03426822943222774
+arg_index = 156
+arg_index_pipi = 86
+
+[[data]]
+path = "resonances.rho1700.propagators.B_propagator.mass"
+value = 1.8513794498613898
+range = [ 1.8823, 0.01,]
+error = 0.006169442229145059
+arg_index = 157
+arg_index_pipi = 87
+
+[[data]]
+path = "resonances.rho1700.propagators.B_propagator.width"
+value = 0.1313660735278949
+range = [ 0.1, 0.1,]
+error = 0.0
+arg_index = 158
+arg_index_pipi = 88
+
+[[data]]
+path = "resonances.rho1700.shared_amplitude_parameters.const1"
+value = -0.009250919729243731
+error = 0.0015427373233720594
+arg_index = 159
+arg_index_pipi = 89
+
+[[data]]
+path = "resonances.rho1700.shared_amplitude_parameters.theta1"
+value = -0.0011602054060865681
+error = 0.0
+arg_index = 160
+arg_index_pipi = 90
+
+[[data]]
+path = "resonances.K1830.propagators.B_propagator.mass"
+value = 1.833891806023835
+range = [ 1.83, 0.1,]
+error = 0.005188861852577167
+arg_index = 161
+arg_index_pipi = 91
+
+[[data]]
+path = "resonances.K1830.propagators.B_propagator.width"
+value = 0.32071140616916155
+range = [ 0.31, 0.1,]
+error = 0.006168664642136837
+arg_index = 162
+arg_index_pipi = 92
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.const1"
+value = -0.09344540542076364
+error = 0.0028154723832329895
+arg_index = 163
+arg_index_pipi = 93
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.const2"
+value = -0.043136472672836886
+error = 0.004116099097187444
+arg_index = 164
+arg_index_pipi = 94
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.const3"
+value = -0.0007561936971118836
+error = 0.004227177255360261
+arg_index = 165
+arg_index_pipi = 95
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.const4"
+value = 0.018874616088269645
+error = 0.002698150349157523
+arg_index = 166
+arg_index_pipi = 96
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.theta1"
+value = -0.010822687421108044
+error = 0.0037176283216583984
+arg_index = 167
+arg_index_pipi = 97
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.theta2"
+value = -0.040722568342230044
+error = 0.004982819930055716
+arg_index = 168
+arg_index_pipi = 98
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.theta3"
+value = -0.026196927067868466
+error = 0.00443751922573855
+arg_index = 169
+arg_index_pipi = 99
+
+[[data]]
+path = "resonances.K1830.shared_amplitude_parameters.theta4"
+value = -0.02641076251926599
+error = 0.003775177971127837
+arg_index = 170
+arg_index_pipi = 100
+

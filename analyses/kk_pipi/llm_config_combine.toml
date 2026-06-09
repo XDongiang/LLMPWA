@@ -8,8 +8,6 @@ resonances_config_ctrl = {"type" = "file", "path" = "resonances_config_ctrl.toml
 
 
 
-
-
 [stages.combine_check]
 # 检查共享参数是否在两个配置文件中均存在
 kind = "python"
@@ -19,6 +17,158 @@ output.checked = {"type" = "direct"}
 
 [stages.config_strip_kk]
 kind = "python"
-handler = {"type" = "file", "path" = "gen/handlers/config_strip_ctrl_handler.py", "function" = "config_strip_ctrl_handler"}
-
+handler = {"type" = "file", "path" = "gen/handlers/config_strip_handler.py", "function" = "config_strip_handler"}
+input = {"resonances_config" = "ref.resonances_config_kk"}
 output_type = "json"
+output.free_params = {"type" = "file", "path" = "gen/fragments/free_params_kk.toml"}
+output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_config_kk.toml"}
+output.free_params_range = {"type" = "file", "path" = "gen/fragments/free_params_range_kk.toml"}
+output.all_sbc = {"type" = "direct"}
+output.all_amp = {"type" = "direct"}
+
+[stages.config_strip_pipi]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/config_strip_handler.py", "function" = "config_strip_handler"}
+input = {"resonances_config" = "ref.resonances_config_pipi"}
+output_type = "json"
+output.free_params = {"type" = "file", "path" = "gen/fragments/free_params_pipi.toml"}
+output.stripped_config = {"type" = "file", "path" = "gen/fragments/stripped_config_pipi.toml"}
+output.free_params_range = {"type" = "file", "path" = "gen/fragments/free_params_range_pipi.toml"}
+output.all_sbc = {"type" = "direct"}
+output.all_amp = {"type" = "direct"}
+
+[stages.generate_args]
+#对于联合拟合，由于存在公用参数，我们需要先将需要的参数提取出来total_args
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/generate_args_handler.py", "function" = "generate_args_handler"}
+input = {"param_kk" = "stages.config_strip_kk.free_params","param_pipi" = "stages.config_strip_pipi.free_params","ctrl" = "ref.resonances_config_ctrl"}
+output_type = "json"
+output.free_params = {"type" = "file", "path" = "run/free_params_total.toml"}
+# arg_index
+# arg_index_kk
+# arg_index_pipi
+
+[stages.split_args]
+# 根据 generate_args 产出的 index 映射，生成 split_args(total_args) 代码片段
+# args_kk = total_args[kk_indices]
+# args_pipi = total_args[pipi_indices]
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/split_args_handler.py", "function" = "split_args_handler"}
+input = {"free_params" = "stages.generate_args.free_params"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/split_args.py"}
+
+[stages.make_initial_args]
+# python生成辅助函数，从free_param中读取变量
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/make_initial_args_handler.py", "function" = "make_initial_args_handler"}
+input = {"path" = "run/free_params_total.toml"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/make_initial_args.py"}
+
+[stages.save_results]
+# python生成辅助函数，以free_param格式，保存拟合结果
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/save_results_handler.py", "function" = "save_results_handler"}
+input = {"input_path" = "run/free_params_total.toml","output_path" = "output/free_params_fitted.toml" }
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/save_results.py"}
+
+
+[stages.classification_kk]
+# llm分类器
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/classification_prompt.txt"}
+human_prompt = "使用传入的{\"arg_index\": n}代替parameter_lists中变量的具体值,输出纯json，不要包含注释\n toml 配置：<<stages.config_strip_kk.stripped_config>>"
+output_type = "json"
+output.all = {"type" = "file", "path" = "gen/fragments/classification_kk.json"}
+output.propagator_classification = {"type" = "direct"}
+
+[stages.classification_pipi]
+# llm分类器
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/classification_prompt.txt"}
+human_prompt = "使用传入的{\"arg_index\": n}代替parameter_lists中变量的具体值,输出纯json，不要包含注释\n toml 配置：<<stages.config_strip_pipi.stripped_config>>"
+output_type = "json"
+output.all = {"type" = "file", "path" = "gen/fragments/classification_pipi.json"}
+output.propagator_classification = {"type" = "direct"}
+
+[stages.data_load]
+# 拟合数据加载函数
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/data_load_prompt.txt"}
+human_prompt = "#### kk部分数据 \n\n sbc = <<stages.config_strip_kk.all_sbc>> \n amp = <<stages.config_strip_kk.all_amp>>\n #### pipi部分数据 \n\nsbc = <<stages.config_strip_pipi.all_sbc>> \n amp = <<stages.config_strip_pipi.all_amp>>\n使用同一套数据加载函数"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/data_load.py"}
+
+[stages.resonance_calculation]
+# 共振态振幅计算函数
+kind = "llm"
+foreach = {"type" = "ref", path = "stages.classification_kk.propagator_classification"}
+prompt = {"type" = "file", "path" = "gen/prompts/resonance_calculation_prompt.txt"}
+human_prompt = "amplitude_classification: <<stages.classification_kk.all.amplitude_classification>> \n\n当const,theta有多个参数，请直接传入一个参数，参数的值为一个np.array，包含所有的参数值"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/resonance_calculation_<<key>>.py"}
+
+[stages.extract_parameters_kk]
+# 依照分组结果，将一维np.array分组成dict方便调用
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
+human_prompt ="### 参数分组信息 \n<<stages.classification_kk.all.parameter_lists>>\n\n使用已导入的import numpy as onp 生成函数名为extract_parameters_kk"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_kk.py"}
+
+[stages.extract_parameters_pipi]
+# 依照分组结果，将一维np.array分组成dict方便调用
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/extract_parameters_prompt.txt"}
+human_prompt ="### 参数分组信息 \n<<stages.classification_pipi.all.parameter_lists>>\n\n使用已导入的import numpy as onp 生成函数名为extract_parameters_pipi"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/extract_parameters_pipi.py"}
+
+[stages.step_function_kk]
+# likelihood_function的辅助函数
+kind = "llm"
+prompt = "你的任务是生成step函数 def data_step_function_kk(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_kk.free_params_range>> "
+
+human_prompt = "计算由已经导入的import jax.numpy as np包处理，只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/step_function_kk.py"}
+
+[stages.step_function_pipi]
+# likelihood_function的辅助函数
+kind = "llm"
+prompt = "你的任务是生成step函数 def data_step_function_pipi(total_frac,args): return step_value  计算方式为 step_function = np.power(total_frac - total_frac_kk, 2.0) * constraint_strength + np.sum(np.power(ranges[i,0] - args[i], 2) / np.power(ranges[i,1], 2) / 2.0)。其中边界约束部分只包含range存在的arg。相关数据<<stages.config_strip_pipi.free_params_range>> "
+
+human_prompt = "计算由已经导入的import jax.numpy as np包处理，只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/step_function_pipi.py"}
+
+[stages.likelihood_function_kk]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
+human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_kk.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_kk.all>>"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function_kk.py"}
+
+[stages.likelihood_function_pipi]
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/likelihood_function_prompt.txt"}
+human_prompt = "#### 函数定义(calculate_xxx和component_xxx): \n\n <<stages.resonance_calculation[*].all>> \n<<stages.extract_parameters_pipi.all>>当计算data_likelihood时，step_function 使用上个stage生成的data_step_function <<stages.step_function_pipi.all>>"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/likelihood_function_pipi.py"}
+
+[stages.run_load_data]
+# 加载数据
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/run_load_data_prompt.txt"}
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/run_load_data.py"}
+
+[stages.main_section]
+# 主函数
+kind = "llm"
+prompt = {"type" = "file", "path" = "gen/prompts/main_section_prompt.txt"}
+human_prompt = "格外定义变量constraint_strength = 1000.0，total_frac_kk = 1.1 作为约束强度的权重。同时总的似然函数为total_likelihood = combined_likelihood_kk +combine_likehood_pipi"
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/main_section.py"}

@@ -72,6 +72,3 @@ Amplitude.parameters: [[arg25..arg29, arg30..arg34], [arg37..arg41, arg42..arg46
 
 只输出 Python 代码，不含注释、解释或 Markdown 代码块，不添加任何 `#===` 形式的分隔符。
 
-### 参数分组信息
-
-<<stages.classification.all.parameter_lists>>

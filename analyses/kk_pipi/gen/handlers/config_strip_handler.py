@@ -3,7 +3,12 @@ from agent.config_parser import parse_config
 
 
 def config_strip_handler(cfg: ConfigAccessor):
-    resonances_config = cfg.resolver.resolve("ref.resonances_config")
+    try:
+        resonances_config_path = cfg.read_input("resonances_config")
+        resonances_config = cfg.resolver.resolve(resonances_config_path)
+    except:
+        print("unable to read input, fall back to default")
+        resonances_config = cfg.resolver.resolve("ref.resonances_config")
 
     stripped_config, free_params, _ = parse_config(resonances_config)
 

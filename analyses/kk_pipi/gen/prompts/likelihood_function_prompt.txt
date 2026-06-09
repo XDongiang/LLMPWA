@@ -9,11 +9,5 @@
 
 ### 2. 输入信息
 
-函数定义(calculate_xxx和component_xxx):
-
-<<stages.resonance_calculation[*].all>>
-
-<<stages.extract_parameters.all>>
-
-函数例子：
+#### 函数例子：
 <<ref.code_template.likelihood_functions>>
