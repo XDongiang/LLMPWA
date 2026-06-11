@@ -1,0 +1,151 @@
+# syntax=docker/dockerfile:1.6
+#
+# JAX + NCCL multi-node Dockerfile for DGX Spark (GB10, sm_121)
+# Builds NCCL from source for sm_121 support, then installs JAX with CUDA 13.
+#
+
+ARG BUILD_JOBS=16
+ARG HTTP_PROXY=http://192.168.4.157:7890
+ARG HTTPS_PROXY=http://192.168.4.157:7890
+ARG NO_PROXY=localhost,127.0.0.1
+
+# =========================================================
+# STAGE 1: NCCL Builder
+# =========================================================
+FROM nvidia/cuda:13.2.0-devel-ubuntu24.04 AS nccl-builder
+
+ARG BUILD_JOBS
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV MAX_JOBS=${BUILD_JOBS}
+ENV MAKEFLAGS="-j${BUILD_JOBS}"
+ENV DEBIAN_FRONTEND=noninteractive
+ENV http_proxy=${HTTP_PROXY}
+ENV https_proxy=${HTTPS_PROXY}
+ENV no_proxy=${NO_PROXY}
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# Set pip cache directory
+ENV PIP_CACHE_DIR=/root/.cache/pip
+ENV UV_CACHE_DIR=/root/.cache/uv
+ENV UV_SYSTEM_PYTHON=1
+ENV UV_BREAK_SYSTEM_PACKAGES=1
+ENV UV_LINK_MODE=copy
+# Set timeouts
+ENV UV_HTTP_TIMEOUT=600
+ENV UV_HTTP_RETRIES=10
+
+RUN apt update && \
+    apt install -y --no-install-recommends \
+    curl vim cmake build-essential ninja-build \
+    libcudnn9-cuda-13 libcudnn9-dev-cuda-13 \
+    python3-dev python3-pip git wget \
+    libibverbs1 libibverbs-dev rdma-core \
+    ccache devscripts debhelper fakeroot \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install uv
+
+
+# Build NCCL v2.30u1 with sm_121 (GB10) support
+RUN git clone -b v2.30u1 https://github.com/NVIDIA/nccl.git /workspace/nccl && \
+    cd /workspace/nccl && \
+    make -j ${BUILD_JOBS} src.build NVCC_GENCODE="-gencode=arch=compute_121,code=sm_121" && \
+    make pkg.debian.build
+
+# =========================================================
+# STAGE 2: JAX Runtime
+# =========================================================
+FROM nvidia/cuda:13.2.0-devel-ubuntu24.04 AS runtime
+
+ARG BUILD_JOBS
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV DEBIAN_FRONTEND=noninteractive
+# 仅在安装阶段使用代理，安装完成后会清除
+ENV http_proxy=${HTTP_PROXY}
+ENV https_proxy=${HTTPS_PROXY}
+ENV no_proxy=${NO_PROXY}
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# Install system deps + custom NCCL .deb from builder stage
+RUN --mount=type=bind,from=nccl-builder,source=/workspace/nccl/build/pkg/deb,target=/tmp/nccl-pkg \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip curl wget git vim \
+    libcudnn9-cuda-13 libcudnn9-dev-cuda-13 \
+    libibverbs1 libibverbs-dev rdma-core \
+    openssh-client openssh-server \
+    && cd /tmp/nccl-pkg && apt-get install -y --no-install-recommends --allow-downgrades ./*.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip3 install uv
+ENV UV_SYSTEM_PYTHON=1
+ENV UV_BREAK_SYSTEM_PACKAGES=1
+ENV UV_LINK_MODE=copy
+
+# Install JAX with CUDA 13 support
+RUN uv pip install "jax[cuda13]" "jaxlib" && \
+    uv pip install numpy matplotlib tqdm toml 
+
+# Fix NCCL symlink: point Python nccl package to system-installed libnccl
+# (same pattern used in spark-vllm-docker for GB10)
+RUN NCCL_PKG_DIR=$(python3 -c "import nvidia.nccl, os; print(os.path.dirname(nvidia.nccl.__file__))" 2>/dev/null || true); \
+    if [ -n "$NCCL_PKG_DIR" ] && [ -L "$NCCL_PKG_DIR/lib/libnccl.so.2" ]; then \
+        rm "$NCCL_PKG_DIR/lib/libnccl.so.2" && \
+        ln -s /usr/lib/aarch64-linux-gnu/libnccl.so.2 "$NCCL_PKG_DIR/lib/libnccl.so.2"; \
+    fi
+
+# Configure SSH for multi-node JAX (passwordless SSH within cluster)
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh && \
+    ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N "" && \
+    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/authorized_keys && \
+    echo "StrictHostKeyChecking no\nUserKnownHostsFile /dev/null" > /root/.ssh/config
+
+# sshd config: allow root login, disable PAM
+RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config && \
+    mkdir -p /run/sshd
+
+# =========================================================
+# 清除构建期的 proxy 设置，避免残留到运行时镜像。
+# JAX distributed.initialize / gRPC 在检测到 proxy 变量时可能挂起。
+# =========================================================
+ENV http_proxy=""
+ENV https_proxy=""
+ENV no_proxy=""
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
+ENV NO_PROXY=""
+
+# =========================================================
+# Multi-node NCCL / JAX runtime environment variables
+# These can be overridden at docker run time via -e flags.
+# =========================================================
+
+# NCCL core
+ENV NCCL_IGNORE_CPU_AFFINITY=1
+# Set to INFO or TRACE for debugging: docker run -e NCCL_DEBUG=INFO
+ENV NCCL_DEBUG=VERSION
+
+# RoCE / IB transport (DGX Spark non-mesh: 2 CX7 ports)
+# Override IB_IF names at runtime: -e NCCL_IB_HCA=rocep1s0f0,roceP2p1s0f0
+ENV NCCL_IB_HCA="rocep1s0f0,roceP2p1s0f0"
+ENV NCCL_IB_GID_INDEX=3
+ENV NCCL_IB_TC=106
+ENV NCCL_IB_TIMEOUT=23
+ENV NCCL_IB_RETRY_CNT=7
+
+# Mesh mode additions (set at runtime for 4-port mesh):
+#   -e NCCL_NET_PLUGIN=none
+#   -e NCCL_IB_SUBNET_AWARE_ROUTING=1
+#   -e NCCL_IB_MERGE_NICS=0
+
+# JAX distributed init — set at runtime per node:
+#   -e JAX_COORDINATOR_ADDRESS=<head_ip>:1234
+#   -e JAX_NUM_PROCESSES=<total_nodes>
+#   -e JAX_PROCESS_ID=<this_node_index>
+
+WORKDIR /workspace
