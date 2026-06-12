@@ -358,29 +358,18 @@ def shard_data_distributed(data, mesh):
 # 关键：jnp.sum / jnp.mean 作用在 sharded array 上时，XLA 自动插入 all-reduce
 # =============================================================================
 
-def make_distributed_likelihood(jax_data, mesh, data_size):
+def make_distributed_likelihood(data_size):
     """
-    构建分布式 combined_likelihood 闭包。
-    每个设备只持有本地 event shard，通过 XLA 自动 all-reduce 得到全局结果。
+    构建分布式 combined_likelihood 函数。
+
+    注意：在多进程 JAX 中，jit 函数不能通过闭包捕获跨进程（non-addressable）的
+    sharded array，否则会报 "Closing over jax.Array that spans non-addressable
+    devices is not allowed"。因此分片数据必须作为显式参数传入。
+
+    返回的 combined_likelihood(args, jax_data) 接收：
+      - args:     全局复制的参数向量（被微分变量）
+      - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
     """
-    # 解包分片数据
-    d_phi_kk = jax_data['data_phi_kk']
-    d_f_kk = jax_data['data_f_kk']
-    d_phif0_kk = jax_data['data_phif0_kk']
-    d_phif2_kk = jax_data['data_phif2_kk']
-
-    m_phi_kk = jax_data['mc_phi_kk']
-    m_f_kk = jax_data['mc_f_kk']
-    m_phif0_kk = jax_data['mc_phif0_kk']
-    m_phif2_kk = jax_data['mc_phif2_kk']
-
-    t_phi_kk = jax_data['truth_phi_kk']
-    t_f_kk = jax_data['truth_f_kk']
-    t_phif0_kk = jax_data['truth_phif0_kk']
-    t_phif2_kk = jax_data['truth_phif2_kk']
-
-    mc_size = m_phi_kk.shape[0]
-    truth_size = t_phi_kk.shape[0]
 
     def data_step_function(total_frac, args):
         step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
@@ -399,8 +388,19 @@ def make_distributed_likelihood(jax_data, mesh, data_size):
         step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
         return step_value
 
-    def data_likelihood_kk(args):
+    def data_likelihood_kk(args, jax_data):
         params = extract_parameters(args)
+
+        # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
+        d_phi_kk = jax_data['data_phi_kk']
+        d_f_kk = jax_data['data_f_kk']
+        d_phif0_kk = jax_data['data_phif0_kk']
+        d_phif2_kk = jax_data['data_phif2_kk']
+
+        t_phi_kk = jax_data['truth_phi_kk']
+        t_f_kk = jax_data['truth_f_kk']
+        t_phif0_kk = jax_data['truth_phif0_kk']
+        t_phif2_kk = jax_data['truth_phif2_kk']
 
         data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
             params['phi_mass'], params['phi_width'], d_phi_kk,
@@ -468,8 +468,15 @@ def make_distributed_likelihood(jax_data, mesh, data_size):
         likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
         return likelihood
 
-    def mc_likelihood_kk(args):
+    def mc_likelihood_kk(args, jax_data):
         params = extract_parameters(args)
+
+        # 解包分片 MC 数据
+        m_phi_kk = jax_data['mc_phi_kk']
+        m_f_kk = jax_data['mc_f_kk']
+        m_phif0_kk = jax_data['mc_phif0_kk']
+        m_phif2_kk = jax_data['mc_phif2_kk']
+
         total_mc = calculate_BW_flatte980(
             params['phi_mass'], params['phi_width'], m_phi_kk,
             params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
@@ -494,8 +501,8 @@ def make_distributed_likelihood(jax_data, mesh, data_size):
         # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
         return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
 
-    def combined_likelihood(args):
-        return data_likelihood_kk(args) + data_size * jnp.log(mc_likelihood_kk(args))
+    def combined_likelihood(args, jax_data):
+        return data_likelihood_kk(args, jax_data) + data_size * jnp.log(mc_likelihood_kk(args, jax_data))
 
     return combined_likelihood
 
@@ -534,10 +541,18 @@ def main():
         jax_data = shard_data_distributed(data, mesh)
 
         # 构建分布式 likelihood / grad / HVP
-        combined_likelihood = make_distributed_likelihood(jax_data, mesh, data_size)
+        # 注意：combined_likelihood 现在接收 (args, jax_data) 两个参数
+        combined_likelihood = make_distributed_likelihood(data_size)
 
-        def hvp_combined_likelihood(x, v):
-            return jvp(grad(combined_likelihood), (x,), (v,))[1]
+        # 对 args 求梯度（argnums=0 表示只对第一个参数 args 求导）
+        def likelihood_for_grad(args, jax_data):
+            return combined_likelihood(args, jax_data)
+
+        def hvp_combined_likelihood(x, v, jax_data):
+            # jvp 要求 tangents 与 primals 的 pytree 结构完全一致。
+            # jax_data 是 dict，所以 tangent 也必须是相同 key 的 dict（值全为 0）。
+            zero_data = jax.tree.map(jnp.zeros_like, jax_data)
+            return jvp(grad(likelihood_for_grad), (x, jax_data), (v, zero_data))[1]
 
         # 参数 args 全局复制
         args_list, args_range, args_error = make_initial_args()
@@ -547,25 +562,25 @@ def main():
         if is_chief:
             logger.info("编译 JAX 函数（分布式 HVP 版本）...")
         jit_likelihood = jit(combined_likelihood)
-        jit_grad = jit(grad(combined_likelihood))
+        jit_grad = jit(grad(likelihood_for_grad))
         jit_hvp = jit(hvp_combined_likelihood)
 
-        test_result = jit_likelihood(args_list)
+        test_result = jit_likelihood(args_list, jax_data)
         if is_chief:
             logger.info(f"初始似然值: {test_result}")
 
         test_vector = jnp.ones_like(args_list)
-        test_hvp = jit_hvp(args_list, test_vector)
+        test_hvp = jit_hvp(args_list, test_vector, jax_data)
         if is_chief:
             logger.info(f"HVP 测试完成，结果形状: {test_hvp.shape}")
 
         def my_callback(x):
             if is_chief:
-                current_likelihood = jit_likelihood(jnp.asarray(x))
+                current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
                 logger.info(f"当前似然值: {current_likelihood}")
 
         def hessp(x, p):
-            return onp.array(jit_hvp(jnp.asarray(x), jnp.asarray(p)))
+            return onp.array(jit_hvp(jnp.asarray(x), jnp.asarray(p), jax_data))
 
         if is_chief:
             logger.info("开始优化（Newton-CG + HVP）...")
@@ -574,9 +589,9 @@ def main():
         # 所有进程运行相同的 SciPy 循环：输入相同 x，调用顺序相同，
         # 因此每个进程触发完全一致的 collective
         result = minimize(
-            fun=lambda x: float(jit_likelihood(jnp.asarray(x))),
+            fun=lambda x: float(jit_likelihood(jnp.asarray(x), jax_data)),
             x0=onp.asarray(args_list),
-            jac=lambda x: onp.array(jit_grad(jnp.asarray(x))),
+            jac=lambda x: onp.array(jit_grad(jnp.asarray(x), jax_data)),
             hessp=hessp,
             method="Newton-CG",
             callback=my_callback,
@@ -607,7 +622,7 @@ def main():
         for i in range(args_size):
             v = onp.zeros(args_size)
             v[i] = 1.0
-            hessian_matrix[:, i] = onp.array(jit_hvp(result_x, jnp.asarray(v)))
+            hessian_matrix[:, i] = onp.array(jit_hvp(result_x, jnp.asarray(v), jax_data))
         ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
         if is_chief:
             logger.info("误差计算完成")
