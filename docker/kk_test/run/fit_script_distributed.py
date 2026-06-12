@@ -575,8 +575,9 @@ def main():
             logger.info(f"HVP 测试完成，结果形状: {test_hvp.shape}")
 
         def my_callback(x):
+            current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
+            current_likelihood.block_until_ready()
             if is_chief:
-                current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
                 logger.info(f"当前似然值: {current_likelihood}")
 
         def hessp(x, p):
