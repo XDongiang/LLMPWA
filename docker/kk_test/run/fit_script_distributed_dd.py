@@ -279,21 +279,22 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 # =============================================================================
 
 def load_data():
+    n_repeat = 5
     data = {}
-    data['data_phi_kk'] = onp.load("data/real_data/phi_kk.npy")
-    data['data_f_kk'] = onp.load("data/real_data/f_kk.npy")
-    data['data_phif0_kk'] = onp.load("data/real_data/phif0_kk.npy")
-    data['data_phif2_kk'] = onp.load("data/real_data/phif2_kk.npy")
+    data['data_phi_kk'] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
+    data['data_f_kk'] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)
+    data['data_phif0_kk'] = onp.tile(onp.load("data/real_data/phif0_kk.npy"), (1, n_repeat, 1))
+    data['data_phif2_kk'] = onp.tile(onp.load("data/real_data/phif2_kk.npy"), (1, n_repeat, 1))
 
-    data['mc_phi_kk'] = onp.load("data/mc_truth/phi_kk.npy")
-    data['mc_f_kk'] = onp.load("data/mc_truth/f_kk.npy")
-    data['mc_phif0_kk'] = onp.load("data/mc_truth/phif0_kk.npy")
-    data['mc_phif2_kk'] = onp.load("data/mc_truth/phif2_kk.npy")
+    data['mc_phi_kk'] = onp.tile(onp.load("data/mc_truth/phi_kk.npy"), n_repeat)
+    data['mc_f_kk'] = onp.tile(onp.load("data/mc_truth/f_kk.npy"), n_repeat)
+    data['mc_phif0_kk'] = onp.tile(onp.load("data/mc_truth/phif0_kk.npy"), (1, n_repeat, 1))
+    data['mc_phif2_kk'] = onp.tile(onp.load("data/mc_truth/phif2_kk.npy"), (1, n_repeat, 1))
 
-    data['truth_phi_kk'] = data['mc_phi_kk'][0:150000]
-    data['truth_f_kk'] = data['mc_f_kk'][0:150000]
-    data['truth_phif0_kk'] = data['mc_phif0_kk'][:, 0:150000]
-    data['truth_phif2_kk'] = data['mc_phif2_kk'][:, 0:150000]
+    data['truth_phi_kk'] = data['mc_phi_kk'][0:150000 * n_repeat]
+    data['truth_f_kk'] = data['mc_f_kk'][0:150000 * n_repeat]
+    data['truth_phif0_kk'] = data['mc_phif0_kk'][:, 0:150000 * n_repeat]
+    data['truth_phif2_kk'] = data['mc_phif2_kk'][:, 0:150000 * n_repeat]
 
     return data
 
@@ -537,7 +538,7 @@ def main():
     data_size = len(data['data_phi_kk'])
 
     # 按事件轴分片到所有设备
-    with mesh:
+    with jax.set_mesh(mesh):
         jax_data = shard_data_distributed(data, mesh)
 
         # 构建分布式 likelihood / grad / HVP
@@ -588,31 +589,56 @@ def main():
             logger.info("开始优化（Newton-CG + HVP）...")
         start_time = time.time()
 
-            # ===== 时间占比分析 =====
-        _N = 1000
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_likelihood(args_list, jax_data).block_until_ready()
-        t_likelihood = (time.perf_counter() - _t0) / _N
+        # 所有进程运行相同的 SciPy 循环：输入相同 x，调用顺序相同，
+        # 因此每个进程触发完全一致的 collective
+        result = minimize(
+            fun=lambda x: float(jit_likelihood(jnp.asarray(x), jax_data)),
+            x0=onp.asarray(args_list),
+            jac=lambda x: onp.array(jit_grad(jnp.asarray(x), jax_data)),
+            hessp=hessp,
+            method="Newton-CG",
+            callback=my_callback,
+            options={"disp": False, "xtol": 1e-8},
+        )
 
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_grad(args_list, jax_data).block_until_ready()
-        t_grad = (time.perf_counter() - _t0) / _N
-
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_hvp(args_list, test_vector, jax_data).block_until_ready()
-        t_hvp = (time.perf_counter() - _t0) / _N
+        end_time = time.time()
 
         if is_chief:
             logger.info("=" * 50)
-            logger.info("单次调用耗时（JIT编译后）:")
-            logger.info(f"  likelihood: {t_likelihood*1000:.2f} ms")
-            logger.info(f"  grad:       {t_grad*1000:.2f} ms  ({t_grad/t_likelihood:.1f}x likelihood)")
-            logger.info(f"  hvp:        {t_hvp*1000:.2f} ms  ({t_hvp/t_likelihood:.1f}x likelihood)")
+            logger.info("HVP 优化完成!")
+            logger.info(f"成功: {result.success}")
+            logger.info(f"最终似然值: {result.fun}")
+            logger.info(f"迭代次数: {result.nit}")
+            logger.info(f"函数调用次数: {result.nfev}")
+            logger.info(f"梯度调用次数: {result.njev}")
+            logger.info(f"Hessian调用次数: {result.nhev}")
+            logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
+            logger.info(f"优化信息: {result.message}")
             logger.info("=" * 50)
-        # ===== 时间占比分析结束 =====
+
+        # 误差计算：逐列构造 Hessian（所有进程一致执行 collective）
+        if is_chief:
+            logger.info("计算参数误差（Hessian逆矩阵）...")
+        args_size = onp.asarray(args_list).shape[0]
+        hessian_matrix = onp.zeros([args_size, args_size])
+        result_x = jnp.asarray(result.x)
+        for i in range(args_size):
+            v = onp.zeros(args_size)
+            v[i] = 1.0
+            hessian_matrix[:, i] = onp.array(jit_hvp(result_x, jnp.asarray(v), jax_data))
+        ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
+        if is_chief:
+            logger.info("误差计算完成")
+
+        # 只有 chief 进程写结果，避免多进程竞争写同一文件
+        if is_chief:
+            os.makedirs("output/fit", exist_ok=True)
+            onp.save("output/fit/fit_result_values.npy", result.x)
+            onp.save("output/fit/fit_result_errors.npy", ferror)
+            logger.info("参数已保存至 output/fit/fit_result_values.npy")
+            save_result(result.x, ferror, "output/fit/free_params_fitted.toml")
+            logger.info("配置已保存至 output/fit/free_params_fitted.toml")
+
     return 0
 
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 使用 node_config_example.toml 在 docker 上运行 fit_script_distributed.py
-# kk_test 目录会被 rsync 同步到每个 worker，并挂载到 docker 容器的 /workspace/kk_test
+# kk_test 目录会被 rsync 同步到每个节点（包括 header），并挂载到 docker 容器的 /workspace/kk_test
+# 运行完成后，header 节点的 output 目录会被拷贝回本地 kk_test/output
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -97,11 +98,22 @@ for i in $(seq 0 $((NUM_WORKERS - 1))); do
     run_on_worker "$i"
 done
 
-# ---------- 本地启动 header（process 0，前台） ----------
-HEADER_CMD=$(build_docker_cmd 0 "${HEADER_IB}" "${KK_TEST_DIR}")
-echo "[header] Running locally as process 0 ..."
+# ---------- header 节点（process 0） ----------
+REMOTE_KK_TEST="/tmp/kk_test"
+
+echo "[header] rsync kk_test -> ${HEADER_USER}@${HEADER_IP}:${REMOTE_KK_TEST}"
+rsync -az --delete "${KK_TEST_DIR}/" "${HEADER_USER}@${HEADER_IP}:${REMOTE_KK_TEST}/"
+
+HEADER_CMD=$(build_docker_cmd 0 "${HEADER_IB}" "${REMOTE_KK_TEST}")
+echo "[header] ssh ${HEADER_USER}@${HEADER_IP} (process 0)"
 echo "$HEADER_CMD"
-eval "$HEADER_CMD"
+ssh "${HEADER_USER}@${HEADER_IP}" "$HEADER_CMD" &
 
 wait
 echo "All processes finished."
+
+# ---------- 拷贝 header 节点的 output 回本地 ----------
+echo "[header] rsync output <- ${HEADER_USER}@${HEADER_IP}:${REMOTE_KK_TEST}/output/"
+mkdir -p "${KK_TEST_DIR}/output"
+rsync -az "${HEADER_USER}@${HEADER_IP}:${REMOTE_KK_TEST}/output/" "${KK_TEST_DIR}/output/"
+echo "Output copied to ${KK_TEST_DIR}/output"

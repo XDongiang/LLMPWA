@@ -75,7 +75,6 @@ RUN --mount=type=bind,from=nccl-builder,source=/workspace/nccl/build/pkg/deb,tar
     python3 python3-pip curl wget git vim \
     libcudnn9-cuda-13 libcudnn9-dev-cuda-13 \
     libibverbs1 libibverbs-dev rdma-core \
-    openssh-client openssh-server \
     && cd /tmp/nccl-pkg && apt-get install -y --no-install-recommends --allow-downgrades ./*.deb \
     && rm -rf /var/lib/apt/lists/*
 
@@ -96,18 +95,6 @@ RUN NCCL_PKG_DIR=$(python3 -c "import nvidia.nccl, os; print(os.path.dirname(nvi
         rm "$NCCL_PKG_DIR/lib/libnccl.so.2" && \
         ln -s /usr/lib/aarch64-linux-gnu/libnccl.so.2 "$NCCL_PKG_DIR/lib/libnccl.so.2"; \
     fi
-
-# Configure SSH for multi-node JAX (passwordless SSH within cluster)
-RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh && \
-    ssh-keygen -t rsa -b 4096 -f /root/.ssh/id_rsa -N "" && \
-    cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys && \
-    chmod 600 /root/.ssh/authorized_keys && \
-    echo "StrictHostKeyChecking no\nUserKnownHostsFile /dev/null" > /root/.ssh/config
-
-# sshd config: allow root login, disable PAM
-RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config && \
-    mkdir -p /run/sshd
 
 # =========================================================
 # 清除构建期的 proxy 设置，避免残留到运行时镜像。

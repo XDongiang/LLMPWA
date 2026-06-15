@@ -8,8 +8,7 @@ Username = "nvidia"
 #ETH_IF="enp1s0f0np0"
 # IB_IF --- NCCL_IB_HCA in container env
 # 两卡使用的IB设备
-# IB_IF="rocep1s0f0,roceP2p1s0f0"
-
+#IB_IF="rocep1s0f0,roceP2p1s0f0"
 # 四卡使用的IB
 IB_IF="rocep1s0f1,roceP2p1s0f1"
 
@@ -38,5 +37,7 @@ image = "jax:latest"
 container = "kkfit"
 env = [
     "NCCL_DEBUG=VERSION", 
+    #"NCCL_DEBUG=TRACE",
+    #"NCCL_DEBUG_SUBSYS=TUNING",
     "NCCL_IGNORE_CPU_AFFINITY=1",
 ]
