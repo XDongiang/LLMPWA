@@ -279,7 +279,7 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 # =============================================================================
 
 def load_data():
-    n_repeat = 5
+    n_repeat = 2
     data = {}
     data['data_phi_kk'] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
     data['data_f_kk'] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)

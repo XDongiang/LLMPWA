@@ -72,7 +72,7 @@ build_docker_cmd() {
          "-e NCCL_IB_HCA=${ib_if}" \
          ${EXTRA_ENV_FLAGS} \
          "-v ${remote_kk_test}:/workspace/kk_test" \
-         "${IMAGE} python3 /workspace/kk_test/run/fit_script_distributed.py"
+         "${IMAGE} python3 /workspace/kk_test/run/fit_script_distributed_somax.py"
 }
 
 # ---------- worker 节点通过 SSH 执行（后台） ----------

@@ -1,10 +1,12 @@
 """
-多节点数据并行 PWA 拟合脚本
+多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本）
 
-架构：事件级数据并行 + Newton-CG 优化
+架构：事件级数据并行 + somax Newton-CG 优化
 - 每个节点/GPU 持有一部分 event shard
 - likelihood / grad / HVP 通过 XLA 自动 all-reduce 汇聚
-- SciPy Newton-CG 外层优化器不变，所有进程同步执行相同优化循环
+- 优化器换成 somax 的 newton_cg：整个 CG + HVP 循环编译进 XLA 图，
+  全程在 device 上跑，消除 SciPy 外层每步 host<->device 同步的 CPU 开销
+- 所有进程运行相同的优化循环、相同输入、相同 collective 调用顺序，保持同步
 """
 import json
 import logging
@@ -16,13 +18,14 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 import time
 import numpy as onp
 from functools import partial
-from scipy.optimize import minimize
 
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, vmap, jvp, device_put
 from jax import config
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+
+import somax
 
 import toml
 import sys
@@ -279,7 +282,7 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 # =============================================================================
 
 def load_data():
-    n_repeat = 5
+    n_repeat = 2
     data = {}
     data['data_phi_kk'] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
     data['data_f_kk'] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)
@@ -509,8 +512,8 @@ def make_distributed_likelihood(data_size):
 
 
 # =============================================================================
-# Main：分布式 Newton-CG 拟合
-# 每个进程运行相同的 SciPy 优化循环、相同输入、相同 collective 调用顺序
+# Main：分布式 somax Newton-CG 拟合
+# 每个进程运行相同的优化循环、相同输入、相同 collective 调用顺序
 # 只让 process 0 写日志和保存结果
 # =============================================================================
 
@@ -522,7 +525,7 @@ def main():
 
     logger = setup_logging()
     if is_chief:
-        logger.info("开始分布式 HVP 优化版 PWA 拟合（Newton-CG 方法）")
+        logger.info("开始分布式 somax Newton-CG PWA 拟合")
         logger.info(f"进程数: {num_processes}, 全局设备数: {jax.device_count()}")
 
     global constraint_strength, total_frac_kk
@@ -541,79 +544,118 @@ def main():
     with jax.set_mesh(mesh):
         jax_data = shard_data_distributed(data, mesh)
 
-        # 构建分布式 likelihood / grad / HVP
-        # 注意：combined_likelihood 现在接收 (args, jax_data) 两个参数
+        # 构建分布式 likelihood
+        # 注意：combined_likelihood 接收 (args, jax_data) 两个参数，
+        # 正好符合 somax 的 LossFn 协议：loss_fn(params, batch) -> scalar
+        #   - params = args（被微分的 65 维参数向量）
+        #   - batch  = jax_data（分片数据 dict，作为 pytree 传入，不被微分）
         combined_likelihood = make_distributed_likelihood(data_size)
 
-        # 对 args 求梯度（argnums=0 表示只对第一个参数 args 求导）
-        def likelihood_for_grad(args, jax_data):
-            return combined_likelihood(args, jax_data)
-
+        # HVP 仍然手动保留一份，仅用于最终误差计算（逐列构造 Hessian）
         def hvp_combined_likelihood(x, v, jax_data):
             # jvp 要求 tangents 与 primals 的 pytree 结构完全一致。
             # jax_data 是 dict，所以 tangent 也必须是相同 key 的 dict（值全为 0）。
             zero_data = jax.tree.map(jnp.zeros_like, jax_data)
-            return jvp(grad(likelihood_for_grad), (x, jax_data), (v, zero_data))[1]
+            return jvp(grad(combined_likelihood), (x, jax_data), (v, zero_data))[1]
 
         # 参数 args 全局复制
         args_list, args_range, args_error = make_initial_args()
         replicated = NamedSharding(mesh, P())
         args_list = jax.device_put(jnp.asarray(args_list), replicated)
 
-        if is_chief:
-            logger.info("编译 JAX 函数（分布式 HVP 版本）...")
         jit_likelihood = jit(combined_likelihood)
-        jit_grad = jit(grad(likelihood_for_grad))
         jit_hvp = jit(hvp_combined_likelihood)
 
-        test_result = jit_likelihood(args_list, jax_data)
+        # ---------------------------------------------------------------------
+        # somax Newton-CG 优化器
+        # 整个 step（HVP + CG + 阻尼 + 参数更新）编译进一个 XLA 图，全程在 device 上，
+        # 不再有 SciPy 外层每次迭代的 host<->device 同步开销。
+        # 分布式：step 内部调用 combined_likelihood 时，jnp.sum/jnp.mean 作用在 sharded
+        # jax_data 上，XLA 仍会自动插入 all-reduce，分布式行为透明保留。
+        # ---------------------------------------------------------------------
+        method = somax.make(
+            "newton_cg",
+            loss_fn=combined_likelihood,   # (args, jax_data) -> scalar
+            lam_policy="const",            # 固定阻尼（先稳为主）
+            lam0 = 1e4,                # 阻尼加到 1.0 保证 Hessian+lamI 正定、CG 稳定
+            tol=1e-5,                      # CG 相对残差容差
+            maxiter=1200,                    # CG 最大迭代（65 维问题足够）
+            warm_start=True,               # 用上一步解作为本步 CG 初值
+            stabilise_every=10,            # 每 10 次 CG 迭代重算精确残差防漂移
+            learning_rate=0.01,             # 步长减半，给 likelihood 加 log() 的地方留余量
+            record_cg_stats=True,          # 记录 CG 迭代/残差用于日志
+        )
+
+        params = args_list
+        state = method.init(params)
+        if is_chief:
+            print("state = ",state)
+        rng = jax.random.PRNGKey(0)
+
+        # 编译单步 step；jax_data 作为 batch 显式传入
+        # 注意：多进程 JAX 中 jit 函数不能闭包捕获跨进程的 sharded array，
+        # 必须作为参数传入，否则报 "Closing over jax.Array that spans
+        # non-addressable devices is not allowed"。
+        @jax.jit
+        def opt_step(params, state, rng, jax_data):
+            return method.step(params, jax_data, state, rng)
+
+        if is_chief:
+            logger.info("编译 somax Newton-CG step 并预热...")
+        test_result = jit_likelihood(params, jax_data)
         if is_chief:
             logger.info(f"初始似然值: {test_result}")
 
-        test_vector = jnp.ones_like(args_list)
-        test_hvp = jit_hvp(args_list, test_vector, jax_data)
-        if is_chief:
-            logger.info(f"HVP 测试完成，结果形状: {test_hvp.shape}")
-
-        def my_callback(x):
-            # 虽然只有主线程输出数据，但是需要其他几个线程同时计算似然函数值，保证节点同步
-            current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
-            current_likelihood.block_until_ready()
-            if is_chief:
-                logger.info(f"当前似然值: {current_likelihood}")
-
-        def hessp(x, p):
-            return onp.array(jit_hvp(jnp.asarray(x), jnp.asarray(p), jax_data))
+        max_steps = 20
+        xtol = 1e-8
 
         if is_chief:
-            logger.info("开始优化（Newton-CG + HVP）...")
+            logger.info("开始优化（somax Newton-CG，全 device 内 CG+HVP）...")
         start_time = time.time()
 
-        # 所有进程运行相同的 SciPy 循环：输入相同 x，调用顺序相同，
-        # 因此每个进程触发完全一致的 collective
-        result = minimize(
-            fun=lambda x: float(jit_likelihood(jnp.asarray(x), jax_data)),
-            x0=onp.asarray(args_list),
-            jac=lambda x: onp.array(jit_grad(jnp.asarray(x), jax_data)),
-            hessp=hessp,
-            method="Newton-CG",
-            callback=my_callback,
-            options={"disp": False, "xtol": 1e-8},
-        )
+        # 所有进程运行相同的优化循环：相同输入、相同调用顺序，
+        # 因此每个进程触发完全一致的 collective，保持同步
+        n_iter = 0
+        for i in range(max_steps):
+            rng, subkey = jax.random.split(rng)
+
+            new_params, state, info = opt_step(params, state, subkey, jax_data)
+            if is_chief:
+                print("new_params = ",new_params)
+                print(state)
+            dx = jnp.max(jnp.abs(new_params - params))
+            dx.block_until_ready()
+
+
+            params = new_params
+            n_iter = i + 1
+            cur_loss = jit_likelihood(params, jax_data)
+
+            if is_chief and (i % 10 == 0 or i == max_steps - 1):
+                cg_iters = info.get("cg_iters", -1)
+                cg_resid = info.get("cg_resid", float("nan"))
+                logger.info(
+                    f"Step {i}: likelihood={float(cur_loss):.6f}, "
+                    f"cg_iters={int(cg_iters)}, cg_resid={float(cg_resid):.2e}, "
+                    f"dx={float(dx):.2e}"
+                )
+
+            if float(dx) < xtol:
+                if is_chief:
+                    logger.info(f"达到收敛判据 dx < {xtol}，在第 {i} 步停止")
+                break
 
         end_time = time.time()
 
+        result_x = jnp.asarray(params)
+        final_loss = float(jit_likelihood(result_x, jax_data))
+
         if is_chief:
             logger.info("=" * 50)
-            logger.info("HVP 优化完成!")
-            logger.info(f"成功: {result.success}")
-            logger.info(f"最终似然值: {result.fun}")
-            logger.info(f"迭代次数: {result.nit}")
-            logger.info(f"函数调用次数: {result.nfev}")
-            logger.info(f"梯度调用次数: {result.njev}")
-            logger.info(f"Hessian调用次数: {result.nhev}")
+            logger.info("somax Newton-CG 优化完成!")
+            logger.info(f"最终似然值: {final_loss}")
+            logger.info(f"外层迭代次数: {n_iter}")
             logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
-            logger.info(f"优化信息: {result.message}")
             logger.info("=" * 50)
 
         # 误差计算：逐列构造 Hessian（所有进程一致执行 collective）
@@ -621,7 +663,6 @@ def main():
             logger.info("计算参数误差（Hessian逆矩阵）...")
         args_size = onp.asarray(args_list).shape[0]
         hessian_matrix = onp.zeros([args_size, args_size])
-        result_x = jnp.asarray(result.x)
         for i in range(args_size):
             v = onp.zeros(args_size)
             v[i] = 1.0
@@ -633,10 +674,11 @@ def main():
         # 只有 chief 进程写结果，避免多进程竞争写同一文件
         if is_chief:
             os.makedirs("output/fit", exist_ok=True)
-            onp.save("output/fit/fit_result_values.npy", result.x)
+            result_x_np = onp.asarray(result_x)
+            onp.save("output/fit/fit_result_values.npy", result_x_np)
             onp.save("output/fit/fit_result_errors.npy", ferror)
             logger.info("参数已保存至 output/fit/fit_result_values.npy")
-            save_result(result.x, ferror, "output/fit/free_params_fitted.toml")
+            save_result(result_x_np, ferror, "output/fit/free_params_fitted.toml")
             logger.info("配置已保存至 output/fit/free_params_fitted.toml")
 
     return 0
