@@ -282,7 +282,7 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 # =============================================================================
 
 def load_data():
-    n_repeat = 2
+    n_repeat = 1
     data = {}
     data['data_phi_kk'] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
     data['data_f_kk'] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)
@@ -356,6 +356,138 @@ def shard_data_distributed(data, mesh):
 
     return jax_data
 
+def data_step_function(total_frac, args):
+    step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
+    step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
+    step_value += jnp.power(1.704 - args[5], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(0.123 - args[6], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(1.2755 - args[11], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(0.1867 - args[12], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(1.517 - args[23], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(0.086 - args[24], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(2.157 - args[35], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(0.152 - args[36], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(2.345 - args[47], 2.0) / jnp.power(0.01, 2.0) / 2.0
+    step_value += jnp.power(0.322 - args[48], 2.0) / jnp.power(1.0, 2.0) / 2.0
+    step_value += jnp.power(2.47 - args[59], 2.0) / jnp.power(0.007, 2.0) / 2.0
+    step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
+    return step_value
+
+
+def data_likelihood_kk(args, jax_data):
+    params = extract_parameters(args)
+
+    # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
+    d_phi_kk = jax_data['data_phi_kk']
+    d_f_kk = jax_data['data_f_kk']
+    d_phif0_kk = jax_data['data_phif0_kk']
+    d_phif2_kk = jax_data['data_phif2_kk']
+
+    t_phi_kk = jax_data['truth_phi_kk']
+    t_f_kk = jax_data['truth_f_kk']
+    t_phif0_kk = jax_data['truth_phif0_kk']
+    t_phif2_kk = jax_data['truth_phif2_kk']
+
+    data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
+        params['phi_mass'], params['phi_width'], d_phi_kk,
+        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+        params['phif0_kk_BW_flatte980_rg'], d_f_kk,
+        d_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        )
+    data_phif0_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], d_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], d_f_kk,
+        d_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        )
+    data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], d_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], d_f_kk,
+        d_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        )
+    data_phif2_kk_BW_BW = calculate_BW_BW(
+        params['phi_mass'], params['phi_width'], d_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], d_f_kk,
+        d_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        )
+
+        # truth constraint — 使用 truth shard
+    comp_f0_flatte980 = component_BW_flatte980(
+        params['phi_mass'], params['phi_width'], t_phi_kk,
+        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+        params['phif0_kk_BW_flatte980_rg'], t_f_kk,
+        t_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        )
+    comp_f0_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], t_phi_kk,
+        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], t_f_kk,
+        t_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        )
+    comp_f2_flatte1270 = component_BW_flatte1270(
+        params['phi_mass'], params['phi_width'], t_phi_kk,
+        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], t_f_kk,
+        t_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        )
+    comp_f2_BW = component_BW_BW(
+        params['phi_mass'], params['phi_width'], t_phi_kk,
+        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], t_f_kk,
+        t_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        )
+
+        # fraction 计算 — jnp.sum 在 sharded 数组上自动 all-reduce
+    sum_frac = jnp.sum(dplex_dabs(
+            jnp.einsum("mljk->mjk", comp_f0_flatte980) +
+            jnp.einsum("mljk->mjk", comp_f0_BW) +
+            jnp.einsum("mljk->mjk", comp_f2_flatte1270) +
+            jnp.einsum("mljk->mjk", comp_f2_BW)
+        ))
+    frac_f0_flatte980 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_flatte980)) / sum_frac)
+    frac_f0_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_BW)) / sum_frac)
+    frac_f2_flatte1270 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_flatte1270)) / sum_frac)
+    frac_f2_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_BW)) / sum_frac)
+    total_frac = frac_f0_flatte980 + frac_f0_BW + frac_f2_flatte1270 + frac_f2_BW
+
+    step_function = data_step_function(total_frac, args)
+
+    # data NLL — jnp.sum(log(...)) 在 sharded array 上自动 all-reduce
+    total_amplitude = (data_phif0_kk_BW_flatte980 + data_phif0_kk_BW_BW +
+                           data_phif2_kk_BW_flatte1270 + data_phif2_kk_BW_BW)
+    likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
+    return likelihood
+
+def mc_likelihood_kk(args, jax_data):
+    params = extract_parameters(args)
+
+    # 解包分片 MC 数据
+    m_phi_kk = jax_data['mc_phi_kk']
+    m_f_kk = jax_data['mc_f_kk']
+    m_phif0_kk = jax_data['mc_phif0_kk']
+    m_phif2_kk = jax_data['mc_phif2_kk']
+
+    total_mc = calculate_BW_flatte980(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+            params['phif0_kk_BW_flatte980_rg'], m_f_kk,
+            m_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        )
+    total_mc = total_mc + calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], m_f_kk,
+            m_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        )
+    total_mc = total_mc + calculate_BW_flatte1270(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], m_f_kk,
+            m_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        )
+    total_mc = total_mc + calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
+            m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        )
+    # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
+    return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
+
+
 
 # =============================================================================
 # 分布式 likelihood 函数
@@ -374,136 +506,6 @@ def make_distributed_likelihood(data_size):
       - args:     全局复制的参数向量（被微分变量）
       - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
     """
-
-    def data_step_function(total_frac, args):
-        step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
-        step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
-        step_value += jnp.power(1.704 - args[5], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(0.123 - args[6], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(1.2755 - args[11], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(0.1867 - args[12], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(1.517 - args[23], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(0.086 - args[24], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(2.157 - args[35], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(0.152 - args[36], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(2.345 - args[47], 2.0) / jnp.power(0.01, 2.0) / 2.0
-        step_value += jnp.power(0.322 - args[48], 2.0) / jnp.power(1.0, 2.0) / 2.0
-        step_value += jnp.power(2.47 - args[59], 2.0) / jnp.power(0.007, 2.0) / 2.0
-        step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
-        return step_value
-
-    def data_likelihood_kk(args, jax_data):
-        params = extract_parameters(args)
-
-        # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
-        d_phi_kk = jax_data['data_phi_kk']
-        d_f_kk = jax_data['data_f_kk']
-        d_phif0_kk = jax_data['data_phif0_kk']
-        d_phif2_kk = jax_data['data_phif2_kk']
-
-        t_phi_kk = jax_data['truth_phi_kk']
-        t_f_kk = jax_data['truth_f_kk']
-        t_phif0_kk = jax_data['truth_phif0_kk']
-        t_phif2_kk = jax_data['truth_phif2_kk']
-
-        data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
-            params['phi_mass'], params['phi_width'], d_phi_kk,
-            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-            params['phif0_kk_BW_flatte980_rg'], d_f_kk,
-            d_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
-        )
-        data_phif0_kk_BW_BW = calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], d_phi_kk,
-            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], d_f_kk,
-            d_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
-        )
-        data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
-            params['phi_mass'], params['phi_width'], d_phi_kk,
-            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], d_f_kk,
-            d_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
-        )
-        data_phif2_kk_BW_BW = calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], d_phi_kk,
-            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], d_f_kk,
-            d_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
-        )
-
-        # truth constraint — 使用 truth shard
-        comp_f0_flatte980 = component_BW_flatte980(
-            params['phi_mass'], params['phi_width'], t_phi_kk,
-            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-            params['phif0_kk_BW_flatte980_rg'], t_f_kk,
-            t_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
-        )
-        comp_f0_BW = component_BW_BW(
-            params['phi_mass'], params['phi_width'], t_phi_kk,
-            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], t_f_kk,
-            t_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
-        )
-        comp_f2_flatte1270 = component_BW_flatte1270(
-            params['phi_mass'], params['phi_width'], t_phi_kk,
-            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], t_f_kk,
-            t_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
-        )
-        comp_f2_BW = component_BW_BW(
-            params['phi_mass'], params['phi_width'], t_phi_kk,
-            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], t_f_kk,
-            t_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
-        )
-
-        # fraction 计算 — jnp.sum 在 sharded 数组上自动 all-reduce
-        sum_frac = jnp.sum(dplex_dabs(
-            jnp.einsum("mljk->mjk", comp_f0_flatte980) +
-            jnp.einsum("mljk->mjk", comp_f0_BW) +
-            jnp.einsum("mljk->mjk", comp_f2_flatte1270) +
-            jnp.einsum("mljk->mjk", comp_f2_BW)
-        ))
-        frac_f0_flatte980 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_flatte980)) / sum_frac)
-        frac_f0_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_BW)) / sum_frac)
-        frac_f2_flatte1270 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_flatte1270)) / sum_frac)
-        frac_f2_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_BW)) / sum_frac)
-        total_frac = frac_f0_flatte980 + frac_f0_BW + frac_f2_flatte1270 + frac_f2_BW
-
-        step_function = data_step_function(total_frac, args)
-
-        # data NLL — jnp.sum(log(...)) 在 sharded array 上自动 all-reduce
-        total_amplitude = (data_phif0_kk_BW_flatte980 + data_phif0_kk_BW_BW +
-                           data_phif2_kk_BW_flatte1270 + data_phif2_kk_BW_BW)
-        likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
-        return likelihood
-
-    def mc_likelihood_kk(args, jax_data):
-        params = extract_parameters(args)
-
-        # 解包分片 MC 数据
-        m_phi_kk = jax_data['mc_phi_kk']
-        m_f_kk = jax_data['mc_f_kk']
-        m_phif0_kk = jax_data['mc_phif0_kk']
-        m_phif2_kk = jax_data['mc_phif2_kk']
-
-        total_mc = calculate_BW_flatte980(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-            params['phif0_kk_BW_flatte980_rg'], m_f_kk,
-            m_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
-        )
-        total_mc = total_mc + calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], m_f_kk,
-            m_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
-        )
-        total_mc = total_mc + calculate_BW_flatte1270(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], m_f_kk,
-            m_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
-        )
-        total_mc = total_mc + calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
-            m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
-        )
-        # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
-        return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
 
     def combined_likelihood(args, jax_data):
         return data_likelihood_kk(args, jax_data) + data_size * jnp.log(mc_likelihood_kk(args, jax_data))
@@ -559,7 +561,7 @@ def main():
             return jvp(grad(combined_likelihood), (x, jax_data), (v, zero_data))[1]
 
         # 参数 args 全局复制
-        args_list, args_range, args_error = make_initial_args()
+        args_list, _ , _ = make_initial_args()
         replicated = NamedSharding(mesh, P())
         args_list = jax.device_put(jnp.asarray(args_list), replicated)
 
@@ -575,21 +577,20 @@ def main():
         # ---------------------------------------------------------------------
         method = somax.make(
             "newton_cg",
-            loss_fn=combined_likelihood,   # (args, jax_data) -> scalar
-            lam_policy="const",            # 固定阻尼（先稳为主）
-            lam0 = 1e4,                # 阻尼加到 1.0 保证 Hessian+lamI 正定、CG 稳定
-            tol=1e-5,                      # CG 相对残差容差
-            maxiter=1200,                    # CG 最大迭代（65 维问题足够）
-            warm_start=True,               # 用上一步解作为本步 CG 初值
-            stabilise_every=10,            # 每 10 次 CG 迭代重算精确残差防漂移
-            learning_rate=0.01,             # 步长减半，给 likelihood 加 log() 的地方留余量
-            record_cg_stats=True,          # 记录 CG 迭代/残差用于日志
+            loss_fn=combined_likelihood,                    # (args, jax_data) -> scalar
+            lam_policy="trust_region",                      # 可变阻尼
+            lam0 = 5e7,                                     # 阻尼加到 5e7 保证 Hessian+lamI 正定、CG 稳定
+            lam_kwargs={"max_lam": 1e8,"min_lam":1e5, "dec":0.9},      # 阻尼参数
+            tol=1e-6,                                       # CG 相对残差容差
+            maxiter=args_list.shape[0]* 20,                 # CG 最大迭代（65 维问题足够） 参照scipy设置
+            warm_start=True,                                # 用上一步解作为本步 CG 初值
+            stabilise_every=10,                             # 每 10 次 CG 迭代重算精确残差防漂移
+            learning_rate=1,                                # trust-region + LM 阻尼的设计假设步长 = 1
+            record_cg_stats=True,                           # 记录 CG 迭代/残差用于日志
         )
 
         params = args_list
         state = method.init(params)
-        if is_chief:
-            print("state = ",state)
         rng = jax.random.PRNGKey(0)
 
         # 编译单步 step；jax_data 作为 batch 显式传入
@@ -606,8 +607,18 @@ def main():
         if is_chief:
             logger.info(f"初始似然值: {test_result}")
 
-        max_steps = 20
-        xtol = 1e-8
+        max_steps = 1000
+    
+        
+        # 收敛判据采用 scipy _minimize_newtoncg 的实现方式：
+        #   - avextol 为用户给定的平均相对容差（scipy 默认 1e-5）
+        #   - 实际阈值按问题维度放大：xtol = len(x0) * avextol
+        #   - 终止量为更新步长的 L1 范数 update_l1norm = ||update||_1
+        #   - 循环条件 while update_l1norm > xtol（即 update_l1norm <= xtol 时停止）
+        avextol = 1e-8
+        xtol = len(params) * avextol
+        # 保证首次进入循环（scipy 用 np.finfo(float).max 初始化）
+        update_l1norm = onp.finfo(float).max
 
         if is_chief:
             logger.info("开始优化（somax Newton-CG，全 device 内 CG+HVP）...")
@@ -620,30 +631,42 @@ def main():
             rng, subkey = jax.random.split(rng)
 
             new_params, state, info = opt_step(params, state, subkey, jax_data)
-            if is_chief:
-                print("new_params = ",new_params)
-                print(state)
-            dx = jnp.max(jnp.abs(new_params - params))
-            dx.block_until_ready()
 
-
+            # scipy _minimize_newtoncg 的终止量：更新步长的 L1 范数
+            #   update = new_params - params; update_l1norm = ||update||_1
+            update_l1norm = float(jnp.linalg.norm(new_params - params, ord=1))
             params = new_params
             n_iter = i + 1
-            cur_loss = jit_likelihood(params, jax_data)
+            
 
-            if is_chief and (i % 10 == 0 or i == max_steps - 1):
-                cg_iters = info.get("cg_iters", -1)
-                cg_resid = info.get("cg_resid", float("nan"))
-                logger.info(
-                    f"Step {i}: likelihood={float(cur_loss):.6f}, "
-                    f"cg_iters={int(cg_iters)}, cg_resid={float(cg_resid):.2e}, "
-                    f"dx={float(dx):.2e}"
-                )
 
-            if float(dx) < xtol:
+            if i % 10 == 0 or i == max_steps - 1:
+                # 为分布式正常运行，cur_loss需要所有节点共同计算
+                cur_loss = jit_likelihood(params, jax_data)
                 if is_chief:
-                    logger.info(f"达到收敛判据 dx < {xtol}，在第 {i} 步停止")
+                    cg_iters = info.get("cg_iters", -1)
+                    cg_resid = info.get("cg_resid", float("nan"))
+                    #print(info)
+                    #print(state)
+                    logger.info(
+                        f"Step {i}: likelihood={float(cur_loss):.6f}, "
+                        f"cg_iters={int(cg_iters)}, cg_resid={float(cg_resid):.2e}, "
+                        f"update_l1norm = {update_l1norm:.9e}"
+                    )
+
+
+
+            if onp.isnan(info.get("cg_resid", float("nan"))):
+                if is_chief:
+                    logger.warning("cg_resid is nan, opti stopped")
                 break
+
+            # scipy 循环条件 while update_l1norm > xtol 的反向：满足即收敛停止
+            if update_l1norm <= xtol:
+                if is_chief:
+                    logger.info("opti finished")
+                break
+
 
         end_time = time.time()
 

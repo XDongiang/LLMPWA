@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-CONFIG="${1:-$(dirname "$0")/../analyses/kk_new/node_config.toml}"
+CONFIG="${1:-$(dirname "$0")/node_config_example.toml}"
 
 if [[ ! -f "$CONFIG" ]]; then
     echo "Usage: $0 [node_config.toml]"

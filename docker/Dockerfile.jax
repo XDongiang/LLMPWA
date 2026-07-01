@@ -87,7 +87,7 @@ ENV UV_LINK_MODE=copy
 # Install JAX with CUDA 13 support + somax (second-order optimizer)
 RUN uv pip install "jax[cuda13]" "jaxlib" && \
     uv pip install numpy matplotlib tqdm toml && \
-    uv pip install python-somax 
+    uv pip install "python-somax @ git+https://github.com/isolitude/somax.git@fix-grad-type-error"
 
 # Fix NCCL symlink: point Python nccl package to system-installed libnccl
 # (same pattern used in spark-vllm-docker for GB10)
