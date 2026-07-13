@@ -32,6 +32,7 @@ print(f'HEADER_PORT={q(header.get("PORT", "12345"))}')
 print(f'HEADER_IB={q(header.get("IB_IF", ""))}')
 print(f'HEADER_USER={q(header.get("Username", "root"))}')
 print(f'IMAGE={q(container.get("image", "jax:latest"))}')
+print(f'CONTAINER_NAME={q(container.get("container", "kkfit"))}')
 print(f'WORKERS_JSON={q(json.dumps(workers))}')
 
 envs = container.get("env", [])
@@ -56,6 +57,7 @@ COORDINATOR="${HEADER_IP}:${HEADER_PORT}"
 echo "============================================"
 echo " Config      : $CONFIG"
 echo " Image       : $IMAGE"
+echo " Container   : $CONTAINER_NAME"
 echo " Header      : ${HEADER_USER}@${HEADER_IP}:${HEADER_PORT} (process 0)"
 echo " Workers     : ${NUM_WORKERS}"
 echo " Total procs : $NUM_PROCESSES"
@@ -66,13 +68,14 @@ echo "============================================"
 build_docker_cmd() {
     local process_id="$1" ib_if="$2" remote_kk_test="$3"
     echo "docker run --rm --gpus all --privileged --network=host" \
+         "--name ${CONTAINER_NAME}" \
          "-e JAX_COORDINATOR_ADDRESS=${COORDINATOR}" \
          "-e JAX_NUM_PROCESSES=${NUM_PROCESSES}" \
          "-e JAX_PROCESS_ID=${process_id}" \
          "-e NCCL_IB_HCA=${ib_if}" \
          ${EXTRA_ENV_FLAGS} \
          "-v ${remote_kk_test}:/workspace/kk_test" \
-         "${IMAGE} python3 /workspace/kk_test/run/fit_script_distributed_somax.py"
+         "${IMAGE} python3 /workspace/kk_test/run/fit_script_distributed_somax_random_restart.py"
 }
 
 # ---------- worker 节点通过 SSH 执行（后台） ----------

@@ -1,12 +1,16 @@
 """
-多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本）
+多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本，随机初值多次重启扫描）
 
-架构：事件级数据并行 + somax Newton-CG 优化
-- 每个节点/GPU 持有一部分 event shard
-- likelihood / grad / HVP 通过 XLA 自动 all-reduce 汇聚
-- 优化器换成 somax 的 newton_cg：整个 CG + HVP 循环编译进 XLA 图，
-  全程在 device 上跑，消除 SciPy 外层每步 host<->device 同步的 CPU 开销
-- 所有进程运行相同的优化循环、相同输入、相同 collective 调用顺序，保持同步
+架构：与 fit_script_distributed_somax.py 完全一致的分布式 event-shard + somax
+Newton-CG 优化，唯一区别是：
+- 每次试验先对初始参数做随机偏移（const/theta 重新采样到半径 0.1 的圆上，
+  再对全部参数施加一个统一的乘性抖动），然后从该偏移点完整跑一次 Newton-CG
+  优化直至收敛
+- 记录每次试验的初始/最终 likelihood、迭代次数、是否收敛、耗时
+- 所有进程使用同一个 seed（base_seed + trial_idx）生成偏移，因此各进程算出的
+  偏移值完全一致，不需要额外通信
+- 结果保存到 output/fit/random_restart_trace.npz；likelihood 最优的一组参数
+  额外保存为 output/fit/free_params_fitted_best_restart.toml
 """
 import json
 import logging
@@ -264,7 +268,8 @@ def make_initial_args():
     args = [d["value"] for d in _data]
     ranges = [d.get("range", [-onp.inf, onp.inf]) for d in _data]
     errors = [d["error"] for d in _data]
-    return onp.array(args), onp.array(ranges), onp.array(errors)
+    paths = [d["path"] for d in _data]
+    return onp.array(args), onp.array(ranges), onp.array(errors), paths
 
 
 def save_result(args, errors, path="output/free_params_fitted.toml"):
@@ -356,6 +361,7 @@ def shard_data_distributed(data, mesh):
 
     return jax_data
 
+
 def data_step_function(total_frac, args):
     step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
     step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
@@ -377,7 +383,6 @@ def data_step_function(total_frac, args):
 def data_likelihood_kk(args, jax_data):
     params = extract_parameters(args)
 
-    # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
     d_phi_kk = jax_data['data_phi_kk']
     d_f_kk = jax_data['data_f_kk']
     d_phif0_kk = jax_data['data_phif0_kk']
@@ -410,7 +415,6 @@ def data_likelihood_kk(args, jax_data):
         d_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
         )
 
-        # truth constraint — 使用 truth shard
     comp_f0_flatte980 = component_BW_flatte980(
         params['phi_mass'], params['phi_width'], t_phi_kk,
         params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
@@ -433,7 +437,6 @@ def data_likelihood_kk(args, jax_data):
         t_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
         )
 
-        # fraction 计算 — jnp.sum 在 sharded 数组上自动 all-reduce
     sum_frac = jnp.sum(dplex_dabs(
             jnp.einsum("mljk->mjk", comp_f0_flatte980) +
             jnp.einsum("mljk->mjk", comp_f0_BW) +
@@ -448,16 +451,15 @@ def data_likelihood_kk(args, jax_data):
 
     step_function = data_step_function(total_frac, args)
 
-    # data NLL — jnp.sum(log(...)) 在 sharded array 上自动 all-reduce
     total_amplitude = (data_phif0_kk_BW_flatte980 + data_phif0_kk_BW_BW +
                            data_phif2_kk_BW_flatte1270 + data_phif2_kk_BW_BW)
     likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
     return likelihood
 
+
 def mc_likelihood_kk(args, jax_data):
     params = extract_parameters(args)
 
-    # 解包分片 MC 数据
     m_phi_kk = jax_data['mc_phi_kk']
     m_f_kk = jax_data['mc_f_kk']
     m_phif0_kk = jax_data['mc_phif0_kk']
@@ -484,27 +486,14 @@ def mc_likelihood_kk(args, jax_data):
             params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
             m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
         )
-    # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
     return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
 
-
-
-# =============================================================================
-# 分布式 likelihood 函数
-# 关键：jnp.sum / jnp.mean 作用在 sharded array 上时，XLA 自动插入 all-reduce
-# =============================================================================
 
 def make_distributed_likelihood(data_size):
     """
     构建分布式 combined_likelihood 函数。
-
-    注意：在多进程 JAX 中，jit 函数不能通过闭包捕获跨进程（non-addressable）的
-    sharded array，否则会报 "Closing over jax.Array that spans non-addressable
-    devices is not allowed"。因此分片数据必须作为显式参数传入。
-
-    返回的 combined_likelihood(args, jax_data) 接收：
-      - args:     全局复制的参数向量（被微分变量）
-      - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
+    combined_likelihood(args, jax_data) 接收全局复制的参数向量和分片数据 dict，
+    符合 somax 的 LossFn 协议：loss_fn(params, batch) -> scalar
     """
 
     def combined_likelihood(args, jax_data):
@@ -514,9 +503,43 @@ def make_distributed_likelihood(data_size):
 
 
 # =============================================================================
-# Main：分布式 somax Newton-CG 拟合
-# 每个进程运行相同的优化循环、相同输入、相同 collective 调用顺序
-# 只让 process 0 写日志和保存结果
+# 随机初值扰动
+#
+# 参照旧版单节点脚本的抖动逻辑：
+#   theta = 2*pi*rand()
+#   theta_val = 0.1 * cos(theta); const_val = 0.1 * sin(theta)   （落在半径 0.1 的圆上）
+#   args_float *= (rand() - 0.5) / disturb + 1.0                 （disturb=50 → 整体乘性抖动 ±1%）
+# 这里改为对每次试验使用独立的 numpy RandomState(seed)，seed 由所有分布式进程
+# 用同一个 base_seed + trial_idx 算出，因此各进程生成完全一致的偏移，无需通信。
+# =============================================================================
+
+def find_const_theta_indices(paths):
+    """从 free_params.toml 的 path 字段中找出所有 Amplitude.constN / Amplitude.thetaN 的 arg_index"""
+    const_idx = [i for i, p in enumerate(paths) if ".Amplitude.const" in p]
+    theta_idx = [i for i, p in enumerate(paths) if ".Amplitude.theta" in p]
+    return onp.array(const_idx, dtype=int), onp.array(theta_idx, dtype=int)
+
+
+def perturb_args(base_args, const_idx, theta_idx, seed, disturb=50.0):
+    """
+    对初始参数做随机偏移，返回新的参数数组（不修改 base_args）。
+    - const/theta：重新采样到半径 0.1 的圆上（幅值固定为 0.1，相位随机）
+    - 全部参数：额外乘以一个统一的随机乘性抖动 (rand()-0.5)/disturb + 1.0
+    """
+    rng = onp.random.RandomState(seed)
+    args = onp.array(base_args, dtype=float).copy()
+
+    if const_idx.size > 0:
+        theta = 2 * onp.pi * rng.rand(theta_idx.shape[0])
+        args[theta_idx] = 0.1 * onp.cos(theta)
+        args[const_idx] = 0.1 * onp.sin(theta)
+
+    args = args * ((rng.rand(args.shape[0]) - 0.5) / disturb + 1.0)
+    return args
+
+
+# =============================================================================
+# Main：分布式 somax Newton-CG 拟合，随机初值多次重启扫描
 # =============================================================================
 
 def main():
@@ -527,169 +550,181 @@ def main():
 
     logger = setup_logging()
     if is_chief:
-        logger.info("开始分布式 somax Newton-CG PWA 拟合")
+        logger.info("开始分布式 somax Newton-CG 随机初值重启扫描")
         logger.info(f"进程数: {num_processes}, 全局设备数: {jax.device_count()}")
 
     global constraint_strength, total_frac_kk
     constraint_strength = 1000.0
     total_frac_kk = 1.1
 
-    # 构建设备网格
     mesh = build_mesh()
 
-    # 所有进程加载并归一化数据（归一化因子由全局 MC 决定，各进程一致）
     data = load_data()
     data = normalize_data(data)
     data_size = len(data['data_phi_kk'])
 
-    # 按事件轴分片到所有设备
+    base_args, _, _, paths = make_initial_args()
+    const_idx, theta_idx = find_const_theta_indices(paths)
+
     with jax.set_mesh(mesh):
         jax_data = shard_data_distributed(data, mesh)
 
-        # 构建分布式 likelihood
-        # 注意：combined_likelihood 接收 (args, jax_data) 两个参数，
-        # 正好符合 somax 的 LossFn 协议：loss_fn(params, batch) -> scalar
-        #   - params = args（被微分的 65 维参数向量）
-        #   - batch  = jax_data（分片数据 dict，作为 pytree 传入，不被微分）
         combined_likelihood = make_distributed_likelihood(data_size)
 
-        # HVP 仍然手动保留一份，仅用于最终误差计算（逐列构造 Hessian）
         def hvp_combined_likelihood(x, v, jax_data):
-            # jvp 要求 tangents 与 primals 的 pytree 结构完全一致。
-            # jax_data 是 dict，所以 tangent 也必须是相同 key 的 dict（值全为 0）。
             zero_data = jax.tree.map(jnp.zeros_like, jax_data)
             return jvp(grad(combined_likelihood), (x, jax_data), (v, zero_data))[1]
 
-        # 参数 args 全局复制
-        args_list, _ , _ = make_initial_args()
         replicated = NamedSharding(mesh, P())
-        args_list = jax.device_put(jnp.asarray(args_list), replicated)
-
         jit_likelihood = jit(combined_likelihood)
         jit_hvp = jit(hvp_combined_likelihood)
 
-        # ---------------------------------------------------------------------
-        # somax Newton-CG 优化器
-        # 整个 step（HVP + CG + 阻尼 + 参数更新）编译进一个 XLA 图，全程在 device 上，
-        # 不再有 SciPy 外层每次迭代的 host<->device 同步开销。
-        # 分布式：step 内部调用 combined_likelihood 时，jnp.sum/jnp.mean 作用在 sharded
-        # jax_data 上，XLA 仍会自动插入 all-reduce，分布式行为透明保留。
-        # ---------------------------------------------------------------------
+        args_size = base_args.shape[0]
+
+        # somax Newton-CG 优化器，构建一次即可复用于每次随机重启试验
         method = somax.make(
             "newton_cg",
-            loss_fn=combined_likelihood,                    # (args, jax_data) -> scalar
-            lam_policy="trust_region",                      # 可变阻尼
-            lam0 = 5e7,                                     # 阻尼加到 5e7 保证 Hessian+lamI 正定、CG 稳定
-            lam_kwargs={"max_lam": 1e8,"min_lam":10, "dec":0.9},      # 阻尼参数
-            tol=1e-5,                                       # CG 相对残差容差
-            maxiter=args_list.shape[0]* 2,                 # CG 最大迭代（65 维问题足够） 参照scipy设置
-            warm_start=True,                                # 用上一步解作为本步 CG 初值
-            stabilise_every=10,                             # 每 10 次 CG 迭代重算精确残差防漂移
-            learning_rate=1,                                # trust-region + LM 阻尼的设计假设步长 = 1
-            record_cg_stats=True,                           # 记录 CG 迭代/残差用于日志
+            loss_fn=combined_likelihood,
+            lam_policy="trust_region",
+            lam_kwargs={"max_lam": 1e9, "min_lam": 100, "dec": 0.97, "inc": 1.5},
+            tol=1e-4,
+            maxiter=args_size * 5,
+            warm_start=True,
+            stabilise_every=1,
+            learning_rate=1,
+            record_cg_stats=True,
         )
 
-        params = args_list
-        state = method.init(params)
-        rng = jax.random.PRNGKey(0)
-
-        # 编译单步 step；jax_data 作为 batch 显式传入
-        # 注意：多进程 JAX 中 jit 函数不能闭包捕获跨进程的 sharded array，
-        # 必须作为参数传入，否则报 "Closing over jax.Array that spans
-        # non-addressable devices is not allowed"。
         @jax.jit
         def opt_step(params, state, rng, jax_data):
             return method.step(params, jax_data, state, rng)
 
-        if is_chief:
-            logger.info("编译 somax Newton-CG step 并预热...")
-        test_result = jit_likelihood(params, jax_data)
-        if is_chief:
-            logger.info(f"初始似然值: {test_result}")
-
-        max_steps = 1000
-    
-        
-        # 收敛判据采用 scipy _minimize_newtoncg 的实现方式：
-        #   - avextol 为用户给定的平均相对容差（scipy 默认 1e-5）
-        #   - 实际阈值按问题维度放大：xtol = len(x0) * avextol
-        #   - 终止量为更新步长的 L1 范数 update_l1norm = ||update||_1
-        #   - 循环条件 while update_l1norm > xtol（即 update_l1norm <= xtol 时停止）
         avextol = 1e-8
-        xtol = len(params) * avextol
-        # 保证首次进入循环（scipy 用 np.finfo(float).max 初始化）
-        update_l1norm = onp.finfo(float).max
+        xtol = args_size * avextol
+        max_steps = 1000
+
+        n_trials = 10
+        base_seed = 20260710
+
+        trace_trial = []
+        trace_seed = []
+        trace_init_args = []
+        trace_init_likelihood = []
+        trace_final_args = []
+        trace_final_likelihood = []
+        trace_n_iter = []
+        trace_converged = []
+        trace_elapsed = []
+
+        best_final_loss = onp.inf
+        best_final_args = None
 
         if is_chief:
-            logger.info("开始优化（somax Newton-CG，全 device 内 CG+HVP）...")
+            logger.info(f"计划运行 {n_trials} 次随机初值重启试验，每次跑满 Newton-CG 至收敛")
 
-        start_time = time.time()
+        for trial in range(n_trials):
+            trial_seed = base_seed + trial
 
-        # 所有进程运行相同的优化循环：相同输入、相同调用顺序，
-        # 因此每个进程触发完全一致的 collective，保持同步
-        n_iter = 0
-        for i in range(max_steps):
-            rng, subkey = jax.random.split(rng)
+            perturbed = perturb_args(base_args, const_idx, theta_idx, trial_seed)
+            params = jax.device_put(jnp.asarray(perturbed), replicated)
 
-            new_params, state, info = opt_step(params, state, subkey, jax_data)
+            init_loss = float(jit_likelihood(params, jax_data))
 
-            # scipy _minimize_newtoncg 的终止量：更新步长的 L1 范数
-            #   update = new_params - params; update_l1norm = ||update||_1
-            update_l1norm = float(jnp.linalg.norm(new_params - params, ord=1))
-            params = new_params
-            n_iter = i + 1
-            
-            if i % 10 == 0 or i == max_steps - 1:
-                # 为分布式正常运行，cur_loss需要所有节点共同计算
-                cur_loss = jit_likelihood(params, jax_data)
-                if is_chief:
-                    cg_iters = info.get("cg_iters", -1)
-                    cg_resid = info.get("cg_resid", float("nan"))
-                    #print(info)
-                    #print(state)
-                    logger.info(
-                        f"Step {i}: likelihood={float(cur_loss):.6f}, "
-                        f"cg_iters={int(cg_iters)}, cg_resid={float(cg_resid):.2e}, "
-                        f"update_l1norm = {update_l1norm:.9e}"
-                    )
+            # 在每次试验开始优化前，用 H 计算所需的 lam0
+            H0 = onp.zeros((args_size, args_size))
+            for i in range(args_size):
+                v = onp.zeros(args_size)
+                v[i] = 1.0
+                H0[:, i] = onp.asarray(jit_hvp(params, jnp.asarray(v), jax_data))
 
+            w = onp.linalg.eigvalsh((H0 + H0.T) / 2)
+            lam0 = float(- w[0] * 2 + 1)
+            if is_chief:
+                logger.info(f"Trial {trial}: H eig min={w[0]}, max={w[-1]}, lam={lam0}")
 
-            if onp.isnan(info.get("cg_resid", float("nan"))):
-                if is_chief:
-                    logger.warning("cg_resid is nan, opti stopped")
-                break
+            method.damping = method.damping.replace(lam0=lam0)
+            state = method.init(params)
+            rng = jax.random.PRNGKey(trial_seed)
 
-            # scipy 循环条件 while update_l1norm > xtol 的反向：满足即收敛停止
-            if update_l1norm <= xtol:
-                if is_chief:
-                    print(info)
-                    print(state)
-                    logger.info("opti finished")
-                break
+            update_l1norm = onp.finfo(float).max
+            n_iter = 0
+            converged = False
+
+            trial_start = time.time()
+
+            for i in range(max_steps):
+                rng, subkey = jax.random.split(rng)
+                new_params, state, info = opt_step(params, state, subkey, jax_data)
+                update_l1norm = float(jnp.linalg.norm(new_params - params, ord=1))
 
 
-        end_time = time.time()
+                if onp.isnan(info.get("cg_resid", float("nan"))):
+                    break
 
-        result_x = jnp.asarray(params)
-        final_loss = float(jit_likelihood(result_x, jax_data))
+                if update_l1norm <= xtol:
+                    converged = True
+                    break
+
+                params = new_params
+                n_iter = i + 1
+
+                if i % 10 == 0 or i == max_steps - 1:
+                    cur_loss = jit_likelihood(params, jax_data)
+                    if is_chief:
+                        logger.info(
+                            f"Trial {trial}: iter {i}, "
+                            f"cg_resid={info['cg_resid']:.6f}, "
+                            f"update_l1norm={update_l1norm:.6e}, "
+                            f"lam_used={info['lam_used']:.6e}, "
+                            f"loss={cur_loss:.6f}"
+                        )
+
+            trial_elapsed = time.time() - trial_start
+            final_loss = float(jit_likelihood(params, jax_data))
+            final_args = onp.asarray(params)
+
+            # final_loss / final_args 由 all-reduce 得到，所有进程结果一致；
+            # 必须在所有进程上都更新 best_final_*，否则后续 Hessian 计算
+            # （collective 操作）会在各进程间使用不同的 best_x，破坏同步。
+            if final_loss < best_final_loss:
+                best_final_loss = final_loss
+                best_final_args = final_args
+
+            if is_chief:
+                trace_trial.append(trial)
+                trace_seed.append(trial_seed)
+                trace_init_args.append(perturbed)
+                trace_init_likelihood.append(init_loss)
+                trace_final_args.append(final_args)
+                trace_final_likelihood.append(final_loss)
+                trace_n_iter.append(n_iter)
+                trace_converged.append(converged)
+                trace_elapsed.append(trial_elapsed)
+
+                logger.info(
+                    f"Trial {trial}: init_likelihood={init_loss:.6f}, "
+                    f"final_likelihood={final_loss:.6f}, n_iter={n_iter}, "
+                    f"converged={converged}, elapsed={trial_elapsed:.2f}s"
+                )
 
         if is_chief:
             logger.info("=" * 50)
-            logger.info("somax Newton-CG 优化完成!")
-            logger.info(f"最终似然值: {final_loss}")
-            logger.info(f"外层迭代次数: {n_iter}")
-            logger.info(f"优化时间: {end_time - start_time:.2f} 秒")
+            logger.info(f"随机初值重启扫描完成，共 {n_trials} 次试验")
+            logger.info(f"最优 likelihood: {best_final_loss:.6f}")
             logger.info("=" * 50)
 
-        # 误差计算：逐列构造 Hessian（所有进程一致执行 collective）
+        # 只对最优结果计算误差（逐列构造 Hessian，所有进程一致执行 collective）
         if is_chief:
-            logger.info("计算参数误差（Hessian逆矩阵）...")
-        args_size = onp.asarray(args_list).shape[0]
+            logger.info("计算最优结果的参数误差（Hessian逆矩阵）...")
+        best_x = jnp.asarray(
+            best_final_args if best_final_args is not None else onp.asarray(base_args)
+        )
+        best_x = jax.device_put(best_x, replicated)
         hessian_matrix = onp.zeros([args_size, args_size])
         for i in range(args_size):
             v = onp.zeros(args_size)
             v[i] = 1.0
-            hessian_matrix[:, i] = onp.array(jit_hvp(result_x, jnp.asarray(v), jax_data))
+            hessian_matrix[:, i] = onp.array(jit_hvp(best_x, jnp.asarray(v), jax_data))
         ferror = onp.sqrt(onp.diag(onp.linalg.inv(hessian_matrix)))
         if is_chief:
             logger.info("误差计算完成")
@@ -697,12 +732,27 @@ def main():
         # 只有 chief 进程写结果，避免多进程竞争写同一文件
         if is_chief:
             os.makedirs("output/fit", exist_ok=True)
-            result_x_np = onp.asarray(result_x)
-            onp.save("output/fit/fit_result_values.npy", result_x_np)
-            onp.save("output/fit/fit_result_errors.npy", ferror)
-            logger.info("参数已保存至 output/fit/fit_result_values.npy")
-            save_result(result_x_np, ferror, "output/fit/free_params_fitted.toml")
-            logger.info("配置已保存至 output/fit/free_params_fitted.toml")
+
+            best_x_np = onp.asarray(best_x)
+            onp.save("output/fit/random_restart_best_values.npy", best_x_np)
+            onp.save("output/fit/random_restart_best_errors.npy", ferror)
+            save_result(best_x_np, ferror, "output/fit/free_params_fitted_best_restart.toml")
+            logger.info("最优结果已保存至 output/fit/free_params_fitted_best_restart.toml")
+
+            onp.savez(
+                "output/fit/random_restart_trace.npz",
+                trial=onp.asarray(trace_trial),
+                seed=onp.asarray(trace_seed),
+                init_args=onp.asarray(trace_init_args),
+                init_likelihood=onp.asarray(trace_init_likelihood),
+                final_args=onp.asarray(trace_final_args),
+                final_likelihood=onp.asarray(trace_final_likelihood),
+                n_iter=onp.asarray(trace_n_iter),
+                converged=onp.asarray(trace_converged),
+                elapsed=onp.asarray(trace_elapsed),
+                best_final_loss=onp.asarray(best_final_loss),
+            )
+            logger.info("随机重启扫描记录已保存至 output/fit/random_restart_trace.npz")
 
     return 0
 

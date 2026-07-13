@@ -1,5 +1,5 @@
 """
-多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本）
+多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本，带优化过程记录）
 
 架构：事件级数据并行 + somax Newton-CG 优化
 - 每个节点/GPU 持有一部分 event shard
@@ -7,6 +7,12 @@
 - 优化器换成 somax 的 newton_cg：整个 CG + HVP 循环编译进 XLA 图，
   全程在 device 上跑，消除 SciPy 外层每步 host<->device 同步的 CPU 开销
 - 所有进程运行相同的优化循环、相同输入、相同 collective 调用顺序，保持同步
+
+相比 fit_script_distributed_somax.py 的额外功能：
+- 每个记录步（默认每 10 步）保存 args / likelihood / lam_used / cg_iters
+- 每个记录步额外逐列构造完整 Hessian，计算最小特征值，
+  推算维持 Hessian+lam*I 正定所需的最小 lam 数量级，用于诊断 lam0/lam_kwargs 设置是否合理
+- 记录结果保存为 output/fit/optimization_trace.npz
 """
 import json
 import logging
@@ -580,9 +586,9 @@ def main():
             loss_fn=combined_likelihood,                    # (args, jax_data) -> scalar
             lam_policy="trust_region",                      # 可变阻尼
             lam0 = 5e7,                                     # 阻尼加到 5e7 保证 Hessian+lamI 正定、CG 稳定
-            lam_kwargs={"max_lam": 1e8,"min_lam":10, "dec":0.9},      # 阻尼参数
-            tol=1e-5,                                       # CG 相对残差容差
-            maxiter=args_list.shape[0]* 2,                 # CG 最大迭代（65 维问题足够） 参照scipy设置
+            lam_kwargs={"max_lam": 1e8,"min_lam":1e5, "dec":0.9},      # 阻尼参数
+            tol=1e-6,                                       # CG 相对残差容差
+            maxiter=args_list.shape[0]* 20,                 # CG 最大迭代（65 维问题足够） 参照scipy设置
             warm_start=True,                                # 用上一步解作为本步 CG 初值
             stabilise_every=10,                             # 每 10 次 CG 迭代重算精确残差防漂移
             learning_rate=1,                                # trust-region + LM 阻尼的设计假设步长 = 1
@@ -606,6 +612,29 @@ def main():
         test_result = jit_likelihood(params, jax_data)
         if is_chief:
             logger.info(f"初始似然值: {test_result}")
+
+        args_size = onp.asarray(args_list).shape[0]
+
+        def compute_min_lam_needed(x):
+            """逐列构造完整 Hessian，返回让 Hessian+lam*I 正定所需的最小 lam（= max(0, -eig_min)）。"""
+            H = onp.zeros((args_size, args_size))
+            for i in range(args_size):
+                v = onp.zeros(args_size)
+                v[i] = 1.0
+                H[:, i] = onp.asarray(jit_hvp(x, jnp.asarray(v), jax_data))
+            eig_min = onp.linalg.eigvalsh((H + H.T) / 2.0)[0]
+            return max(0.0, -float(eig_min)), float(eig_min)
+
+        # 记录容器：每个记录步保存一组数据
+        trace_steps = []
+        trace_args = []
+        trace_likelihood = []
+        trace_lam_used = []
+        trace_cg_iters = []
+        trace_min_lam_needed = []
+        trace_hessian_eig_min = []
+
+        record_every = 10
 
         max_steps = 1000
     
@@ -639,18 +668,30 @@ def main():
             params = new_params
             n_iter = i + 1
             
-            if i % 10 == 0 or i == max_steps - 1:
-                # 为分布式正常运行，cur_loss需要所有节点共同计算
+            if i % record_every == 0 or i == max_steps - 1:
+                # 为分布式正常运行，cur_loss / Hessian 特征值需要所有节点共同计算（collective 同步）
                 cur_loss = jit_likelihood(params, jax_data)
+                min_lam_needed, hessian_eig_min = compute_min_lam_needed(params)
+
+                cg_iters = info.get("cg_iters", -1)
+                cg_resid = info.get("cg_resid", float("nan"))
+                lam_used = info.get("lam_used", float("nan"))
+
                 if is_chief:
-                    cg_iters = info.get("cg_iters", -1)
-                    cg_resid = info.get("cg_resid", float("nan"))
-                    #print(info)
-                    #print(state)
+                    trace_steps.append(i)
+                    trace_args.append(onp.asarray(params))
+                    trace_likelihood.append(float(cur_loss))
+                    trace_lam_used.append(float(lam_used))
+                    trace_cg_iters.append(int(cg_iters))
+                    trace_min_lam_needed.append(min_lam_needed)
+                    trace_hessian_eig_min.append(hessian_eig_min)
+
                     logger.info(
                         f"Step {i}: likelihood={float(cur_loss):.6f}, "
+                        f"lam_used={float(lam_used):.3e}, "
                         f"cg_iters={int(cg_iters)}, cg_resid={float(cg_resid):.2e}, "
-                        f"update_l1norm = {update_l1norm:.9e}"
+                        f"update_l1norm = {update_l1norm:.9e}, "
+                        f"hessian_eig_min={hessian_eig_min:.3e}, min_lam_needed~{min_lam_needed:.3e}"
                     )
 
 
@@ -684,7 +725,6 @@ def main():
         # 误差计算：逐列构造 Hessian（所有进程一致执行 collective）
         if is_chief:
             logger.info("计算参数误差（Hessian逆矩阵）...")
-        args_size = onp.asarray(args_list).shape[0]
         hessian_matrix = onp.zeros([args_size, args_size])
         for i in range(args_size):
             v = onp.zeros(args_size)
@@ -703,6 +743,18 @@ def main():
             logger.info("参数已保存至 output/fit/fit_result_values.npy")
             save_result(result_x_np, ferror, "output/fit/free_params_fitted.toml")
             logger.info("配置已保存至 output/fit/free_params_fitted.toml")
+
+            onp.savez(
+                "output/fit/optimization_trace.npz",
+                steps=onp.asarray(trace_steps),
+                args=onp.asarray(trace_args),
+                likelihood=onp.asarray(trace_likelihood),
+                lam_used=onp.asarray(trace_lam_used),
+                cg_iters=onp.asarray(trace_cg_iters),
+                min_lam_needed=onp.asarray(trace_min_lam_needed),
+                hessian_eig_min=onp.asarray(trace_hessian_eig_min),
+            )
+            logger.info("优化过程记录已保存至 output/fit/optimization_trace.npz")
 
     return 0
 

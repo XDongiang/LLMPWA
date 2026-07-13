@@ -1,3 +1,5 @@
+
+
 [header]
 IP = "192.168.1.13"
 PORT = 12345 
@@ -13,13 +15,27 @@ IB_IF="rocep1s0f0,roceP2p1s0f0"
 IP = "192.168.1.12"
 #ETH_IF="enp1s0f0np0"
 # 由于spark上一个connectx7接口对应linux系统中两个设备
-IB_IF="rocep1s0f0,roceP2p1s0f0"
+#IB_IF="rocep1s0f0,roceP2p1s0f0"
+IB_IF="rocep1s0f1,roceP2p1s0f1"
+Username = "nvidia"
+
+
+[[worker]]
+IP = "192.168.1.11"
+IB_IF="rocep1s0f1,roceP2p1s0f1"
+Username = "nvidia"
+
+[[worker]]
+IP = "192.168.1.10"
+IB_IF="rocep1s0f1,roceP2p1s0f1"
 Username = "nvidia"
 
 
 [container]
 image = "jax:latest"
 container = "kkfit"
+# 相对于workdir
+script = "run/generated_script.py"
 env = [
     "NCCL_DEBUG=INFO", 
     "NCCL_IGNORE_CPU_AFFINITY=1",
