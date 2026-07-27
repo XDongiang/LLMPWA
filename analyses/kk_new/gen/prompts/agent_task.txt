@@ -1,0 +1,8 @@
+Demo task for the agent stage framework:
+
+1. Use ask_user to ask the human for a short phrase (any string is fine).
+2. Write that phrase into gen/fragments/agent_demo_note.txt using the write tool.
+3. Optionally read the file back to verify.
+4. Call task with action="finish" and set result to the absolute-or-relative
+   path of the note file plus the phrase, e.g.:
+   gen/fragments/agent_demo_note.txt :: <phrase>

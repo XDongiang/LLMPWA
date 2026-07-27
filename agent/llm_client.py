@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
@@ -52,3 +52,41 @@ class LLMClient:
             code = _strip_fences(self._client.extract_content(resp2))
 
         return code
+
+    def chat_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        tool_choice: Optional[Any] = "auto",
+        temperature: float = 1.0,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        One agent turn: chat.completions with tools.
+
+        Returns:
+            (assistant_message, tool_calls, raw_response)
+        """
+        from easytrans_client import EasyTransError
+
+        used_model = model or self.model
+        response = self._client.chat_completion(
+            messages=messages,
+            model=used_model,
+            temperature=temperature,
+            tools=tools or None,
+            tool_choice=tool_choice if tools else None,
+        )
+        if not self._client.validate_response(response):
+            raise EasyTransError(
+                "LLM chat_with_tools response validation failed: "
+                f"keys={list(response.keys())}"
+            )
+        message = self._client.extract_message(response)
+        if not message:
+            raise EasyTransError(
+                "LLM chat_with_tools returned empty assistant message. "
+                f"response keys={list(response.keys())}"
+            )
+        tool_calls = self._client.extract_tool_calls(response)
+        return message, tool_calls, response

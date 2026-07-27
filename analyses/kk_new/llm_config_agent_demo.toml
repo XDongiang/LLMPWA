@@ -1,0 +1,21 @@
+# 最小 agent stage 演示配置（不进入默认 fit 流水线）
+# 运行：
+#   python -m agent.cli --workdir analyses/kk_new --config llm_config_agent_demo.toml --check-only
+#   python -m agent.cli --workdir analyses/kk_new --config llm_config_agent_demo.toml
+#
+# 模型需支持 OpenAI tools / tool_calls。交互需要 TTY（ask_user）。
+
+[stages.agent_demo]
+kind = "agent"
+system_prompt = { type = "file", path = "gen/prompts/agent_system.txt" }
+prompt = { type = "file", path = "gen/prompts/agent_task.txt" }
+tools = ["read", "write", "shell", "task", "ask_user"]
+max_turns = 12
+cwd = "."
+workspace_root = "."
+cache = false
+finish_on_message = false
+on_max_turns = "error"
+output_type = "text"
+output.all = { type = "file", path = "gen/fragments/agent_demo_result.txt" }
+output.transcript = { type = "file", path = "gen/llm_logs/agent_demo_transcript.json" }

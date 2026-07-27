@@ -65,6 +65,8 @@ class StageRunner:
             self._execute_foreach()
         elif kind == "llm":
             self._execute_llm()
+        elif kind == "agent":
+            self._execute_agent()
         else:
             raise ValueError(f"Unknown stage kind: {kind!r}")
 
@@ -179,6 +181,15 @@ class StageRunner:
                 foreach_key=key,
             )
             sub_runner._execute_llm()
+
+    # ------------------------------------------------------------------
+    # agent stage
+    # ------------------------------------------------------------------
+
+    def _execute_agent(self) -> None:
+        from agent_stage import AgentStageRunner
+
+        AgentStageRunner(self.name, self.stage_cfg, self.engine).execute()
 
     # ------------------------------------------------------------------
     # Prompt construction

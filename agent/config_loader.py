@@ -80,6 +80,24 @@ class StageConfig:
 
         self.prompt: Optional[Any] = raw.get("prompt")
         self.human_prompt: Optional[str] = raw.get("human_prompt")
+        # agent stage 额外字段
+        self.system_prompt: Optional[Any] = raw.get("system_prompt")
+        tools_raw = raw.get("tools")
+        if tools_raw is None:
+            self.tools: Optional[List[str]] = None  # None → 使用默认全量工具
+        elif isinstance(tools_raw, list):
+            self.tools = [str(t) for t in tools_raw]
+        else:
+            raise ConfigError(
+                f"stage '{name}': tools must be a list of strings, got {type(tools_raw)}"
+            )
+        self.max_turns: int = int(raw.get("max_turns", 20))
+        self.cwd: str = str(raw.get("cwd", "."))
+        self.workspace_root: str = str(raw.get("workspace_root", "."))
+        # agent 默认不 cache（HITL 对话不可盲目复用）
+        self.cache: bool = bool(raw.get("cache", False if self.kind == "agent" else True))
+        self.finish_on_message: bool = bool(raw.get("finish_on_message", False))
+        self.on_max_turns: str = str(raw.get("on_max_turns", "error"))
 
         # foreach 可以是字符串（foreach_source）或 dict（{type, path/values, field?}）
         foreach_raw = raw.get("foreach") or raw.get("foreach_source")
@@ -150,12 +168,34 @@ class ConfigLoader:
             if not isinstance(stage, dict):
                 raise ConfigError(f"{path}: stage '{name}' must be a table, got {type(stage)}")
             kind = stage.get("kind", "")
-            if kind not in ("python", "llm"):
+            if kind not in ("python", "llm", "agent"):
                 raise ConfigError(
                     f"{path}: stage '{name}' has invalid kind={kind!r}. "
-                    f"Expected one of: python, llm"
+                    f"Expected one of: python, llm, agent"
                 )
             if kind == "python" and not stage.get("handler"):
                 raise ConfigError(f"{path}: stage '{name}' (python) missing 'handler'")
             if kind == "llm" and not stage.get("prompt"):
                 raise ConfigError(f"{path}: stage '{name}' (llm) missing 'prompt'")
+            if kind == "agent":
+                has_prompt = bool(
+                    stage.get("prompt")
+                    or stage.get("system_prompt")
+                    or stage.get("human_prompt")
+                )
+                if not has_prompt:
+                    raise ConfigError(
+                        f"{path}: stage '{name}' (agent) needs at least one of "
+                        "prompt / system_prompt / human_prompt"
+                    )
+                on_max = stage.get("on_max_turns", "error")
+                if on_max not in ("error", "use_last_message"):
+                    raise ConfigError(
+                        f"{path}: stage '{name}' on_max_turns must be "
+                        f"'error' or 'use_last_message', got {on_max!r}"
+                    )
+                max_turns = stage.get("max_turns", 20)
+                if not isinstance(max_turns, int) or max_turns <= 0:
+                    raise ConfigError(
+                        f"{path}: stage '{name}' max_turns must be a positive int"
+                    )

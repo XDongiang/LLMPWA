@@ -47,13 +47,15 @@ class EasyTransClient:
 
     def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         model: Optional[str] = None,
         temperature: float = 1.0,
         max_tokens: Optional[int] = None,
         stream: bool = False,
         functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, str]]] = None
+        function_call: Optional[Union[str, Dict[str, str]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         model = model or self.model
 
@@ -69,6 +71,10 @@ class EasyTransClient:
             kwargs["functions"] = functions
         if function_call:
             kwargs["function_call"] = function_call
+        if tools:
+            kwargs["tools"] = tools
+        if tool_choice is not None:
+            kwargs["tool_choice"] = tool_choice
 
         try:
             response = self.client.chat.completions.create(**kwargs)
@@ -124,7 +130,13 @@ class EasyTransClient:
     def validate_response(self, response: Dict[str, Any]) -> bool:
         if 'choices' in response:
             choice = response['choices'][0]
-            return choice.get('finish_reason') in ['stop', None] or choice.get('message', {}).get('function_call')
+            finish = choice.get('finish_reason')
+            message = choice.get('message') or {}
+            if finish in ('stop', 'tool_calls', 'function_call', None):
+                return True
+            if message.get('function_call') or message.get('tool_calls'):
+                return True
+            return False
 
         if 'status' in response:
             return response['status'] in ['completed', 'queued', 'processing']
@@ -185,6 +197,39 @@ class EasyTransClient:
             message = choice.get('message', {})
             return message.get('function_call')
         return None
+
+    def extract_message(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the assistant message dict from a chat.completions response."""
+        if 'choices' in response and response['choices']:
+            message = response['choices'][0].get('message') or {}
+            if isinstance(message, dict):
+                return message
+        return {}
+
+    def extract_tool_calls(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Extract modern OpenAI tool_calls from a chat completion response.
+
+        Each item: {"id": str, "type": "function", "function": {"name": str, "arguments": str}}
+        Falls back to legacy single function_call when tool_calls is absent.
+        """
+        message = self.extract_message(response)
+        tool_calls = message.get('tool_calls') or []
+        if isinstance(tool_calls, list) and tool_calls:
+            return [tc for tc in tool_calls if isinstance(tc, dict)]
+
+        # Legacy functions API → normalize to one synthetic tool_call
+        fn = message.get('function_call')
+        if isinstance(fn, dict) and fn.get('name'):
+            return [{
+                "id": "function_call_0",
+                "type": "function",
+                "function": {
+                    "name": fn.get("name", ""),
+                    "arguments": fn.get("arguments") or "{}",
+                },
+            }]
+        return []
 
 
 class EasyTransError(Exception):

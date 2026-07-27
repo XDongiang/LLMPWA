@@ -49,6 +49,22 @@ class Validator:
             if not prompt_path.exists():
                 errors.append(f"Stage '{name}': prompt file not found: {prompt_path}")
 
+        if isinstance(stage.system_prompt, dict) and stage.system_prompt.get("type") == "file":
+            sp_path = self.workdir / stage.system_prompt["path"]
+            if not sp_path.exists():
+                errors.append(
+                    f"Stage '{name}': system_prompt file not found: {sp_path}"
+                )
+
+        if stage.kind == "agent" and stage.tools is not None:
+            try:
+                from tools.registry import validate_tool_names
+
+                for err in validate_tool_names(stage.tools):
+                    errors.append(f"Stage '{name}': {err}")
+            except Exception as e:
+                errors.append(f"Stage '{name}': failed to validate tools: {e}")
+
     def _check_stage_refs(
         self, name: str, stage: StageConfig, preceding: set, errors: List[str]
     ) -> None:
@@ -60,6 +76,13 @@ class Validator:
                 texts_to_scan.append(prompt_path.read_text(encoding="utf-8"))
         elif isinstance(stage.prompt, str):
             texts_to_scan.append(stage.prompt)
+
+        if isinstance(stage.system_prompt, dict) and stage.system_prompt.get("type") == "file":
+            sp_path = self.workdir / stage.system_prompt["path"]
+            if sp_path.exists():
+                texts_to_scan.append(sp_path.read_text(encoding="utf-8"))
+        elif isinstance(stage.system_prompt, str):
+            texts_to_scan.append(stage.system_prompt)
 
         if stage.human_prompt:
             texts_to_scan.append(stage.human_prompt)
