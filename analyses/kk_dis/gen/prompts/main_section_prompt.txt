@@ -1,0 +1,27 @@
+### 1. 任务目标
+你的任务是：
+1. 理解输入信息中函数的信息，整理出这些函数之间的关联，以及输入了哪些类型的共振态。
+2. 理解函数模板中主程序入口例子中各个函数的调用和输入信息中的主程序入口函数调用之间的关系。
+3. 根据你的理解，生成主程序入口部分脚本。
+4. 要求返回的内容只包含python代码的字符串，不包含解释、代码框、注释或额外文本，缩进和函数组织方式与函数例子一致。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+
+### 2. 函数模板：
+<<ref.code_template.main_section>>
+
+### 3. 输入部分
+<<ref.code_template.COMMON_UTILITIES>>
+
+<<ref.code_template.PATH_CONFIG>>
+
+<<ref.code_template.LOGGING_CONFIG>>
+
+<<ref.code_template.DPLEX_FUNCTIONS>>
+
+<<ref.code_template.PHYSICS_FUNCTIONS>>
+
+<<stages.resonance_calculation[*].all>>
+
+<<stages[*].all>>
+
+
+

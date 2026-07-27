@@ -1,14 +1,15 @@
 """
-多节点数据并行 PWA 拟合脚本（somax Newton-CG 版本，随机初值多次重启扫描）
+多节点数据并行 PWA 拟合脚本（SciPy Newton-CG 版本，随机初值多次重启扫描）
 
-架构：与 fit_script_distributed_somax.py 完全一致的分布式 event-shard + somax
-Newton-CG 优化，唯一区别是：
+架构：与 fit_script_distributed_scipy.py 完全一致的分布式 event-shard + SciPy
+Newton-CG + HVP 优化，唯一区别是：
 - 每次试验先对初始参数做随机偏移（const/theta 重新采样到半径 0.1 的圆上，
-  再对全部参数施加一个统一的乘性抖动），然后从该偏移点完整跑一次 Newton-CG
-  优化直至收敛
-- 记录每次试验的初始/最终 likelihood、迭代次数、是否收敛、耗时
+  再对全部参数施加一个统一的乘性抖动），然后从该偏移点完整跑一次 SciPy
+  Newton-CG 优化直至收敛
+- 记录每次试验的初始/最终 likelihood、迭代/函数调用次数、是否收敛、耗时
 - 所有进程使用同一个 seed（base_seed + trial_idx）生成偏移，因此各进程算出的
-  偏移值完全一致，不需要额外通信
+  偏移值完全一致，不需要额外通信；每个进程运行相同的 SciPy 优化循环，触发
+  完全一致的 collective 调用顺序
 - 结果保存到 output/fit/random_restart_trace.npz；likelihood 最优的一组参数
   额外保存为 output/fit/free_params_fitted_best_restart.toml
 """
@@ -22,14 +23,13 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 import time
 import numpy as onp
 from functools import partial
+from scipy.optimize import minimize
 
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, vmap, jvp, device_put
 from jax import config
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
-
-import somax
 
 import toml
 import sys
@@ -362,139 +362,153 @@ def shard_data_distributed(data, mesh):
     return jax_data
 
 
-def data_step_function(total_frac, args):
-    step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
-    step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
-    step_value += jnp.power(1.704 - args[5], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(0.123 - args[6], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(1.2755 - args[11], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(0.1867 - args[12], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(1.517 - args[23], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(0.086 - args[24], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(2.157 - args[35], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(0.152 - args[36], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(2.345 - args[47], 2.0) / jnp.power(0.01, 2.0) / 2.0
-    step_value += jnp.power(0.322 - args[48], 2.0) / jnp.power(1.0, 2.0) / 2.0
-    step_value += jnp.power(2.47 - args[59], 2.0) / jnp.power(0.007, 2.0) / 2.0
-    step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
-    return step_value
+# =============================================================================
+# 分布式 likelihood 函数
+# 关键：jnp.sum / jnp.mean 作用在 sharded array 上时，XLA 自动插入 all-reduce
+# =============================================================================
 
+def make_distributed_likelihood(data_size):
+    """
+    构建分布式 combined_likelihood 函数。
 
-def data_likelihood_kk(args, jax_data):
-    params = extract_parameters(args)
+    注意：在多进程 JAX 中，jit 函数不能通过闭包捕获跨进程（non-addressable）的
+    sharded array，否则会报 "Closing over jax.Array that spans non-addressable
+    devices is not allowed"。因此分片数据必须作为显式参数传入。
 
-    d_phi_kk = jax_data['data_phi_kk']
-    d_f_kk = jax_data['data_f_kk']
-    d_phif0_kk = jax_data['data_phif0_kk']
-    d_phif2_kk = jax_data['data_phif2_kk']
+    返回的 combined_likelihood(args, jax_data) 接收：
+      - args:     全局复制的参数向量（被微分变量）
+      - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
+    """
 
-    t_phi_kk = jax_data['truth_phi_kk']
-    t_f_kk = jax_data['truth_f_kk']
-    t_phif0_kk = jax_data['truth_phif0_kk']
-    t_phif2_kk = jax_data['truth_phif2_kk']
+    def data_step_function(total_frac, args):
+        step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
+        step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
+        step_value += jnp.power(1.704 - args[5], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(0.123 - args[6], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(1.2755 - args[11], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(0.1867 - args[12], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(1.517 - args[23], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(0.086 - args[24], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(2.157 - args[35], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(0.152 - args[36], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(2.345 - args[47], 2.0) / jnp.power(0.01, 2.0) / 2.0
+        step_value += jnp.power(0.322 - args[48], 2.0) / jnp.power(1.0, 2.0) / 2.0
+        step_value += jnp.power(2.47 - args[59], 2.0) / jnp.power(0.007, 2.0) / 2.0
+        step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
+        return step_value
 
-    data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
-        params['phi_mass'], params['phi_width'], d_phi_kk,
-        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-        params['phif0_kk_BW_flatte980_rg'], d_f_kk,
-        d_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
-        )
-    data_phif0_kk_BW_BW = calculate_BW_BW(
-        params['phi_mass'], params['phi_width'], d_phi_kk,
-        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], d_f_kk,
-        d_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
-        )
-    data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
-        params['phi_mass'], params['phi_width'], d_phi_kk,
-        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], d_f_kk,
-        d_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
-        )
-    data_phif2_kk_BW_BW = calculate_BW_BW(
-        params['phi_mass'], params['phi_width'], d_phi_kk,
-        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], d_f_kk,
-        d_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
-        )
+    def data_likelihood_kk(args, jax_data):
+        params = extract_parameters(args)
 
-    comp_f0_flatte980 = component_BW_flatte980(
-        params['phi_mass'], params['phi_width'], t_phi_kk,
-        params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-        params['phif0_kk_BW_flatte980_rg'], t_f_kk,
-        t_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
+        d_phi_kk = jax_data['data_phi_kk']
+        d_f_kk = jax_data['data_f_kk']
+        d_phif0_kk = jax_data['data_phif0_kk']
+        d_phif2_kk = jax_data['data_phif2_kk']
+
+        t_phi_kk = jax_data['truth_phi_kk']
+        t_f_kk = jax_data['truth_f_kk']
+        t_phif0_kk = jax_data['truth_phif0_kk']
+        t_phif2_kk = jax_data['truth_phif2_kk']
+
+        data_phif0_kk_BW_flatte980 = calculate_BW_flatte980(
+            params['phi_mass'], params['phi_width'], d_phi_kk,
+            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+            params['phif0_kk_BW_flatte980_rg'], d_f_kk,
+            d_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
         )
-    comp_f0_BW = component_BW_BW(
-        params['phi_mass'], params['phi_width'], t_phi_kk,
-        params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], t_f_kk,
-        t_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        data_phif0_kk_BW_BW = calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], d_phi_kk,
+            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], d_f_kk,
+            d_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
         )
-    comp_f2_flatte1270 = component_BW_flatte1270(
-        params['phi_mass'], params['phi_width'], t_phi_kk,
-        params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], t_f_kk,
-        t_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        data_phif2_kk_BW_flatte1270 = calculate_BW_flatte1270(
+            params['phi_mass'], params['phi_width'], d_phi_kk,
+            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], d_f_kk,
+            d_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
         )
-    comp_f2_BW = component_BW_BW(
-        params['phi_mass'], params['phi_width'], t_phi_kk,
-        params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], t_f_kk,
-        t_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        data_phif2_kk_BW_BW = calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], d_phi_kk,
+            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], d_f_kk,
+            d_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
         )
 
-    sum_frac = jnp.sum(dplex_dabs(
+        # truth constraint — 使用 truth shard
+        comp_f0_flatte980 = component_BW_flatte980(
+            params['phi_mass'], params['phi_width'], t_phi_kk,
+            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+            params['phif0_kk_BW_flatte980_rg'], t_f_kk,
+            t_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        )
+        comp_f0_BW = component_BW_BW(
+            params['phi_mass'], params['phi_width'], t_phi_kk,
+            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], t_f_kk,
+            t_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        )
+        comp_f2_flatte1270 = component_BW_flatte1270(
+            params['phi_mass'], params['phi_width'], t_phi_kk,
+            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], t_f_kk,
+            t_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        )
+        comp_f2_BW = component_BW_BW(
+            params['phi_mass'], params['phi_width'], t_phi_kk,
+            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], t_f_kk,
+            t_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        )
+
+        # fraction 计算 — jnp.sum 在 sharded 数组上自动 all-reduce
+        sum_frac = jnp.sum(dplex_dabs(
             jnp.einsum("mljk->mjk", comp_f0_flatte980) +
             jnp.einsum("mljk->mjk", comp_f0_BW) +
             jnp.einsum("mljk->mjk", comp_f2_flatte1270) +
             jnp.einsum("mljk->mjk", comp_f2_BW)
         ))
-    frac_f0_flatte980 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_flatte980)) / sum_frac)
-    frac_f0_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_BW)) / sum_frac)
-    frac_f2_flatte1270 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_flatte1270)) / sum_frac)
-    frac_f2_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_BW)) / sum_frac)
-    total_frac = frac_f0_flatte980 + frac_f0_BW + frac_f2_flatte1270 + frac_f2_BW
+        frac_f0_flatte980 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_flatte980)) / sum_frac)
+        frac_f0_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f0_BW)) / sum_frac)
+        frac_f2_flatte1270 = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_flatte1270)) / sum_frac)
+        frac_f2_BW = jnp.sum(jnp.einsum("ljk->l", dplex_dabs(comp_f2_BW)) / sum_frac)
+        total_frac = frac_f0_flatte980 + frac_f0_BW + frac_f2_flatte1270 + frac_f2_BW
 
-    step_function = data_step_function(total_frac, args)
+        step_function = data_step_function(total_frac, args)
 
-    total_amplitude = (data_phif0_kk_BW_flatte980 + data_phif0_kk_BW_BW +
+        # data NLL — jnp.sum(log(...)) 在 sharded array 上自动 all-reduce
+        total_amplitude = (data_phif0_kk_BW_flatte980 + data_phif0_kk_BW_BW +
                            data_phif2_kk_BW_flatte1270 + data_phif2_kk_BW_BW)
-    likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
-    return likelihood
+        likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
+        return likelihood
 
+    def mc_likelihood_kk(args, jax_data):
+        params = extract_parameters(args)
 
-def mc_likelihood_kk(args, jax_data):
-    params = extract_parameters(args)
+        # 解包分片 MC 数据
+        m_phi_kk = jax_data['mc_phi_kk']
+        m_f_kk = jax_data['mc_f_kk']
+        m_phif0_kk = jax_data['mc_phif0_kk']
+        m_phif2_kk = jax_data['mc_phif2_kk']
 
-    m_phi_kk = jax_data['mc_phi_kk']
-    m_f_kk = jax_data['mc_f_kk']
-    m_phif0_kk = jax_data['mc_phif0_kk']
-    m_phif2_kk = jax_data['mc_phif2_kk']
-
-    total_mc = calculate_BW_flatte980(
+        total_mc = calculate_BW_flatte980(
             params['phi_mass'], params['phi_width'], m_phi_kk,
             params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
             params['phif0_kk_BW_flatte980_rg'], m_f_kk,
             m_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
         )
-    total_mc = total_mc + calculate_BW_BW(
+        total_mc = total_mc + calculate_BW_BW(
             params['phi_mass'], params['phi_width'], m_phi_kk,
             params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], m_f_kk,
             m_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
         )
-    total_mc = total_mc + calculate_BW_flatte1270(
+        total_mc = total_mc + calculate_BW_flatte1270(
             params['phi_mass'], params['phi_width'], m_phi_kk,
             params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], m_f_kk,
             m_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
         )
-    total_mc = total_mc + calculate_BW_BW(
+        total_mc = total_mc + calculate_BW_BW(
             params['phi_mass'], params['phi_width'], m_phi_kk,
             params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
             m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
         )
-    return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
-
-
-def make_distributed_likelihood(data_size):
-    """
-    构建分布式 combined_likelihood 函数。
-    combined_likelihood(args, jax_data) 接收全局复制的参数向量和分片数据 dict，
-    符合 somax 的 LossFn 协议：loss_fn(params, batch) -> scalar
-    """
+        # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
+        return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
 
     def combined_likelihood(args, jax_data):
         return data_likelihood_kk(args, jax_data) + data_size * jnp.log(mc_likelihood_kk(args, jax_data))
@@ -539,7 +553,9 @@ def perturb_args(base_args, const_idx, theta_idx, seed, disturb=50.0):
 
 
 # =============================================================================
-# Main：分布式 somax Newton-CG 拟合，随机初值多次重启扫描
+# Main：分布式 SciPy Newton-CG 拟合，随机初值多次重启扫描
+# 每个进程运行相同的 SciPy 优化循环、相同输入、相同 collective 调用顺序
+# 只让 process 0 写日志和保存结果
 # =============================================================================
 
 def main():
@@ -550,7 +566,7 @@ def main():
 
     logger = setup_logging()
     if is_chief:
-        logger.info("开始分布式 somax Newton-CG 随机初值重启扫描")
+        logger.info("开始分布式 SciPy Newton-CG 随机初值重启扫描")
         logger.info(f"进程数: {num_processes}, 全局设备数: {jax.device_count()}")
 
     global constraint_strength, total_frac_kk
@@ -571,40 +587,29 @@ def main():
 
         combined_likelihood = make_distributed_likelihood(data_size)
 
+        def likelihood_for_grad(args, jax_data):
+            return combined_likelihood(args, jax_data)
+
         def hvp_combined_likelihood(x, v, jax_data):
+            # jvp 要求 tangents 与 primals 的 pytree 结构完全一致
             zero_data = jax.tree.map(jnp.zeros_like, jax_data)
-            return jvp(grad(combined_likelihood), (x, jax_data), (v, zero_data))[1]
+            return jvp(grad(likelihood_for_grad), (x, jax_data), (v, zero_data))[1]
 
         replicated = NamedSharding(mesh, P())
+
+        if is_chief:
+            logger.info("编译 JAX 函数（分布式 HVP 版本）...")
         jit_likelihood = jit(combined_likelihood)
+        jit_grad = jit(grad(likelihood_for_grad))
         jit_hvp = jit(hvp_combined_likelihood)
 
         args_size = base_args.shape[0]
 
-        # somax Newton-CG 优化器，构建一次即可复用于每次随机重启试验
-        method = somax.make(
-            "newton_cg",
-            loss_fn=combined_likelihood,
-            lam_policy="trust_region",
-            lam_kwargs={"max_lam": 1e9, "min_lam": 1e-1, "dec": 0.97, "inc": 1.5},
-            tol=1e-4,
-            maxiter=args_size * 2,
-            warm_start=True,
-            stabilise_every=1,
-            learning_rate=1,
-            record_cg_stats=True,
-        )
-
-        @jax.jit
-        def opt_step(params, state, rng, jax_data):
-            return method.step(params, jax_data, state, rng)
-
-        avextol = 1e-8
-        xtol = args_size * avextol
-        max_steps = 1000
+        def hessp(x, p):
+            return onp.array(jit_hvp(jnp.asarray(x), jnp.asarray(p), jax_data))
 
         n_trials = 10
-        base_seed = 20260718
+        base_seed = 20260710
 
         trace_trial = []
         trace_seed = []
@@ -613,6 +618,9 @@ def main():
         trace_final_args = []
         trace_final_likelihood = []
         trace_n_iter = []
+        trace_nfev = []
+        trace_njev = []
+        trace_nhev = []
         trace_converged = []
         trace_elapsed = []
 
@@ -626,75 +634,39 @@ def main():
             trial_seed = base_seed + trial
 
             perturbed = perturb_args(base_args, const_idx, theta_idx, trial_seed)
-            params = jax.device_put(jnp.asarray(perturbed), replicated)
+            args_list = jax.device_put(jnp.asarray(perturbed), replicated)
 
-            init_loss = float(jit_likelihood(params, jax_data))
+            init_loss = float(jit_likelihood(args_list, jax_data))
 
-            # 在每次试验开始优化前，用 H 计算所需的 lam0
-            H0 = onp.zeros((args_size, args_size))
-            for i in range(args_size):
-                v = onp.zeros(args_size)
-                v[i] = 1.0
-                H0[:, i] = onp.asarray(jit_hvp(params, jnp.asarray(v), jax_data))
-
-            w = onp.linalg.eigvalsh((H0 + H0.T) / 2)
-            lam0 = float(- w[0] * 2 + 1)
             if is_chief:
-                logger.info(f"Trial {trial}: H eig min={w[0]}, max={w[-1]}, lam={lam0}")
-
-            method.damping = method.damping.replace(lam0=lam0)
-            state = method.init(params)
-            rng = jax.random.PRNGKey(trial_seed)
-
-            update_l1norm = onp.finfo(float).max
-            n_iter = 0
-            converged = False
+                logger.info(f"Trial {trial}: 开始优化，init_likelihood={init_loss:.6f}")
 
             trial_start = time.time()
-            cur_loss = init_loss
 
-            for i in range(max_steps):
-                rng, subkey = jax.random.split(rng)
-                new_params, state, info = opt_step(params, state, subkey, jax_data)
-                update_l1norm = float(jnp.linalg.norm(new_params - params, ord=1))
+            # 闭包捕获当前 trial，使 callback 日志显示正确的 trial 编号
+            _trial = trial
+            def my_callback(x, _t=_trial):
+                # 所有进程都需调用 jit_likelihood 保持 collective 同步
+                current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
+                current_likelihood.block_until_ready()
+                if is_chief:
+                    logger.info(f"Trial {_t}: 当前似然值: {current_likelihood}")
 
-
-                if onp.isnan(info.get("cg_resid", float("nan"))):
-                    # cg nan break
-                    break
-
-                if update_l1norm <= xtol:
-                    converged = True
-                    break
-
-                new_cur_loss = jit_likelihood(new_params, jax_data)
-
-                if jnp.isnan(new_cur_loss):
-                    # loss nan break
-                    break
-
-                if new_cur_loss > cur_loss + 0.05 * jnp.abs(cur_loss):
-                    # loss blow up
-                    break
-
-                params = new_params
-                n_iter = i + 1
-                cur_loss = new_cur_loss
-
-
-                if i % 10 == 0 or i == max_steps - 1:
-                    if is_chief:
-                        logger.info(
-                            f"Trial {trial}: iter {i}, "
-                            f"cg_resid={info['cg_resid']:.6f}, "
-                            f"update_l1norm={update_l1norm:.6e}, "
-                            f"lam_used={info['lam_used']:.6e}, "
-                            f"loss={cur_loss:.6f}"
-                        )
+            # 所有进程运行相同的 SciPy 循环：输入相同 x，调用顺序相同，
+            # 因此每个进程触发完全一致的 collective
+            result = minimize(
+                fun=lambda x: float(jit_likelihood(jnp.asarray(x), jax_data)),
+                x0=onp.asarray(args_list),
+                jac=lambda x: onp.array(jit_grad(jnp.asarray(x), jax_data)),
+                hessp=hessp,
+                method="Newton-CG",
+                callback=my_callback,
+                options={"disp": False, "xtol": 1e-8},
+            )
 
             trial_elapsed = time.time() - trial_start
-            final_loss = float(jit_likelihood(params, jax_data))
-            final_args = onp.asarray(params)
+            final_loss = float(result.fun)
+            final_args = onp.asarray(result.x)
 
             # final_loss / final_args 由 all-reduce 得到，所有进程结果一致；
             # 必须在所有进程上都更新 best_final_*，否则后续 Hessian 计算
@@ -710,14 +682,17 @@ def main():
                 trace_init_likelihood.append(init_loss)
                 trace_final_args.append(final_args)
                 trace_final_likelihood.append(final_loss)
-                trace_n_iter.append(n_iter)
-                trace_converged.append(converged)
+                trace_n_iter.append(result.nit)
+                trace_nfev.append(result.nfev)
+                trace_njev.append(result.njev)
+                trace_nhev.append(result.nhev)
+                trace_converged.append(bool(result.success))
                 trace_elapsed.append(trial_elapsed)
 
                 logger.info(
                     f"Trial {trial}: init_likelihood={init_loss:.6f}, "
-                    f"final_likelihood={final_loss:.6f}, n_iter={n_iter}, "
-                    f"converged={converged}, elapsed={trial_elapsed:.2f}s"
+                    f"final_likelihood={final_loss:.6f}, n_iter={result.nit}, "
+                    f"converged={result.success}, elapsed={trial_elapsed:.2f}s"
                 )
 
         if is_chief:
@@ -730,7 +705,7 @@ def main():
         if is_chief:
             logger.info("计算最优结果的参数误差（Hessian逆矩阵）...")
         best_x = jnp.asarray(
-            best_final_args if best_final_args is not None else onp.asarray(base_args)
+            best_final_args if best_final_args is not None else base_args
         )
         best_x = jax.device_put(best_x, replicated)
         hessian_matrix = onp.zeros([args_size, args_size])
@@ -761,6 +736,9 @@ def main():
                 final_args=onp.asarray(trace_final_args),
                 final_likelihood=onp.asarray(trace_final_likelihood),
                 n_iter=onp.asarray(trace_n_iter),
+                nfev=onp.asarray(trace_nfev),
+                njev=onp.asarray(trace_njev),
+                nhev=onp.asarray(trace_nhev),
                 converged=onp.asarray(trace_converged),
                 elapsed=onp.asarray(trace_elapsed),
                 best_final_loss=onp.asarray(best_final_loss),

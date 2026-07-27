@@ -1,0 +1,13 @@
+### 1. 任务目标
+你的任务是：
+1. 充分理解输入部分的load data函数和函数模板中对 load data函数的调用。
+2. 你需要加载数据，并将其归一化，放入设备，使用创建data_xxx,mc_xxx,truth_xxx变量并赋值，同时获取data长度
+3. 要求返回的内容只包含 python代码字符串，不包含解释、注释或额方式与函数例子一致。不要添加任何 #=== 或 #====== 形式的分隔符注释。
+
+### 2. 函数模板：
+<<ref.code_template.load_data_section>>
+
+### 3. 输入部分
+
+load data 函数:
+<<stages.data_load.all>>
