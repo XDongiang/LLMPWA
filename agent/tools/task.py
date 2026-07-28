@@ -47,8 +47,9 @@ TASK_TOOL = ToolSpec(
     name="task",
     description=(
         "Agent meta-control. Use action='finish' with the final result string "
-        "to end the stage and produce the primary output. Use action='note' "
-        "to record intermediate progress for the transcript (does not finish)."
+        "to submit the primary stage output for (optional) human approval; "
+        "if rejected, revise and finish again. Use action='note' to record "
+        "intermediate progress for the transcript (does not finish)."
     ),
     parameters={
         "type": "object",

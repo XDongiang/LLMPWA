@@ -1,0 +1,79 @@
+## Goal
+Interactively generate likelihood Python code from the user's LaTeX/formula, using only the necessary analysis context below — not a full code template.
+
+## Required interactive step
+1. First call ask_user to request the likelihood formula. Ask roughly:
+   "请输入 likelihood 的 LaTeX/公式说明（可包含 data/mc 项、振幅相干求和、约束项等）。
+    若有符号与下面 arg_list / data 名称的对应关系，请一并说明。"
+2. Parse the user's answer. If incomplete, ask_user follow-ups.
+3. Implement the formula as Python functions and write them to:
+   gen/fragments/agent_likelihood_function.py
+4. Optionally run a light syntax check:
+   `python -c "import ast; ast.parse(open('gen/fragments/agent_likelihood_function.py').read()); print('OK')"`
+5. task(action="finish", result=<the full generated Python source>).
+
+## Context (necessary information only)
+
+### 1) PHYSICS_FUNCTIONS (allowed resonance shape helpers)
+```python
+<<ref.code_template.DPLEX_FUNCTIONS>>
+<<ref.code_template.PHYSICS_FUNCTIONS>>
+```
+
+### 2) Resonance classification (from stages.classification)
+```json
+<<stages.classification.all>>
+```
+
+Useful fields:
+- propagator_classification: group resonances by propagator type pair
+- amplitude_classification: group by AMP + propagator types
+- parameter_lists: per-group parameter structure; free params appear as {"arg_index": n}
+- fixed_parameter: parameters that must stay fixed constants
+
+### 3) arg_list / free parameters (optimized args vector)
+Source: stages.config_strip.free_params (run/free_params.toml)
+```
+<<stages.config_strip.free_params>>
+```
+Each entry has path, value, optional range/error, and arg_index.
+The fit passes a 1-D args array; index i corresponds to arg_index=i.
+
+### 4) data types / arrays available for the formula
+sbc variables: <<stages.config_strip.all_sbc>>
+amp variables: <<stages.config_strip.all_amp>>
+sbc-amp mapping: <<stages.config_strip.all_sbc_amp>>
+
+Data shape report (if available from inspect_data_shapes):
+```
+<<stages.inspect_data_shapes.all>>
+```
+
+Conventional global array names used in fit scripts (assume already loaded):
+- data_{var}, mc_{var}, truth_{var} for each sbc/amp var
+- data_size, constraint_strength / total_frac_* may be globals if formula needs them
+
+### 5) Interface contract for generated code
+Generate at least:
+- extract_parameters(args) -> dict   # pack args[arg_index] and fixed constants into named params
+- data_likelihood_kk(args) -> scalar
+- mc_likelihood_kk(args) -> scalar
+- combined_likelihood(args) -> scalar
+  default structure if user formula does not override:
+  combined = data_likelihood_kk(args) + data_size * np.log(mc_likelihood_kk(args))
+- optional: hvp_combined_likelihood(args, vector) using jvp(grad(combined_likelihood), ...)
+
+You must also define any calculate_* / component_* helpers your formula needs, built from PHYSICS_FUNCTIONS
+(BW, flatte980, flatte1270, ...) and dplex_* operations. Do not invent unavailable physics kernels
+without asking the user.
+
+## Implementation guidance
+- Translate the user's LaTeX into executable JAX numpy code.
+- Respect classification groups for vectorization when possible.
+- Use parameter_lists + free_params to know which quantities come from args vs constants.
+- Use data shapes to choose broadcasting / einsum axes carefully.
+- Keep code compact; comments only when necessary for non-obvious formula terms.
+- Do not add #=== section separators.
+
+## Deliverable
+Write gen/fragments/agent_likelihood_function.py and finish with the file contents as result.

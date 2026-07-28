@@ -98,6 +98,10 @@ class StageConfig:
         self.cache: bool = bool(raw.get("cache", False if self.kind == "agent" else True))
         self.finish_on_message: bool = bool(raw.get("finish_on_message", False))
         self.on_max_turns: str = str(raw.get("on_max_turns", "error"))
+        # agent 提交后默认需要人工审阅同意；reject 后回灌反馈继续改
+        self.require_approval: bool = bool(
+            raw.get("require_approval", True if self.kind == "agent" else False)
+        )
 
         # foreach 可以是字符串（foreach_source）或 dict（{type, path/values, field?}）
         foreach_raw = raw.get("foreach") or raw.get("foreach_source")
@@ -198,4 +202,11 @@ class ConfigLoader:
                 if not isinstance(max_turns, int) or max_turns <= 0:
                     raise ConfigError(
                         f"{path}: stage '{name}' max_turns must be a positive int"
+                    )
+                if "require_approval" in stage and not isinstance(
+                    stage["require_approval"], bool
+                ):
+                    raise ConfigError(
+                        f"{path}: stage '{name}' require_approval must be a bool, "
+                        f"got {type(stage['require_approval']).__name__}"
                     )

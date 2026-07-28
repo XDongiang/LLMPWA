@@ -2,6 +2,8 @@
 agent_stage.py — interactive multi-turn agent stage runner (kind=agent).
 
 OpenAI tools/tool_calls loop with read/write/shell/task/ask_user.
+After task.finish (or finish_on_message), optional human approval gate
+(require_approval, default true for agent stages).
 """
 
 from __future__ import annotations
@@ -9,12 +11,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from config_loader import StageConfig
-from tools.base import ToolContext
+from tools.base import ToolContext, ToolResult
 from tools.registry import DEFAULT_TOOL_NAMES, ToolRegistry
 
 
@@ -82,7 +85,10 @@ class AgentStageRunner:
                 "You are a coding agent with tools. Use tools to inspect and "
                 "edit files under the workspace. When the task is complete, "
                 "call task with action='finish' and put the final result in "
-                "the result field. Prefer ask_user when you need human input."
+                "the result field. A human may review and reject the "
+                "submission — if rejected, revise using the feedback and "
+                "call task.finish again. Prefer ask_user when you need "
+                "human input."
             )
 
         tool_names = cfg.tools if cfg.tools is not None else DEFAULT_TOOL_NAMES
@@ -131,6 +137,7 @@ class AgentStageRunner:
         final_result: Optional[str] = None
         used_ask_user = False
         last_assistant_text = ""
+        approval_rounds = 0
 
         for turn in range(1, cfg.max_turns + 1):
             print(f"[agent] {self.name} — turn {turn}/{cfg.max_turns}")
@@ -163,68 +170,130 @@ class AgentStageRunner:
             if isinstance(content, str) and content.strip():
                 last_assistant_text = content.strip()
 
+            pending_result: Optional[str] = None
+
             if not tool_calls:
                 if cfg.finish_on_message and last_assistant_text:
-                    final_result = _strip_fences(last_assistant_text)
-                    print(f"[agent] {self.name} — finished via plain message")
+                    pending_result = _strip_fences(last_assistant_text)
+                    print(f"[agent] {self.name} — submitted via plain message")
+                else:
+                    # Nudge once toward explicit finish rather than hanging
+                    nudge = (
+                        "No tool call received. If the task is done, call the "
+                        "`task` tool with action='finish' and put the final "
+                        "output in `result`. Otherwise continue using tools."
+                    )
+                    messages.append({"role": "user", "content": nudge})
+                    transcript.append({"role": "user", "content": nudge, "turn": turn})
+                    time.sleep(0.2)
+                    continue
+            else:
+                for tc in tool_calls:
+                    tc_id = tc.get("id") or f"call_{turn}"
+                    fn = tc.get("function") or {}
+                    name = fn.get("name") or ""
+                    raw_args = fn.get("arguments")
+                    print(f"[agent] {self.name} — tool {name}({_preview_args(raw_args)})")
+
+                    result = registry.dispatch(ctx, name, raw_args)
+                    if name == "ask_user":
+                        used_ask_user = True
+                    if result.meta.get("finished"):
+                        candidate = result.meta.get("result", "")
+                        if not isinstance(candidate, str):
+                            candidate = str(candidate)
+                        pending_result = candidate
+                        # Tool message: submission received; approval is separate
+                        if cfg.require_approval:
+                            result = ToolResult(
+                                ok=True,
+                                content=(
+                                    "Submission received and queued for human review. "
+                                    "Wait for approve/reject feedback before treating "
+                                    "the stage as complete."
+                                ),
+                                meta={
+                                    **result.meta,
+                                    "finished": False,
+                                    "pending_approval": True,
+                                },
+                            )
+                        else:
+                            print(f"[agent] {self.name} — finished via task.finish")
+
+                    tool_content = result.as_tool_message_content()
+                    tool_msg = {
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": tool_content,
+                    }
+                    # Some gateways also want name on tool messages
+                    if name:
+                        tool_msg["name"] = name
+                    messages.append(tool_msg)
+                    transcript.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "name": name,
+                            "content": tool_content,
+                            "ok": result.ok,
+                            "meta": result.meta,
+                            "turn": turn,
+                        }
+                    )
+
+            if pending_result is not None:
+                if not cfg.require_approval:
+                    final_result = pending_result
                     break
-                # Nudge once toward explicit finish rather than hanging
-                nudge = (
-                    "No tool call received. If the task is done, call the "
-                    "`task` tool with action='finish' and put the final "
-                    "output in `result`. Otherwise continue using tools."
+
+                approved, feedback = self._request_human_approval(pending_result)
+                approval_rounds += 1
+                used_ask_user = True  # HITL → do not cache
+                transcript.append(
+                    {
+                        "role": "human_approval",
+                        "approved": approved,
+                        "feedback": feedback,
+                        "submitted_result": pending_result,
+                        "turn": turn,
+                        "approval_round": approval_rounds,
+                    }
                 )
-                messages.append({"role": "user", "content": nudge})
-                transcript.append({"role": "user", "content": nudge, "turn": turn})
+                if approved:
+                    final_result = pending_result
+                    print(
+                        f"[agent] {self.name} — approved "
+                        f"(round {approval_rounds})"
+                    )
+                    break
+
+                reject_msg = (
+                    "Human reviewer REJECTED your submission.\n"
+                    f"Feedback:\n{feedback or '(no additional feedback)'}\n\n"
+                    "Revise the work using tools as needed, then call "
+                    "`task` with action='finish' and an updated `result`."
+                )
+                messages.append({"role": "user", "content": reject_msg})
+                transcript.append(
+                    {
+                        "role": "user",
+                        "content": reject_msg,
+                        "turn": turn,
+                        "kind": "approval_reject",
+                    }
+                )
+                print(
+                    f"[agent] {self.name} — rejected "
+                    f"(round {approval_rounds}); continuing"
+                )
                 time.sleep(0.2)
                 continue
 
-            finished_this_turn = False
-            for tc in tool_calls:
-                tc_id = tc.get("id") or f"call_{turn}"
-                fn = tc.get("function") or {}
-                name = fn.get("name") or ""
-                raw_args = fn.get("arguments")
-                print(f"[agent] {self.name} — tool {name}({_preview_args(raw_args)})")
-
-                result = registry.dispatch(ctx, name, raw_args)
-                if name == "ask_user":
-                    used_ask_user = True
-                if result.meta.get("finished"):
-                    final_result = result.meta.get("result", "")
-                    if not isinstance(final_result, str):
-                        final_result = str(final_result)
-                    finished_this_turn = True
-
-                tool_content = result.as_tool_message_content()
-                tool_msg = {
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": tool_content,
-                }
-                # Some gateways also want name on tool messages
-                if name:
-                    tool_msg["name"] = name
-                messages.append(tool_msg)
-                transcript.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "name": name,
-                        "content": tool_content,
-                        "ok": result.ok,
-                        "meta": result.meta,
-                        "turn": turn,
-                    }
-                )
-
-            if finished_this_turn:
-                print(f"[agent] {self.name} — finished via task.finish")
-                break
-
             time.sleep(0.2)
         else:
-            # max_turns exhausted without finish
+            # max_turns exhausted without approved finish
             if cfg.on_max_turns == "use_last_message" and last_assistant_text:
                 final_result = _strip_fences(last_assistant_text)
                 print(
@@ -234,7 +303,12 @@ class AgentStageRunner:
             else:
                 raise RuntimeError(
                     f"Stage '{self.name}': agent exceeded max_turns={cfg.max_turns} "
-                    "without task.finish"
+                    "without approved task.finish"
+                    + (
+                        f" (had {approval_rounds} rejection(s))"
+                        if approval_rounds
+                        else ""
+                    )
                 )
 
         if final_result is None:
@@ -258,6 +332,8 @@ class AgentStageRunner:
             "stage": self.name,
             "turns": len({t.get("turn") for t in transcript if "turn" in t}),
             "used_ask_user": used_ask_user,
+            "require_approval": cfg.require_approval,
+            "approval_rounds": approval_rounds,
             "messages": transcript,
             "final_result": final_result,
         }
@@ -318,6 +394,72 @@ class AgentStageRunner:
             json.dumps(transcript, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+    def _request_human_approval(self, submitted: str) -> Tuple[bool, str]:
+        """Block for human approve/reject of a task.finish submission.
+
+        Returns (approved, feedback). feedback is empty on approve (unless
+        the operator typed more than the keyword); on reject it is the
+        remaining text after 'reject' or the full free-form reply.
+        """
+        preview = submitted if len(submitted) <= 4000 else (
+            submitted[:2000]
+            + f"\n\n...[{len(submitted) - 4000} chars omitted]...\n\n"
+            + submitted[-2000:]
+        )
+        print("\n" + "=" * 60)
+        print(f"[agent:{self.name}] human approval required")
+        print("The agent submitted the following result for review:")
+        print("-" * 60)
+        print(preview)
+        print("-" * 60)
+        print(
+            "Reply with: approve | a | yes | y   to accept and end the stage\n"
+            "            reject | r | no | n [feedback...]  to send back\n"
+            "Or type free-form feedback (treated as reject)."
+        )
+        print("=" * 60)
+
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                f"Stage '{self.name}': require_approval=true needs an interactive "
+                "TTY stdin to approve/reject the agent submission. Re-run in a "
+                "terminal, or set require_approval=false for non-interactive runs."
+            )
+
+        try:
+            answer = input("Approval> ").strip()
+        except EOFError as e:
+            raise RuntimeError(
+                f"Stage '{self.name}': stdin closed during human approval"
+            ) from e
+
+        if not answer:
+            # empty → re-prompt once, then treat as reject with no feedback
+            try:
+                answer = input("Approval (approve/reject)> ").strip()
+            except EOFError as e:
+                raise RuntimeError(
+                    f"Stage '{self.name}': stdin closed during human approval"
+                ) from e
+            if not answer:
+                print(f"[agent] {self.name} — empty approval reply; treating as reject")
+                return False, "(empty reply)"
+
+        lower = answer.lower()
+        tokens = lower.split(None, 1)
+        head = tokens[0] if tokens else ""
+        rest = tokens[1] if len(tokens) > 1 else ""
+
+        approve_words = {"approve", "a", "yes", "y", "ok", "accept"}
+        reject_words = {"reject", "r", "no", "n", "deny", "revise"}
+
+        if head in approve_words:
+            return True, rest
+        if head in reject_words:
+            return False, rest or answer
+        # free-form text = reject with that feedback
+        return False, answer
 
 
 def _preview_args(raw_args: Any, limit: int = 120) -> str:

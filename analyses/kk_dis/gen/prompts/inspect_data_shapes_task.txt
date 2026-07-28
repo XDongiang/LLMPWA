@@ -1,0 +1,66 @@
+## Goal
+Inspect the npy data files required by this fit analysis and report each file's numpy shape.
+
+## Inputs already available
+- Stripped resonance config (authoritative list of variables):
+  path: gen/fragments/stripped_config.toml
+  (also inlined below for convenience)
+
+```toml
+<<stages.config_strip.stripped_config>>
+```
+
+- Direct variable lists from config_strip (if useful):
+  all_sbc = <<stages.config_strip.all_sbc>>
+  all_amp = <<stages.config_strip.all_amp>>
+
+## What "needed data files" means
+From stripped_config / all_sbc / all_amp, collect the unique variable names:
+1. Every propagator `Sbc` value (e.g. phi_kk, f_kk)
+2. Every amplitude `AMP` value (e.g. phif0_kk, phif2_kk)
+3. Optional: `draw.extra_sbc` entries if present
+
+For each variable name `var`, this analysis conventionally uses:
+- data/real_data/{var}.npy
+- data/mc_truth/{var}.npy
+
+Also check whether these related files exist (include them if present):
+- data/draw_data/{var}.npy
+- data/draw_mc/{var}.npy
+- data/weight/weight_kk.npy or other weight files under data/weight/
+
+If a listed var has no matching npy under data/, record it as MISSING.
+
+## Required procedure
+1. read gen/fragments/stripped_config.toml (or use the inlined copy) and extract unique Sbc / AMP / extra_sbc names.
+2. Use shell to list candidate files under data/ (e.g. find/ls).
+3. For every needed existing .npy file, use shell + numpy to print shape and dtype, e.g.:
+
+```bash
+python - <<'PY'
+import numpy as np
+from pathlib import Path
+paths = [
+  "data/real_data/phi_kk.npy",
+  # ... all needed paths ...
+]
+for p in paths:
+    path = Path(p)
+    if not path.exists():
+        print(f"{p}\tMISSING")
+        continue
+    a = np.load(path, mmap_mode="r")
+    print(f"{p}\tshape={tuple(a.shape)}\tdtype={a.dtype}")
+PY
+```
+
+4. write a structured report to gen/fragments/data_shapes_report.txt with:
+   - unique vars (sbc / amp / extra)
+   - table lines: path, shape, dtype, or MISSING
+   - short summary counts
+5. Call task(action="finish", result=<full report text or a short summary that includes the report path>).
+
+## Output quality
+- Prefer exact shapes from numpy, not guesses.
+- Deduplicate variables and paths.
+- Keep the report plain text, easy to read.

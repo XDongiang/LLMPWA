@@ -16,6 +16,23 @@ output.all_sbc = {"type" = "direct"}
 output.all_amp = {"type" = "direct"}
 output.all_sbc_amp = {"type" = "direct"}
 
+# 交互式 agent：从 stripped_config 解析所需变量，定位 data/ 下 npy，并用 numpy 读取 shape
+[stages.inspect_data_shapes]
+kind = "agent"
+system_prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_system.txt"}
+prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_task.txt"}
+tools = ["read", "write", "shell", "task", "ask_user"]
+max_turns = 16
+cwd = "."
+workspace_root = "."
+cache = true
+finish_on_message = false
+on_max_turns = "error"
+require_approval = false
+output_type = "text"
+output.all = {"type" = "file", "path" = "gen/fragments/data_shapes_report.txt"}
+output.transcript = {"type" = "file", "path" = "gen/llm_logs/inspect_data_shapes_transcript.json"}
+
 [stages.make_initial_args]
 # python生成辅助函数，从free_param中读取变量
 kind = "python"
@@ -32,6 +49,22 @@ input = {"input_path" = "run/free_params.toml","output_path" = "output/free_para
 output_type = "python"
 output.all = {"type" = "file", "path" = "gen/fragments/save_results.py"}
 
+[stages.assemble_help_functions]
+# 组装辅助函数，供llm使用
+kind = "python"
+handler = {"type" = "file", "path" = "gen/handlers/assemble_final_code_handler.py", "function" = "assemble_final_code_handler"}
+input = {"list"=[
+         "ref.code_template.COMMON_UTILITIES",
+         "ref.code_template.PATH_CONFIG",
+         "ref.code_template.LOGGING_CONFIG",
+         "ref.code_template.DPLEX_FUNCTIONS",
+         "ref.code_template.PHYSICS_FUNCTIONS",
+         "stages.make_initial_args.all",
+         "stages.save_results.all"
+         ]}
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/base_functions.py"}
+
 [stages.classification]
 # llm分类器
 kind = "llm"
@@ -40,3 +73,21 @@ human_prompt = "使用传入的{\"arg_index\": n}代替parameter_lists中变量�
 output_type = "json"
 output.all = {"type" = "file", "path" = "gen/fragments/classification.json"}
 output.propagator_classification = {"type" = "direct"}
+
+# 交互式 agent：仅给 physics_functions / 分类 / arg_list / data 信息，向用户索取 LaTeX 公式后生成 likelihood
+# task.finish 后默认进入人工审阅（require_approval）；reject 可写反馈，agent 继续改再提交
+[stages.generate_likelihood]
+kind = "agent"
+system_prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_system.txt"}
+prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_task.txt"}
+tools = ["read", "write", "shell", "task", "ask_user"]
+max_turns = 24
+cwd = "."
+workspace_root = "."
+cache = false
+finish_on_message = false
+on_max_turns = "error"
+require_approval = true
+output_type = "python"
+output.all = {"type" = "file", "path" = "gen/fragments/agent_likelihood_function.py"}
+output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_likelihood_transcript.json"}

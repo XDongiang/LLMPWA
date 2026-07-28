@@ -83,6 +83,8 @@ output.all = { type = "file", path = "out.txt" }
         assert stage.tools == ["read", "write", "task"]
         assert stage.max_turns == 5
         assert stage.cache is False
+        # agent 默认需要人工审阅
+        assert stage.require_approval is True
     print("OK test_config_loader_accepts_agent")
 
 
@@ -171,6 +173,8 @@ def test_agent_stage_runner_scripted() -> None:
                 "prompt": "write a note and finish",
                 "tools": ["read", "write", "task"],
                 "max_turns": 5,
+                # non-interactive smoke: skip human gate
+                "require_approval": False,
                 "output_type": "text",
                 "output": {
                     "all": {
@@ -200,6 +204,127 @@ def test_agent_stage_runner_scripted() -> None:
     print("OK test_agent_stage_runner_scripted")
 
 
+class _FakeLLMRejectThenFinish:
+    """finish → (human reject injected by runner) → finish again."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def chat_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        model=None,
+        tool_choice="auto",
+        temperature: float = 1.0,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+        self.calls += 1
+        if self.calls == 1:
+            msg = {"role": "assistant", "content": "first draft"}
+            tcs = [{
+                "id": "1",
+                "type": "function",
+                "function": {
+                    "name": "task",
+                    "arguments": json.dumps({
+                        "action": "finish",
+                        "result": "DRAFT_V1",
+                    }),
+                },
+            }]
+            return msg, tcs, {}
+        if self.calls == 2:
+            # After reject feedback, produce revised result
+            msg = {"role": "assistant", "content": "revised"}
+            tcs = [{
+                "id": "2",
+                "type": "function",
+                "function": {
+                    "name": "task",
+                    "arguments": json.dumps({
+                        "action": "finish",
+                        "result": "DRAFT_V2_FIXED",
+                    }),
+                },
+            }]
+            return msg, tcs, {}
+        raise AssertionError(f"unexpected extra LLM call #{self.calls}")
+
+
+def test_agent_require_approval_reject_then_approve(monkeypatch_input=None) -> None:
+    """task.finish → reject with feedback → finish again → approve."""
+    from agent_stage import AgentStageRunner
+    from config_loader import StageConfig
+    import builtins
+
+    replies = iter(["reject please fix sign error", "approve"])
+
+    def _fake_input(prompt: str = "") -> str:
+        try:
+            return next(replies)
+        except StopIteration as e:
+            raise AssertionError(f"unexpected extra input() prompt={prompt!r}") from e
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "gen" / "prompts").mkdir(parents=True)
+        (root / "gen" / "fragments").mkdir(parents=True)
+        (root / "gen" / "prompts" / "sys.txt").write_text(
+            "You are a test agent.", encoding="utf-8"
+        )
+        stage = StageConfig(
+            "agent_review",
+            {
+                "kind": "agent",
+                "system_prompt": {"type": "file", "path": "gen/prompts/sys.txt"},
+                "prompt": "produce a result",
+                "tools": ["task"],
+                "max_turns": 5,
+                "require_approval": True,
+                "output_type": "text",
+                "output": {
+                    "all": {
+                        "type": "file",
+                        "path": "gen/fragments/agent_review_result.txt",
+                    },
+                    "transcript": {
+                        "type": "file",
+                        "path": "gen/llm_logs/agent_review_transcript.json",
+                    },
+                },
+            },
+        )
+        engine = _FakeEngine(root)
+        engine.llm_client = _FakeLLMRejectThenFinish()
+
+        real_input = builtins.input
+        real_isatty = sys.stdin.isatty
+        try:
+            builtins.input = _fake_input  # type: ignore[assignment]
+            sys.stdin.isatty = lambda: True  # type: ignore[method-assign]
+            AgentStageRunner("agent_review", stage, engine).execute()
+        finally:
+            builtins.input = real_input  # type: ignore[assignment]
+            sys.stdin.isatty = real_isatty  # type: ignore[method-assign]
+
+        out = root / "gen" / "fragments" / "agent_review_result.txt"
+        assert out.exists()
+        assert out.read_text(encoding="utf-8") == "DRAFT_V2_FIXED"
+        tr = root / "gen" / "llm_logs" / "agent_review_transcript.json"
+        data = json.loads(tr.read_text(encoding="utf-8"))
+        assert data["approval_rounds"] == 2
+        assert data["final_result"] == "DRAFT_V2_FIXED"
+        human_events = [
+            m for m in data["messages"] if m.get("role") == "human_approval"
+        ]
+        assert len(human_events) == 2
+        assert human_events[0]["approved"] is False
+        assert "sign" in (human_events[0].get("feedback") or "")
+        assert human_events[1]["approved"] is True
+        assert engine.llm_client.calls == 2
+    print("OK test_agent_require_approval_reject_then_approve")
+
+
 def test_check_only_demo_config() -> None:
     """Static check against real analyses/kk_new demo if present."""
     repo = AGENT_DIR.parent
@@ -219,6 +344,7 @@ def main() -> None:
     test_tool_registry_and_path_guard()
     test_config_loader_accepts_agent()
     test_agent_stage_runner_scripted()
+    test_agent_require_approval_reject_then_approve()
     test_check_only_demo_config()
     print("\nAll smoke tests passed.")
 
