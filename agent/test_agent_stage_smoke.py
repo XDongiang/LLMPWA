@@ -325,6 +325,296 @@ def test_agent_require_approval_reject_then_approve(monkeypatch_input=None) -> N
     print("OK test_agent_require_approval_reject_then_approve")
 
 
+class _FakeLLMMultiFile:
+    """Write report + 3 fragments, then finish with outputs checklist."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def chat_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        model=None,
+        tool_choice="auto",
+        temperature: float = 1.0,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+        self.calls += 1
+        files = [
+            (
+                "gen/fragments/data_shapes_report.txt",
+                "phi_kk shape=(100,)\nphif0_kk shape=(2, 100, 3)\n",
+            ),
+            (
+                "gen/fragments/load_data_func.py",
+                "def load_data():\n    return {'data_phi_kk': None}\n",
+            ),
+            (
+                "gen/fragments/normalize_data_func.py",
+                "def normalize_data(data):\n    return data\n",
+            ),
+            (
+                "gen/fragments/shard_data_distributed_func.py",
+                "def shard_data_distributed(data, mesh):\n    return data\n",
+            ),
+        ]
+        if 1 <= self.calls <= 4:
+            path, content = files[self.calls - 1]
+            msg = {"role": "assistant", "content": ""}
+            tcs = [{
+                "id": str(self.calls),
+                "type": "function",
+                "function": {
+                    "name": "write",
+                    "arguments": json.dumps({"path": path, "content": content}),
+                },
+            }]
+            return msg, tcs, {}
+        if self.calls == 5:
+            msg = {"role": "assistant", "content": ""}
+            tcs = [{
+                "id": "5",
+                "type": "function",
+                "function": {
+                    "name": "task",
+                    "arguments": json.dumps({
+                        "action": "finish",
+                        "result": "summary: wrote report + 3 preprocess funcs",
+                        "outputs": {
+                            "all": "gen/fragments/data_shapes_report.txt",
+                            "load_data": "gen/fragments/load_data_func.py",
+                            "normalize_data": "gen/fragments/normalize_data_func.py",
+                            "shard_data_distributed": (
+                                "gen/fragments/shard_data_distributed_func.py"
+                            ),
+                        },
+                    }),
+                },
+            }]
+            return msg, tcs, {}
+        raise AssertionError(f"unexpected extra LLM call #{self.calls}")
+
+
+def test_agent_multi_file_outputs_harvest() -> None:
+    """Multi-field type=file outputs are harvested into manifest paths."""
+    from agent_stage import AgentStageRunner
+    from config_loader import StageConfig
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "gen" / "prompts").mkdir(parents=True)
+        (root / "gen" / "fragments").mkdir(parents=True)
+        (root / "gen" / "prompts" / "sys.txt").write_text(
+            "You are a multi-file test agent.", encoding="utf-8"
+        )
+        stage = StageConfig(
+            "inspect_data_shapes",
+            {
+                "kind": "agent",
+                "system_prompt": {"type": "file", "path": "gen/prompts/sys.txt"},
+                "prompt": "inspect shapes and write preprocess fragments",
+                "tools": ["read", "write", "task"],
+                "max_turns": 10,
+                "require_approval": False,
+                "cache": False,
+                "output_type": "text",
+                "output": {
+                    "all": {
+                        "type": "file",
+                        "path": "gen/fragments/data_shapes_report.txt",
+                    },
+                    "load_data": {
+                        "type": "file",
+                        "path": "gen/fragments/load_data_func.py",
+                    },
+                    "normalize_data": {
+                        "type": "file",
+                        "path": "gen/fragments/normalize_data_func.py",
+                    },
+                    "shard_data_distributed": {
+                        "type": "file",
+                        "path": "gen/fragments/shard_data_distributed_func.py",
+                    },
+                    "transcript": {
+                        "type": "file",
+                        "path": "gen/llm_logs/inspect_data_shapes_transcript.json",
+                    },
+                },
+            },
+        )
+        engine = _FakeEngine(root)
+        engine.llm_client = _FakeLLMMultiFile()
+        AgentStageRunner("inspect_data_shapes", stage, engine).execute()
+
+        report = root / "gen" / "fragments" / "data_shapes_report.txt"
+        load_f = root / "gen" / "fragments" / "load_data_func.py"
+        norm_f = root / "gen" / "fragments" / "normalize_data_func.py"
+        shard_f = root / "gen" / "fragments" / "shard_data_distributed_func.py"
+        assert report.exists() and "phi_kk" in report.read_text(encoding="utf-8")
+        assert "def load_data" in load_f.read_text(encoding="utf-8")
+        assert "def normalize_data" in norm_f.read_text(encoding="utf-8")
+        assert "def shard_data_distributed" in shard_f.read_text(encoding="utf-8")
+
+        node = engine.manifest.get_stage("inspect_data_shapes")
+        assert node is not None
+        for field, rel in [
+            ("all", "gen/fragments/data_shapes_report.txt"),
+            ("load_data", "gen/fragments/load_data_func.py"),
+            ("normalize_data", "gen/fragments/normalize_data_func.py"),
+            ("shard_data_distributed", "gen/fragments/shard_data_distributed_func.py"),
+        ]:
+            assert isinstance(node.get(field), dict), field
+            assert node[field].get("type") == "file", field
+            assert node[field].get("path") == rel, field
+
+        # harvested content is what resolver/manifest would re-read
+        assert "def load_data" in engine.manifest.read_field(
+            "inspect_data_shapes", "load_data", root
+        )
+        tr = root / "gen" / "llm_logs" / "inspect_data_shapes_transcript.json"
+        assert tr.exists()
+        data = json.loads(tr.read_text(encoding="utf-8"))
+        assert "load_data" in data.get("harvested_fields", [])
+    print("OK test_agent_multi_file_outputs_harvest")
+
+
+class _FakeLLMMultiFileMissing:
+    """Finish without writing fragments → runner should nudge, then write + finish."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.saw_incomplete = False
+
+    def chat_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        model=None,
+        tool_choice="auto",
+        temperature: float = 1.0,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+        self.calls += 1
+        # Detect incomplete-outputs feedback from runner
+        for m in messages:
+            if m.get("role") == "user" and "incomplete" in str(m.get("content", "")).lower():
+                self.saw_incomplete = True
+
+        if self.calls == 1:
+            # Premature finish without files
+            msg = {"role": "assistant", "content": ""}
+            tcs = [{
+                "id": "1",
+                "type": "function",
+                "function": {
+                    "name": "task",
+                    "arguments": json.dumps({
+                        "action": "finish",
+                        "result": "oops no files",
+                    }),
+                },
+            }]
+            return msg, tcs, {}
+        if 2 <= self.calls <= 4:
+            names = [
+                (
+                    "gen/fragments/load_data_func.py",
+                    "def load_data():\n    return {}\n",
+                ),
+                (
+                    "gen/fragments/normalize_data_func.py",
+                    "def normalize_data(data):\n    return data\n",
+                ),
+                (
+                    "gen/fragments/shard_data_distributed_func.py",
+                    "def shard_data_distributed(data, mesh):\n    return data\n",
+                ),
+            ]
+            path, content = names[self.calls - 2]
+            msg = {"role": "assistant", "content": ""}
+            tcs = [{
+                "id": str(self.calls),
+                "type": "function",
+                "function": {
+                    "name": "write",
+                    "arguments": json.dumps({"path": path, "content": content}),
+                },
+            }]
+            return msg, tcs, {}
+        if self.calls == 5:
+            msg = {"role": "assistant", "content": ""}
+            tcs = [{
+                "id": "5",
+                "type": "function",
+                "function": {
+                    "name": "task",
+                    "arguments": json.dumps({
+                        "action": "finish",
+                        "result": "report body from result only",
+                        "outputs": {
+                            "load_data": "gen/fragments/load_data_func.py",
+                            "normalize_data": "gen/fragments/normalize_data_func.py",
+                            "shard_data_distributed": (
+                                "gen/fragments/shard_data_distributed_func.py"
+                            ),
+                        },
+                    }),
+                },
+            }]
+            return msg, tcs, {}
+        raise AssertionError(f"unexpected extra LLM call #{self.calls}")
+
+
+def test_agent_multi_file_incomplete_then_recover() -> None:
+    from agent_stage import AgentStageRunner
+    from config_loader import StageConfig
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "gen" / "prompts").mkdir(parents=True)
+        (root / "gen" / "fragments").mkdir(parents=True)
+        (root / "gen" / "prompts" / "sys.txt").write_text("sys", encoding="utf-8")
+        stage = StageConfig(
+            "inspect_data_shapes",
+            {
+                "kind": "agent",
+                "system_prompt": {"type": "file", "path": "gen/prompts/sys.txt"},
+                "prompt": "multi file",
+                "tools": ["write", "task"],
+                "max_turns": 10,
+                "require_approval": False,
+                "output": {
+                    "all": {
+                        "type": "file",
+                        "path": "gen/fragments/data_shapes_report.txt",
+                    },
+                    "load_data": {
+                        "type": "file",
+                        "path": "gen/fragments/load_data_func.py",
+                    },
+                    "normalize_data": {
+                        "type": "file",
+                        "path": "gen/fragments/normalize_data_func.py",
+                    },
+                    "shard_data_distributed": {
+                        "type": "file",
+                        "path": "gen/fragments/shard_data_distributed_func.py",
+                    },
+                },
+            },
+        )
+        engine = _FakeEngine(root)
+        engine.llm_client = _FakeLLMMultiFileMissing()
+        AgentStageRunner("inspect_data_shapes", stage, engine).execute()
+
+        assert engine.llm_client.saw_incomplete
+        assert (root / "gen" / "fragments" / "load_data_func.py").exists()
+        report = root / "gen" / "fragments" / "data_shapes_report.txt"
+        assert report.exists()
+        # all filled from result when report file was not written by agent
+        assert "report body" in report.read_text(encoding="utf-8")
+    print("OK test_agent_multi_file_incomplete_then_recover")
+
+
 def test_check_only_demo_config() -> None:
     """Static check against real analyses/kk_new demo if present."""
     repo = AGENT_DIR.parent
@@ -340,12 +630,36 @@ def test_check_only_demo_config() -> None:
     print("OK test_check_only_demo_config")
 
 
+def test_check_kk_dis_fit_config() -> None:
+    """Static parse/check against analyses/kk_dis multi-output agent stage."""
+    repo = AGENT_DIR.parent
+    workdir = repo / "analyses" / "kk_dis"
+    cfg = workdir / "llm_config_fit.toml"
+    if not cfg.exists():
+        print("SKIP test_check_kk_dis_fit_config")
+        return
+    from config_loader import ConfigLoader
+
+    loaded = ConfigLoader.load(cfg)
+    stage = loaded.get_stage("inspect_data_shapes")
+    assert stage is not None
+    assert stage.kind == "agent"
+    assert "load_data" in stage.output
+    assert stage.output["load_data"]["path"].endswith("load_data_func.py")
+    assert "normalize_data" in stage.output
+    assert "shard_data_distributed" in stage.output
+    print("OK test_check_kk_dis_fit_config")
+
+
 def main() -> None:
     test_tool_registry_and_path_guard()
     test_config_loader_accepts_agent()
     test_agent_stage_runner_scripted()
     test_agent_require_approval_reject_then_approve()
+    test_agent_multi_file_outputs_harvest()
+    test_agent_multi_file_incomplete_then_recover()
     test_check_only_demo_config()
+    test_check_kk_dis_fit_config()
     print("\nAll smoke tests passed.")
 
 

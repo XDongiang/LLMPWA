@@ -49,6 +49,44 @@ def _read_prompt_decl(decl: Any, workdir: Path, stage_name: str, field: str) -> 
     )
 
 
+def _render_output_decls(decls: dict, resolver: Any) -> Dict[str, Any]:
+    """Render <<...>> placeholders in declared output paths."""
+    rendered: Dict[str, Any] = {}
+    for k, v in (decls or {}).items():
+        if isinstance(v, dict) and "path" in v:
+            rendered[k] = {**v, "path": resolver.render(v["path"])}
+        else:
+            rendered[k] = v
+    return rendered
+
+
+def _file_output_contract(rendered_decls: dict) -> str:
+    """Machine-readable list of required file outputs for the agent prompt."""
+    lines = []
+    for field, decl in rendered_decls.items():
+        if not isinstance(decl, dict):
+            continue
+        if decl.get("type") != "file":
+            continue
+        if field == "transcript":
+            # framework-owned; agent need not write it
+            continue
+        path = decl.get("path")
+        if path:
+            lines.append(f"- {field} → {path}")
+    if not lines:
+        return ""
+    return (
+        "## Required stage outputs (write these exact paths before task.finish)\n"
+        + "\n".join(lines)
+        + "\n\nWhen finishing multi-file stages, call:\n"
+        "task(action='finish', result=<summary or primary text>, "
+        "outputs={field: relative_path, ...})\n"
+        "Paths in outputs must match the list above. The framework will harvest "
+        "file contents into the corresponding stage output fields."
+    )
+
+
 class AgentStageRunner:
     """Run one kind=agent stage to completion and write manifest outputs."""
 
@@ -80,15 +118,22 @@ class AgentStageRunner:
             human = self.resolver.render(cfg.human_prompt)
             user_text = (user_text + "\n\n" + human).strip() if user_text else human
 
+        decls = cfg.output or {}
+        rendered_decls = _render_output_decls(decls, self.resolver)
+        contract = _file_output_contract(rendered_decls)
+        if contract:
+            user_text = (user_text + "\n\n" + contract).strip() if user_text else contract
+
         if not system_text:
             system_text = (
                 "You are a coding agent with tools. Use tools to inspect and "
                 "edit files under the workspace. When the task is complete, "
                 "call task with action='finish' and put the final result in "
-                "the result field. A human may review and reject the "
-                "submission — if rejected, revise using the feedback and "
-                "call task.finish again. Prefer ask_user when you need "
-                "human input."
+                "the result field. For multi-file stages, write each declared "
+                "output path first, then pass outputs={field: path} on finish. "
+                "A human may review and reject the submission — if rejected, "
+                "revise using the feedback and call task.finish again. Prefer "
+                "ask_user when you need human input."
             )
 
         tool_names = cfg.tools if cfg.tools is not None else DEFAULT_TOOL_NAMES
@@ -114,9 +159,16 @@ class AgentStageRunner:
             str(cfg.max_turns),
             cfg.cwd or ".",
             cfg.workspace_root or ".",
+            json.dumps(
+                {k: v for k, v in rendered_decls.items() if isinstance(v, dict)},
+                sort_keys=True,
+                ensure_ascii=False,
+            ),
         )
 
-        if cfg.cache and self.manifest.is_cached(self.name, prompt_hash, self.workdir):
+        if cfg.cache and self.manifest.is_cached(
+            self.name, prompt_hash, self.workdir, rendered_decls
+        ):
             print(f"[agent] {self.name} — cache hit")
             return
 
@@ -135,6 +187,7 @@ class AgentStageRunner:
         )
 
         final_result: Optional[str] = None
+        final_outputs_map: Dict[str, str] = {}
         used_ask_user = False
         last_assistant_text = ""
         approval_rounds = 0
@@ -171,6 +224,7 @@ class AgentStageRunner:
                 last_assistant_text = content.strip()
 
             pending_result: Optional[str] = None
+            pending_outputs_map: Dict[str, str] = {}
 
             if not tool_calls:
                 if cfg.finish_on_message and last_assistant_text:
@@ -181,7 +235,8 @@ class AgentStageRunner:
                     nudge = (
                         "No tool call received. If the task is done, call the "
                         "`task` tool with action='finish' and put the final "
-                        "output in `result`. Otherwise continue using tools."
+                        "output in `result` (and `outputs={field:path}` for "
+                        "multi-file stages). Otherwise continue using tools."
                     )
                     messages.append({"role": "user", "content": nudge})
                     transcript.append({"role": "user", "content": nudge, "turn": turn})
@@ -203,6 +258,11 @@ class AgentStageRunner:
                         if not isinstance(candidate, str):
                             candidate = str(candidate)
                         pending_result = candidate
+                        out_map = result.meta.get("outputs") or {}
+                        if isinstance(out_map, dict):
+                            pending_outputs_map = {
+                                str(k): str(v) for k, v in out_map.items()
+                            }
                         # Tool message: submission received; approval is separate
                         if cfg.require_approval:
                             result = ToolResult(
@@ -244,11 +304,45 @@ class AgentStageRunner:
                     )
 
             if pending_result is not None:
+                # Pre-check declared file outputs before accepting the finish
+                harvest_err = self._check_file_outputs(
+                    rendered_decls, pending_outputs_map
+                )
+                if harvest_err is not None:
+                    used_ask_user = True  # interactive correction path
+                    fix_msg = (
+                        "Your task.finish submission is incomplete — required "
+                        "output files are missing or mismatched:\n"
+                        f"{harvest_err}\n\n"
+                        "Write the missing files with the write tool (exact "
+                        "paths), then call task.finish again with "
+                        "outputs={field: relative_path, ...}."
+                    )
+                    messages.append({"role": "user", "content": fix_msg})
+                    transcript.append(
+                        {
+                            "role": "user",
+                            "content": fix_msg,
+                            "turn": turn,
+                            "kind": "outputs_incomplete",
+                        }
+                    )
+                    print(
+                        f"[agent] {self.name} — finish rejected: incomplete outputs"
+                    )
+                    time.sleep(0.2)
+                    continue
+
+                approval_preview = self._approval_preview(
+                    pending_result, rendered_decls, pending_outputs_map
+                )
+
                 if not cfg.require_approval:
                     final_result = pending_result
+                    final_outputs_map = pending_outputs_map
                     break
 
-                approved, feedback = self._request_human_approval(pending_result)
+                approved, feedback = self._request_human_approval(approval_preview)
                 approval_rounds += 1
                 used_ask_user = True  # HITL → do not cache
                 transcript.append(
@@ -257,12 +351,14 @@ class AgentStageRunner:
                         "approved": approved,
                         "feedback": feedback,
                         "submitted_result": pending_result,
+                        "submitted_outputs": pending_outputs_map,
                         "turn": turn,
                         "approval_round": approval_rounds,
                     }
                 )
                 if approved:
                     final_result = pending_result
+                    final_outputs_map = pending_outputs_map
                     print(
                         f"[agent] {self.name} — approved "
                         f"(round {approval_rounds})"
@@ -273,7 +369,8 @@ class AgentStageRunner:
                     "Human reviewer REJECTED your submission.\n"
                     f"Feedback:\n{feedback or '(no additional feedback)'}\n\n"
                     "Revise the work using tools as needed, then call "
-                    "`task` with action='finish' and an updated `result`."
+                    "`task` with action='finish', an updated `result`, and "
+                    "`outputs={field: path}` for multi-file stages."
                 )
                 messages.append({"role": "user", "content": reject_msg})
                 transcript.append(
@@ -327,6 +424,19 @@ class AgentStageRunner:
                     "valid JSON; storing raw string under all"
                 )
 
+        # Harvest declared file outputs (except transcript, filled below).
+        # File content wins over task.finish(result) for any harvested field,
+        # including `all` when the agent already wrote the report path.
+        harvested = self._harvest_file_outputs(
+            rendered_decls, final_outputs_map, require_all=True
+        )
+        raw_outputs.update(harvested)
+        if "all" in harvested:
+            print(
+                f"[agent] {self.name} — output.all taken from written file "
+                f"(not task.finish result)"
+            )
+
         # Always attach transcript value if declared (or for log convenience)
         raw_outputs["transcript"] = {
             "stage": self.name,
@@ -336,18 +446,9 @@ class AgentStageRunner:
             "approval_rounds": approval_rounds,
             "messages": transcript,
             "final_result": final_result,
+            "outputs_map": final_outputs_map,
+            "harvested_fields": sorted(harvested.keys()),
         }
-
-        decls = self.stage_cfg.output or {}
-        rendered_decls = {}
-        for k, v in decls.items():
-            if isinstance(v, dict) and "path" in v:
-                rendered_decls[k] = {
-                    **v,
-                    "path": self.resolver.render(v["path"]),
-                }
-            else:
-                rendered_decls[k] = v
 
         # If transcript was produced but not declared, still save llm-style log
         if "transcript" not in rendered_decls:
@@ -385,6 +486,141 @@ class AgentStageRunner:
             self.workdir,
         )
         print(f"[agent] {self.name} — done")
+
+    def _declared_file_fields(self, rendered_decls: dict) -> Dict[str, str]:
+        """field → relative path for agent-visible type=file outputs.
+
+        ``transcript`` is framework-owned and excluded.
+        """
+        fields: Dict[str, str] = {}
+        for field, decl in (rendered_decls or {}).items():
+            if not isinstance(decl, dict):
+                continue
+            if decl.get("type") != "file":
+                continue
+            if field == "transcript":
+                continue
+            path = decl.get("path")
+            if path:
+                fields[field] = str(path)
+        return fields
+
+    def _strict_file_fields(self, rendered_decls: dict) -> Dict[str, str]:
+        """Fields that must already exist on disk before task.finish is accepted.
+
+        ``all`` is special-cased: legacy single-output agents may only put the
+        primary text in task.finish(result=...) and let the framework write
+        output.all. Extra fragment fields (load_data, ...) must be written.
+        """
+        fields = self._declared_file_fields(rendered_decls)
+        return {k: v for k, v in fields.items() if k != "all"}
+
+    def _check_file_outputs(
+        self,
+        rendered_decls: dict,
+        outputs_map: Dict[str, str],
+    ) -> Optional[str]:
+        """Return error text if required fragment files are missing/mismatched.
+
+        ``outputs_map`` is optional; when provided, claimed paths must match
+        the declared config paths for strict fields.
+        """
+        required = self._strict_file_fields(rendered_decls)
+        if not required:
+            return None
+
+        problems: List[str] = []
+        for field, expected_path in required.items():
+            claimed = (outputs_map or {}).get(field)
+            if claimed is not None and claimed.replace("\\", "/") != expected_path.replace(
+                "\\", "/"
+            ):
+                problems.append(
+                    f"- {field}: outputs map path '{claimed}' != declared '{expected_path}'"
+                )
+            abs_path = self.workdir / expected_path
+            if not abs_path.exists():
+                problems.append(
+                    f"- {field}: file not found at '{expected_path}' "
+                    "(write it before task.finish)"
+                )
+            elif abs_path.is_file() and abs_path.stat().st_size == 0:
+                problems.append(f"- {field}: file '{expected_path}' is empty")
+
+        if not problems:
+            return None
+        return "\n".join(problems)
+
+    def _harvest_file_outputs(
+        self,
+        rendered_decls: dict,
+        outputs_map: Dict[str, str],
+        require_all: bool = True,
+    ) -> Dict[str, str]:
+        """Read declared output files from disk into raw_outputs values.
+
+        Strict fragment fields must exist when require_all=True. Field ``all``
+        is harvested only if the file already exists (otherwise final_result
+        remains the primary text and write_stage_output creates the file).
+        """
+        declared = self._declared_file_fields(rendered_decls)
+        if not declared:
+            return {}
+
+        if require_all:
+            err = self._check_file_outputs(rendered_decls, outputs_map or {})
+            if err is not None:
+                raise RuntimeError(
+                    f"Stage '{self.name}': cannot harvest declared file outputs:\n{err}"
+                )
+
+        harvested: Dict[str, str] = {}
+        for field, rel_path in declared.items():
+            abs_path = self.workdir / rel_path
+            if not abs_path.exists():
+                # ``all`` may be filled from task.finish result only.
+                if field == "all" or not require_all:
+                    continue
+                raise RuntimeError(
+                    f"Stage '{self.name}': missing harvested file for "
+                    f"'{field}': {abs_path}"
+                )
+            harvested[field] = abs_path.read_text(encoding="utf-8")
+        return harvested
+
+    def _approval_preview(
+        self,
+        submitted: str,
+        rendered_decls: dict,
+        outputs_map: Dict[str, str],
+    ) -> str:
+        """Build human-review text including multi-file snippets."""
+        parts = [submitted if isinstance(submitted, str) else str(submitted)]
+        declared = self._declared_file_fields(rendered_decls)
+        # Prefer showing strict fragments; include all if it was written.
+        show = {
+            k: v
+            for k, v in declared.items()
+            if k != "all" or (self.workdir / v).exists()
+        }
+        if not show:
+            return parts[0]
+
+        parts.append("\n\n--- declared file outputs ---")
+        for field, rel_path in show.items():
+            abs_path = self.workdir / rel_path
+            claimed = outputs_map.get(field, rel_path)
+            if not abs_path.exists():
+                parts.append(f"\n[{field}] {claimed}  MISSING")
+                continue
+            text = abs_path.read_text(encoding="utf-8")
+            preview = text if len(text) <= 1200 else (
+                text[:600] + f"\n...[{len(text) - 1200} chars omitted]...\n" + text[-600:]
+            )
+            parts.append(
+                f"\n[{field}] {rel_path} ({len(text)} chars)\n{preview}"
+            )
+        return "".join(parts)
 
     def _save_transcript_fallback(self, transcript: dict) -> None:
         log_dir = self.workdir / "gen" / "llm_logs"

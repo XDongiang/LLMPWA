@@ -1,66 +1,142 @@
 ## Goal
-Inspect the npy data files required by this fit analysis and report each file's numpy shape.
+Build the data-preprocessing stage for this distributed fit:
+1. Inspect npy shapes for all needed variables.
+2. Generate three function fragments used by the fit script:
+   - load_data()
+   - normalize_data(data)
+   - shard_data_distributed(data, mesh)
+
+Reference semantics (adapt names/paths to THIS analysis; do not invent vars):
+- load_data: load real_data + mc_truth npy for each sbc/amp var; tile with n_repeat;
+  create truth_* by slicing mc_* along the event axis to the **first
+  n_truth_mc * n_repeat** events. Default **n_truth_mc = 150000** — this is an
+  intentional cap on truth-MC compute/memory (not equal to real-data n_data).
+  If mc event count < n_truth_mc * n_repeat, slice to available length (or clamp).
+- normalize_data: for multi-component amplitude arrays (phif*-style), compute
+  regular factors from mc arrays and einsum-scale data/mc/truth.
+- shard_data_distributed: convert to jnp arrays and device_put with NamedSharding:
+  1D event arrays → P("event"); 3D (channels, events, components) → P(None, "event", None).
 
 ## Inputs already available
-- Stripped resonance config (authoritative list of variables):
+- Stripped resonance config:
   path: gen/fragments/stripped_config.toml
-  (also inlined below for convenience)
 
 ```toml
 <<stages.config_strip.stripped_config>>
 ```
 
-- Direct variable lists from config_strip (if useful):
+- Variable lists from config_strip:
   all_sbc = <<stages.config_strip.all_sbc>>
   all_amp = <<stages.config_strip.all_amp>>
+  all_sbc_amp = <<stages.config_strip.all_sbc_amp>>
 
-## What "needed data files" means
-From stripped_config / all_sbc / all_amp, collect the unique variable names:
+### Shared imports already provided by the assembled fit script
+(COMMON_UTILITIES — do **not** re-import these in fragments; use the names as-is)
+
+```python
+<<ref.code_template.COMMON_UTILITIES>>
+```
+
+Import policy for the three `.py` fragments:
+- **No** `import` / `from ... import ...` lines in fragment files.
+- Fragments are later concatenated after COMMON_UTILITIES, so these names are in scope:
+  - `onp` — NumPy (host arrays, load/tile/normalize)
+  - `np` — `jax.numpy` (device arrays; **not** `jnp`)
+  - `device_put`, `NamedSharding`, `P` (`PartitionSpec as P`)
+  - plus other COMMON_UTILITIES symbols if needed
+- Shell inspection of npy shapes may use a temporary `import numpy as np` in the
+  shell snippet only; that is not part of the saved fragments.
+
+## Needed data files
+From stripped_config / all_sbc / all_amp, unique variable names include:
 1. Every propagator `Sbc` value (e.g. phi_kk, f_kk)
 2. Every amplitude `AMP` value (e.g. phif0_kk, phif2_kk)
-3. Optional: `draw.extra_sbc` entries if present
+3. Optional: `draw.extra_sbc` if present
 
-For each variable name `var`, this analysis conventionally uses:
+For each var, conventionally:
 - data/real_data/{var}.npy
 - data/mc_truth/{var}.npy
 
-Also check whether these related files exist (include them if present):
+Also note related files if present (report only; load_data usually uses real_data + mc_truth):
 - data/draw_data/{var}.npy
 - data/draw_mc/{var}.npy
-- data/weight/weight_kk.npy or other weight files under data/weight/
+- data/weight/*
 
-If a listed var has no matching npy under data/, record it as MISSING.
+If a listed var has no matching npy under data/, mark MISSING in the report.
 
 ## Required procedure
-1. read gen/fragments/stripped_config.toml (or use the inlined copy) and extract unique Sbc / AMP / extra_sbc names.
-2. Use shell to list candidate files under data/ (e.g. find/ls).
-3. For every needed existing .npy file, use shell + numpy to print shape and dtype, e.g.:
+1. Extract unique sbc / amp names from stripped_config / lists above.
+2. shell/list data/ candidates; use numpy (mmap) to print shape+dtype for each needed npy.
+   Record real_data event counts (n_data) for the report / later data_size usage, and
+   mc_truth event counts. All real_data event lengths for the same analysis should agree;
+   if not, report the inconsistency.
+3. Write the shape report **once** with the write tool to:
+   gen/fragments/data_shapes_report.txt
+   Contents: unique vars; table path/shape/dtype/MISSING; n_data; mc sizes;
+   chosen n_truth_mc (default 150000); short summary.
+   This file is the authoritative stage output field `all`. Do **not** rely on
+   task.finish(result=...) to carry the report body.
+4. Generate three Python fragments (no markdown fences, no #=== section banners):
 
-```bash
-python - <<'PY'
-import numpy as np
-from pathlib import Path
-paths = [
-  "data/real_data/phi_kk.npy",
-  # ... all needed paths ...
-]
-for p in paths:
-    path = Path(p)
-    if not path.exists():
-        print(f"{p}\tMISSING")
-        continue
-    a = np.load(path, mmap_mode="r")
-    print(f"{p}\tshape={tuple(a.shape)}\tdtype={a.dtype}")
-PY
-```
+   a) gen/fragments/load_data_func.py
+      - def load_data(): ... only (no imports)
+      - Use **onp** from COMMON_UTILITIES (host numpy)
+      - Load only vars that exist; keys like data_{var}, mc_{var}, truth_{var}
+      - n_repeat = 1 by default
+      - n_truth_mc = 150000 by default  # cap truth-MC size for cost/memory
+        (name the constant; optional one-line comment that it is NOT n_data)
+      - 1D sbc: onp.tile(onp.load(...), n_repeat)
+      - multi-dim amp: onp.tile(onp.load(...), (1, n_repeat, 1)) when rank-3
+      - truth_* = mc_* sliced on the **event axis** to length n_truth_mc * n_repeat
+        (1D: mc[0:n_truth_mc*n_repeat]; rank-3: mc[:, 0:n_truth_mc*n_repeat, ...])
+      - Prefer a named constant over a bare magic number, e.g.:
+          n_truth_mc = 150000
+          data['truth_phi_kk'] = data['mc_phi_kk'][0:n_truth_mc * n_repeat]
+      - return data dict
 
-4. write a structured report to gen/fragments/data_shapes_report.txt with:
-   - unique vars (sbc / amp / extra)
-   - table lines: path, shape, dtype, or MISSING
-   - short summary counts
-5. Call task(action="finish", result=<full report text or a short summary that includes the report path>).
+   b) gen/fragments/normalize_data_func.py
+      - def normalize_data(data): ... only (no imports)
+      - Use **onp** for host-side averages / einsum
+      - For each multi-component amp var present (typically *phif* with rank 3):
+        regular = 1 / mean(sqrt(sum(mc_arr**2, axis=last_component)), axis=event)
+        scale data/mc/truth with onp.einsum along the channel axis
+      - Leave pure 1D sbc vars unchanged
+      - return data
 
-## Output quality
+   c) gen/fragments/shard_data_distributed_func.py
+      - def shard_data_distributed(data, mesh): ... only (no imports)
+      - Use **np** (jax.numpy), **device_put**, **NamedSharding**, **P** from
+        COMMON_UTILITIES — do not import jax / jnp yourself
+      - Shard event-1d keys with NamedSharding(mesh, P("event"))
+      - Shard rank-3 keys with NamedSharding(mesh, P(None, "event", None))
+      - return jax_data dict of device_put arrays
+
+5. Optional: syntax-check each .py with
+   python -c "import ast; ast.parse(open(path).read()); print('OK', path)"
+
+6. Finish (result is a **short summary only**, not a second copy of the report):
+   task(
+     action="finish",
+     result=<1-5 lines: n_data, n_truth_mc, file counts, paths written; no full report body>,
+     outputs={
+       "all": "gen/fragments/data_shapes_report.txt",
+       "load_data": "gen/fragments/load_data_func.py",
+       "normalize_data": "gen/fragments/normalize_data_func.py",
+       "shard_data_distributed": "gen/fragments/shard_data_distributed_func.py"
+     }
+   )
+
+## How stage outputs are recorded (important)
+- You must `write` each declared path yourself (report + 3 funcs).
+- Framework **harvests** those files into output fields after finish.
+- Field `all` ← content of gen/fragments/data_shapes_report.txt (the written report).
+  If that file exists, its content is used for `all`; a long `result` string will
+  **not** replace the report. Keep `result` as a short human summary.
+- Field load_data / normalize_data / shard_data_distributed ← the corresponding .py files.
+
+## Quality bar
 - Prefer exact shapes from numpy, not guesses.
-- Deduplicate variables and paths.
-- Keep the report plain text, easy to read.
+- Function code must match the actual vars/shapes found (do not hardcode foreign experiment names unless they appear in this analysis).
+- No imports in fragments; reuse COMMON_UTILITIES names (`onp`, `np`, `device_put`, `NamedSharding`, `P`).
+- Deduplicate vars/paths.
+- Keep fragments compact; comments only for non-obvious axis choices.

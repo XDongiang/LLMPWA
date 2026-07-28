@@ -85,12 +85,43 @@ class Manifest:
     # Cache check
     # ------------------------------------------------------------------
 
-    def is_cached(self, stage: str, prompt_hash: str, workdir: Path) -> bool:
+    def is_cached(
+        self,
+        stage: str,
+        prompt_hash: str,
+        workdir: Path,
+        output_decls: Optional[dict] = None,
+    ) -> bool:
         node = self.get_stage(stage)
         if not node:
             return False
         if node.get("prompt_hash") != prompt_hash:
             return False
+
+        # Prefer validating every declared type=file path (multi-output stages).
+        # Falls back to legacy single `all` check when decls not provided.
+        file_paths: list = []
+        if output_decls:
+            for field, decl in output_decls.items():
+                if not isinstance(decl, dict):
+                    continue
+                if decl.get("type") != "file":
+                    continue
+                path = decl.get("path")
+                if path:
+                    file_paths.append(str(path))
+            if file_paths:
+                return all((workdir / p).exists() for p in file_paths)
+
+        # Legacy / partial: check every file pointer recorded in the node
+        recorded_files = [
+            v["path"]
+            for v in node.values()
+            if isinstance(v, dict) and v.get("type") == "file" and v.get("path")
+        ]
+        if recorded_files:
+            return all((workdir / p).exists() for p in recorded_files)
+
         out = node.get("all")
         if isinstance(out, dict) and out.get("type") == "file":
             return (workdir / out["path"]).exists()

@@ -16,13 +16,15 @@ output.all_sbc = {"type" = "direct"}
 output.all_amp = {"type" = "direct"}
 output.all_sbc_amp = {"type" = "direct"}
 
-# 交互式 agent：从 stripped_config 解析所需变量，定位 data/ 下 npy，并用 numpy 读取 shape
+# 交互式 agent：检查 data shape + 生成 load/normalize/shard 三个预处理函数
+# agent 用 write 写到下列 path，task.finish 时用 outputs={field:path} 清单；
+# 框架会 harvest 文件内容登记进 manifest，下游可用 <<stages.inspect_data_shapes.load_data>> 等引用。
 [stages.inspect_data_shapes]
 kind = "agent"
 system_prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_system.txt"}
 prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_task.txt"}
 tools = ["read", "write", "shell", "task", "ask_user"]
-max_turns = 16
+max_turns = 24
 cwd = "."
 workspace_root = "."
 cache = true
@@ -31,6 +33,9 @@ on_max_turns = "error"
 require_approval = false
 output_type = "text"
 output.all = {"type" = "file", "path" = "gen/fragments/data_shapes_report.txt"}
+output.load_data = {"type" = "file", "path" = "gen/fragments/load_data_func.py"}
+output.normalize_data = {"type" = "file", "path" = "gen/fragments/normalize_data_func.py"}
+output.shard_data_distributed = {"type" = "file", "path" = "gen/fragments/shard_data_distributed_func.py"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/inspect_data_shapes_transcript.json"}
 
 [stages.make_initial_args]
@@ -60,7 +65,10 @@ input = {"list"=[
          "ref.code_template.DPLEX_FUNCTIONS",
          "ref.code_template.PHYSICS_FUNCTIONS",
          "stages.make_initial_args.all",
-         "stages.save_results.all"
+         "stages.save_results.all",
+         "stages.inspect_data_shapes.load_data",
+         "stages.inspect_data_shapes.normalize_data",
+         "stages.inspect_data_shapes.shard_data_distributed"
          ]}
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/base_functions.py"}
@@ -74,14 +82,16 @@ output_type = "json"
 output.all = {"type" = "file", "path" = "gen/fragments/classification.json"}
 output.propagator_classification = {"type" = "direct"}
 
-# 交互式 agent：仅给 physics_functions / 分类 / arg_list / data 信息，向用户索取 LaTeX 公式后生成 likelihood
-# task.finish 后默认进入人工审阅（require_approval）；reject 可写反馈，agent 继续改再提交
+# 交互式 agent：向用户索取 LaTeX 后生成 likelihood，写到 run/likelihood_function.py
+# 通过 import run/base_functions.py 中的符号（COMMON_UTILITIES / dplex / physics / make_initial_args）
+# 生成后跑一遍 likelihood 冒烟测试，测试日志写入 output.test_result
+# task.finish 后默认人工审阅；reject 可回灌反馈
 [stages.generate_likelihood]
 kind = "agent"
 system_prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_system.txt"}
 prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_task.txt"}
 tools = ["read", "write", "shell", "task", "ask_user"]
-max_turns = 24
+max_turns = 32
 cwd = "."
 workspace_root = "."
 cache = false
@@ -89,5 +99,8 @@ finish_on_message = false
 on_max_turns = "error"
 require_approval = true
 output_type = "python"
-output.all = {"type" = "file", "path" = "gen/fragments/agent_likelihood_function.py"}
+output.all = {"type" = "file", "path" = "run/likelihood_function.py"}
+output.test_result = {"type" = "file", "path" = "run/likelihood_test_result.txt"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_likelihood_transcript.json"}
+
+

@@ -15,6 +15,7 @@ from scipy.optimize import minimize
 import jax.numpy as np
 from jax import device_put, grad, jit, vmap, jvp
 from jax import config
+from jax.sharding import NamedSharding, PartitionSpec as P
 
 
 # SECTION: PATH_CONFIG

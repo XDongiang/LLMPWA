@@ -1,0 +1,14 @@
+timestamp: 2026-07-28T17:23:57+08:00
+command: ast.parse + import + small real/MC/truth likelihood evaluation
+syntax OK
+import OK
+n_args = 65
+data_size = 256
+mc_size = 1024
+truth_size = 512
+data_likelihood = -1800.3984375
+mc_likelihood = 6077.3955078125
+combined_likelihood = 429.95849609375
+fraction_total = 0.9252583980560303
+PASS
+exit_status: 0

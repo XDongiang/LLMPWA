@@ -1,20 +1,61 @@
 ## Goal
-Interactively generate likelihood Python code from the user's LaTeX/formula, using only the necessary analysis context below — not a full code template.
+Interactively generate a likelihood module from the user's LaTeX/formula, save it under
+`run/likelihood_function.py`, reuse helpers from `run/base_functions.py`, then run a
+smoke test and save the test log.
 
 ## Required interactive step
 1. First call ask_user to request the likelihood formula. Ask roughly:
    "请输入 likelihood 的 LaTeX/公式说明（可包含 data/mc 项、振幅相干求和、约束项等）。
     若有符号与下面 arg_list / data 名称的对应关系，请一并说明。"
 2. Parse the user's answer. If incomplete, ask_user follow-ups.
-3. Implement the formula as Python functions and write them to:
-   gen/fragments/agent_likelihood_function.py
-4. Optionally run a light syntax check:
-   `python -c "import ast; ast.parse(open('gen/fragments/agent_likelihood_function.py').read()); print('OK')"`
-5. task(action="finish", result=<the full generated Python source>).
+3. Implement the formula as Python in:
+   **run/likelihood_function.py**
+4. Run a likelihood smoke test (section "Smoke test") and write the full log to:
+   **run/likelihood_test_result.txt**
+5. Finish with a short summary (not the full .py body):
+   task(
+     action="finish",
+     result=<1-10 lines: path, key functions, smoke-test status / scalar values>,
+     outputs={
+       "all": "run/likelihood_function.py",
+       "test_result": "run/likelihood_test_result.txt"
+     }
+   )
 
-## Context (necessary information only)
+## Context
 
-### 1) PHYSICS_FUNCTIONS (allowed resonance shape helpers)
+### 0) Shared runtime: run/base_functions.py (MUST use; do not duplicate)
+This file is already assembled by stages.assemble_help_functions. It provides
+COMMON_UTILITIES, PATH setup, dplex_*, PHYSICS_FUNCTIONS, make_initial_args, save_result.
+
+Current content (for reference; prefer `read run/base_functions.py` if needed):
+
+```python
+<<stages.assemble_help_functions.all>>
+```
+
+Import policy for `run/likelihood_function.py`:
+- Import symbols **from base_functions** (module lives next to this file under `run/`):
+  e.g.
+  ```python
+  from base_functions import (
+      np, onp, device_put, grad, jit, jvp, vmap,
+      dplex_dabs, dplex_deinsum, dplex_dconstruct, dplex_ddivide, ...
+      BW, flatte980, flatte1270, ...
+      make_initial_args,
+  )
+  ```
+  Adjust the import list to what you actually use. Prefer `from base_functions import ...`
+  over re-declaring `import jax.numpy as np` / `import numpy as onp` when already available.
+- Do **not** redefine dplex_* / BW / flatte* / make_initial_args / save_result.
+- Data loaders may come from inspect_data_shapes fragments if present:
+  - <<stages.inspect_data_shapes.load_data>> may be inlined by reading
+    gen/fragments/load_data_func.py, or import if you place a thin wrapper.
+  Preferred for the smoke test: `exec`/import the load_data / normalize_data /
+  shard_data_distributed functions from gen/fragments/*_func.py **only in the test
+  harness or __main__**, not re-implement physics in likelihood.
+
+### 1) PHYSICS_FUNCTIONS already in base_functions (also shown for formula design)
 ```python
 <<ref.code_template.DPLEX_FUNCTIONS>>
 <<ref.code_template.PHYSICS_FUNCTIONS>>
@@ -26,54 +67,91 @@ Interactively generate likelihood Python code from the user's LaTeX/formula, usi
 ```
 
 Useful fields:
-- propagator_classification: group resonances by propagator type pair
-- amplitude_classification: group by AMP + propagator types
-- parameter_lists: per-group parameter structure; free params appear as {"arg_index": n}
-- fixed_parameter: parameters that must stay fixed constants
+- propagator_classification / amplitude_classification
+- parameter_lists: free params as {"arg_index": n}
+- fixed_parameter: stay constant
 
-### 3) arg_list / free parameters (optimized args vector)
-Source: stages.config_strip.free_params (run/free_params.toml)
+### 3) free parameters (args vector)
+Source: stages.config_strip.free_params → run/free_params.toml
 ```
 <<stages.config_strip.free_params>>
 ```
-Each entry has path, value, optional range/error, and arg_index.
-The fit passes a 1-D args array; index i corresponds to arg_index=i.
+1-D args array; index i ↔ arg_index=i. Use make_initial_args() from base_functions
+to obtain a starting vector for the smoke test.
 
-### 4) data types / arrays available for the formula
-sbc variables: <<stages.config_strip.all_sbc>>
-amp variables: <<stages.config_strip.all_amp>>
-sbc-amp mapping: <<stages.config_strip.all_sbc_amp>>
+### 4) data / shapes
+sbc: <<stages.config_strip.all_sbc>>
+amp: <<stages.config_strip.all_amp>>
+sbc-amp: <<stages.config_strip.all_sbc_amp>>
 
-Data shape report (if available from inspect_data_shapes):
+Shape report:
 ```
 <<stages.inspect_data_shapes.all>>
 ```
 
-Conventional global array names used in fit scripts (assume already loaded):
-- data_{var}, mc_{var}, truth_{var} for each sbc/amp var
-- data_size, constraint_strength / total_frac_* may be globals if formula needs them
+Preprocessing fragments (load / normalize / shard) are under gen/fragments/*_func.py
+from stages.inspect_data_shapes. Use them for the smoke test data path; do not rewrite
+unless the formula needs different packing.
 
-### 5) Interface contract for generated code
-Generate at least:
-- extract_parameters(args) -> dict   # pack args[arg_index] and fixed constants into named params
-- data_likelihood_kk(args) -> scalar
-- mc_likelihood_kk(args) -> scalar
-- combined_likelihood(args) -> scalar
-  default structure if user formula does not override:
-  combined = data_likelihood_kk(args) + data_size * np.log(mc_likelihood_kk(args))
-- optional: hvp_combined_likelihood(args, vector) using jvp(grad(combined_likelihood), ...)
+### 5) Interface contract for run/likelihood_function.py
+Define at least:
+- extract_parameters(args) -> dict
+- data_likelihood_kk(args, data_or_jax_data) -> scalar
+- mc_likelihood_kk(args, data_or_jax_data) -> scalar
+- combined_likelihood(args, data_or_jax_data) -> scalar
+  default if user does not override:
+  combined = data_likelihood + data_size * np.log(mc_likelihood)
+- optional: hvp_combined_likelihood / factory make_distributed_likelihood(data_size)
 
-You must also define any calculate_* / component_* helpers your formula needs, built from PHYSICS_FUNCTIONS
-(BW, flatte980, flatte1270, ...) and dplex_* operations. Do not invent unavailable physics kernels
-without asking the user.
+Helpers (calculate_* / component_*) as needed, built from base_functions physics + dplex_*.
+
+Also provide a runnable smoke entry so the agent (and humans) can re-test, e.g.:
+```python
+if __name__ == "__main__":
+    # load data via inspect fragments or a minimal path, call combined_likelihood once, print scalars
+    ...
+```
+
+## Smoke test (required before finish)
+Write and execute a light check (shell). Goals: prove the module imports and returns finite scalars.
+
+Suggested procedure (adapt to available files / devices):
+1. Ensure `run/likelihood_function.py` exists and `ast.parse` succeeds.
+2. From analysis workdir, run something equivalent to:
+   ```bash
+   python - <<'PY'
+   import sys, traceback
+   sys.path.insert(0, "run")
+   from base_functions import make_initial_args, np, onp
+   import likelihood_function as lf
+   # load data: prefer load_data/normalize from gen/fragments if present
+   ...
+   args, *_ = make_initial_args()  # unpack whatever make_initial_args returns
+   # compute data_size from real data length
+   val = lf.combined_likelihood(args, data)  # or distributed variant
+   print("combined_likelihood =", float(val))
+   PY
+   ```
+3. Capture stdout/stderr + final status into **run/likelihood_test_result.txt**, including:
+   - timestamp / command
+   - import OK / syntax OK
+   - n_args, data_size (if known)
+   - printed likelihood scalar(s) (data / mc / combined if available)
+   - PASS or FAIL + exception traceback on failure
+4. If the test FAILs, fix the .py and re-run until PASS (or ask_user if blocked by missing formula/data).
+5. Prefer CPU / small subsets if full mc is too heavy; still use real free_params via make_initial_args.
+   Do **not** launch a full minimizer fit in this stage.
 
 ## Implementation guidance
-- Translate the user's LaTeX into executable JAX numpy code.
+- Translate user LaTeX into executable code using **np** (jax.numpy from base_functions).
 - Respect classification groups for vectorization when possible.
-- Use parameter_lists + free_params to know which quantities come from args vs constants.
-- Use data shapes to choose broadcasting / einsum axes carefully.
-- Keep code compact; comments only when necessary for non-obvious formula terms.
-- Do not add #=== section separators.
+- Use free_params / parameter_lists for args vs constants.
+- Use shape report for broadcasting / einsum axes.
+- Keep code compact; no #=== section banners.
+- task.finish `result` = short summary only; framework harvests the two files for
+  output.all and output.test_result.
 
-## Deliverable
-Write gen/fragments/agent_likelihood_function.py and finish with the file contents as result.
+## Deliverables checklist
+- [ ] run/likelihood_function.py  (imports from base_functions; implements likelihood API)
+- [ ] run/likelihood_test_result.txt  (smoke test log with PASS and numeric likelihood)
+- [ ] task.finish with outputs map pointing at both paths

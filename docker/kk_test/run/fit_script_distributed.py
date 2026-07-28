@@ -358,20 +358,40 @@ def shard_data_distributed(data, mesh):
 # 关键：jnp.sum / jnp.mean 作用在 sharded array 上时，XLA 自动插入 all-reduce
 # =============================================================================
 
-def make_distributed_likelihood(data_size):
-    """
-    构建分布式 combined_likelihood 函数。
+def mc_likelihood_kk(args, jax_data):
+        params = extract_parameters(args)
 
-    注意：在多进程 JAX 中，jit 函数不能通过闭包捕获跨进程（non-addressable）的
-    sharded array，否则会报 "Closing over jax.Array that spans non-addressable
-    devices is not allowed"。因此分片数据必须作为显式参数传入。
+        # 解包分片 MC 数据
+        m_phi_kk = jax_data['mc_phi_kk']
+        m_f_kk = jax_data['mc_f_kk']
+        m_phif0_kk = jax_data['mc_phif0_kk']
+        m_phif2_kk = jax_data['mc_phif2_kk']
 
-    返回的 combined_likelihood(args, jax_data) 接收：
-      - args:     全局复制的参数向量（被微分变量）
-      - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
-    """
+        total_mc = calculate_BW_flatte980(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
+            params['phif0_kk_BW_flatte980_rg'], m_f_kk,
+            m_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
+        )
+        total_mc = total_mc + calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], m_f_kk,
+            m_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
+        )
+        total_mc = total_mc + calculate_BW_flatte1270(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], m_f_kk,
+            m_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
+        )
+        total_mc = total_mc + calculate_BW_BW(
+            params['phi_mass'], params['phi_width'], m_phi_kk,
+            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
+            m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
+        )
+        # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
+        return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
 
-    def data_step_function(total_frac, args):
+def data_step_function(total_frac, args):
         step_value = jnp.power(total_frac - total_frac_kk, 2.0) * constraint_strength
         step_value += jnp.power(0.98 - args[0], 2.0) / jnp.power(10.0, 2.0) / 2.0
         step_value += jnp.power(1.704 - args[5], 2.0) / jnp.power(1.0, 2.0) / 2.0
@@ -388,7 +408,8 @@ def make_distributed_likelihood(data_size):
         step_value += jnp.power(0.075 - args[60], 2.0) / jnp.power(0.011, 2.0) / 2.0
         return step_value
 
-    def data_likelihood_kk(args, jax_data):
+
+def data_likelihood_kk(args, jax_data):
         params = extract_parameters(args)
 
         # 解包分片数据（作为参数传入，避免闭包捕获 non-addressable array）
@@ -468,38 +489,18 @@ def make_distributed_likelihood(data_size):
         likelihood = -jnp.sum(jnp.log(jnp.sum(dplex_dabs(total_amplitude), axis=1))) + step_function
         return likelihood
 
-    def mc_likelihood_kk(args, jax_data):
-        params = extract_parameters(args)
+def make_distributed_likelihood(data_size):
+    """
+    构建分布式 combined_likelihood 函数。
 
-        # 解包分片 MC 数据
-        m_phi_kk = jax_data['mc_phi_kk']
-        m_f_kk = jax_data['mc_f_kk']
-        m_phif0_kk = jax_data['mc_phif0_kk']
-        m_phif2_kk = jax_data['mc_phif2_kk']
+    注意：在多进程 JAX 中，jit 函数不能通过闭包捕获跨进程（non-addressable）的
+    sharded array，否则会报 "Closing over jax.Array that spans non-addressable
+    devices is not allowed"。因此分片数据必须作为显式参数传入。
 
-        total_mc = calculate_BW_flatte980(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif0_kk_BW_flatte980_mass'], params['phif0_kk_BW_flatte980_g_kk'],
-            params['phif0_kk_BW_flatte980_rg'], m_f_kk,
-            m_phif0_kk, params['phif0_kk_BW_flatte980_const'], params['phif0_kk_BW_flatte980_theta']
-        )
-        total_mc = total_mc + calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif0_kk_BW_BW_mass'], params['phif0_kk_BW_BW_width'], m_f_kk,
-            m_phif0_kk, params['phif0_kk_BW_BW_const'], params['phif0_kk_BW_BW_theta']
-        )
-        total_mc = total_mc + calculate_BW_flatte1270(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif2_kk_BW_flatte1270_mass'], params['phif2_kk_BW_flatte1270_width'], m_f_kk,
-            m_phif2_kk, params['phif2_kk_BW_flatte1270_const'], params['phif2_kk_BW_flatte1270_theta']
-        )
-        total_mc = total_mc + calculate_BW_BW(
-            params['phi_mass'], params['phi_width'], m_phi_kk,
-            params['phif2_kk_BW_BW_mass'], params['phif2_kk_BW_BW_width'], m_f_kk,
-            m_phif2_kk, params['phif2_kk_BW_BW_const'], params['phif2_kk_BW_BW_theta']
-        )
-        # jnp.mean 在 sharded array 上 → XLA all-reduce(sum) / global_size
-        return jnp.mean(jnp.sum(dplex_dabs(total_mc), axis=1))
+    返回的 combined_likelihood(args, jax_data) 接收：
+      - args:     全局复制的参数向量（被微分变量）
+      - jax_data: 分片数据 dict（作为 pytree 参数传入，不被微分）
+    """
 
     def combined_likelihood(args, jax_data):
         return data_likelihood_kk(args, jax_data) + data_size * jnp.log(mc_likelihood_kk(args, jax_data))
@@ -566,53 +567,15 @@ def main():
         jit_hvp = jit(hvp_combined_likelihood)
 
         test_result = jit_likelihood(args_list, jax_data)
+        test_data_likelihood = data_likelihood_kk(args_list, jax_data)
+        test_mc_likelihood = mc_likelihood_kk(args_list, jax_data)
+
         if is_chief:
             logger.info(f"初始似然值: {test_result}")
+            logger.info(f"初始 data_likelihood: {test_data_likelihood}")
+            logger.info(f"初始 mc_likelihood: {test_mc_likelihood}")
 
-        test_vector = jnp.ones_like(args_list)
-        test_hvp = jit_hvp(args_list, test_vector, jax_data)
-        if is_chief:
-            logger.info(f"HVP 测试完成，结果形状: {test_hvp.shape}")
 
-        def my_callback(x):
-            # 虽然只有主线程输出数据，但是需要其他几个线程同时计算似然函数值，保证节点同步
-            current_likelihood = jit_likelihood(jnp.asarray(x), jax_data)
-            current_likelihood.block_until_ready()
-            if is_chief:
-                logger.info(f"当前似然值: {current_likelihood}")
-
-        def hessp(x, p):
-            return onp.array(jit_hvp(jnp.asarray(x), jnp.asarray(p), jax_data))
-
-        if is_chief:
-            logger.info("开始优化（Newton-CG + HVP）...")
-        start_time = time.time()
-
-            # ===== 时间占比分析 =====
-        _N = 1000
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_likelihood(args_list, jax_data).block_until_ready()
-        t_likelihood = (time.perf_counter() - _t0) / _N
-
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_grad(args_list, jax_data).block_until_ready()
-        t_grad = (time.perf_counter() - _t0) / _N
-
-        _t0 = time.perf_counter()
-        for _ in range(_N):
-            jit_hvp(args_list, test_vector, jax_data).block_until_ready()
-        t_hvp = (time.perf_counter() - _t0) / _N
-
-        if is_chief:
-            logger.info("=" * 50)
-            logger.info("单次调用耗时（JIT编译后）:")
-            logger.info(f"  likelihood: {t_likelihood*1000:.2f} ms")
-            logger.info(f"  grad:       {t_grad*1000:.2f} ms  ({t_grad/t_likelihood:.1f}x likelihood)")
-            logger.info(f"  hvp:        {t_hvp*1000:.2f} ms  ({t_hvp/t_likelihood:.1f}x likelihood)")
-            logger.info("=" * 50)
-        # ===== 时间占比分析结束 =====
     return 0
 
 
