@@ -1,25 +1,18 @@
 from base_functions import (
-    np,
-    grad,
-    jvp,
     BW,
-    flatte980,
-    flatte1270,
     dplex_dabs,
     dplex_dconstruct,
     dplex_deinsum,
     dplex_deinsum_ord,
+    flatte1270,
+    flatte980,
+    jvp,
+    grad,
     make_initial_args,
-    load_data,
-    normalize_data,
+    np,
+    onp,
 )
 
-
-PHI_MASS = 1.02
-PHI_WIDTH = 0.004
-FRACTION_TARGET = 1.1
-FRACTION_PENALTY_SCALE = 1000.0
-LOG_EPSILON = 1.0e-30
 
 GAUSSIAN_CONSTRAINTS = (
     (0, 0.98, 10.0),
@@ -42,187 +35,163 @@ def extract_parameters(args):
     args = np.asarray(args)
     return {
         "f0_980": {
-            "mass": args[0],
-            "g_pipi": args[1],
-            "rg": args[2],
+            "mass": args[0], "g_pipi": args[1], "rg": args[2],
             "const": np.asarray([0.1, args[3]]),
             "theta": np.asarray([0.1, args[4]]),
         },
         "f0_bw": {
-            "mass": np.asarray([args[5], args[59]]),
-            "width": np.asarray([args[6], args[60]]),
-            "const": np.asarray([[args[7], args[8]], [args[61], args[62]]]),
-            "theta": np.asarray([[args[9], args[10]], [args[63], args[64]]]),
+            "mass": args[np.asarray([5, 59])],
+            "width": args[np.asarray([6, 60])],
+            "const": np.stack((args[np.asarray([7, 8])], args[np.asarray([61, 62])])),
+            "theta": np.stack((args[np.asarray([9, 10])], args[np.asarray([63, 64])])),
         },
         "f2_1270": {
-            "mass": args[11],
-            "width": args[12],
-            "const": args[13:18],
-            "theta": args[18:23],
+            "mass": args[11], "width": args[12],
+            "const": args[13:18], "theta": args[18:23],
         },
         "f2_bw": {
-            "mass": np.asarray([args[23], args[35], args[47]]),
-            "width": np.asarray([args[24], args[36], args[48]]),
+            "mass": args[np.asarray([23, 35, 47])],
+            "width": args[np.asarray([24, 36, 48])],
             "const": np.stack((args[25:30], args[37:42], args[49:54])),
             "theta": np.stack((args[30:35], args[42:47], args[54:59])),
         },
     }
 
 
-def _multiply_event_propagators(left, right):
-    if right.ndim == 2:
-        return dplex_deinsum("e,e->e", left, right)
-    return dplex_deinsum("e,le->le", left, right)
+def _propagator_product(phi_mass, phi_width, phi_s, f_propagators):
+    phi_prop = BW(phi_mass, phi_width, phi_s)
+    n_states = f_propagators.shape[1]
+    phi_props = np.broadcast_to(phi_prop[:, None, :], (2, n_states, phi_s.shape[0]))
+    return dplex_deinsum("le,le->le", phi_props, f_propagators)
 
 
-def _single_component(tensor, propagator, const, theta):
-    coupling = dplex_dconstruct(const, theta)
-    weighted = dplex_deinsum_ord("iek,i->ek", tensor, coupling)
-    return dplex_deinsum("e,ek->ek", propagator, weighted)[:, None, ...]
+def _coupled_components(tensor, const, theta, propagators):
+    couplings = dplex_dconstruct(const, theta)
+    weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)
+    return dplex_deinsum("lek,le->lek", weighted, propagators)
 
 
-def _multiple_components(tensor, propagators, const, theta):
-    coupling = dplex_dconstruct(const, theta)
-    weighted = dplex_deinsum_ord("iek,li->lek", tensor, coupling)
-    return dplex_deinsum("le,lek->lek", propagators, weighted)
+def _category_components(params, phi_s, f_s, f0_tensor, f2_tensor):
+    phi_mass = 1.02
+    phi_width = 0.004
+
+    p = params["f0_980"]
+    f_prop = flatte980(p["mass"], p["g_pipi"], p["rg"], f_s)[:, None, :]
+    prop = _propagator_product(phi_mass, phi_width, phi_s, f_prop)
+    f0_980 = _coupled_components(f0_tensor, p["const"][None, :], p["theta"][None, :], prop)
+
+    p = params["f0_bw"]
+    f_prop = np.stack([BW(p["mass"][i], p["width"][i], f_s) for i in range(2)], axis=1)
+    prop = _propagator_product(phi_mass, phi_width, phi_s, f_prop)
+    f0_bw = _coupled_components(f0_tensor, p["const"], p["theta"], prop)
+
+    p = params["f2_1270"]
+    f_prop = flatte1270(p["mass"], p["width"], f_s)[:, None, :]
+    prop = _propagator_product(phi_mass, phi_width, phi_s, f_prop)
+    f2_1270 = _coupled_components(f2_tensor, p["const"][None, :], p["theta"][None, :], prop)
+
+    p = params["f2_bw"]
+    f_prop = np.stack([BW(p["mass"][i], p["width"][i], f_s) for i in range(3)], axis=1)
+    prop = _propagator_product(phi_mass, phi_width, phi_s, f_prop)
+    f2_bw = _coupled_components(f2_tensor, p["const"], p["theta"], prop)
+    return f0_980, f0_bw, f2_1270, f2_bw
 
 
-def component_BW_flatte980(phi_sbc, f_sbc, tensor, parameters):
-    phi_prop = BW(PHI_MASS, PHI_WIDTH, phi_sbc)
-    f_prop = flatte980(
-        parameters["mass"], parameters["g_pipi"], parameters["rg"], f_sbc
-    )
-    propagator = _multiply_event_propagators(phi_prop, f_prop)
-    return _single_component(
-        tensor, propagator, parameters["const"], parameters["theta"]
-    )
-
-
-def component_BW_flatte1270(phi_sbc, f_sbc, tensor, parameters):
-    phi_prop = BW(PHI_MASS, PHI_WIDTH, phi_sbc)
-    f_prop = flatte1270(parameters["mass"], parameters["width"], f_sbc)
-    propagator = _multiply_event_propagators(phi_prop, f_prop)
-    return _single_component(
-        tensor, propagator, parameters["const"], parameters["theta"]
-    )
-
-
-def component_BW_BW(phi_sbc, f_sbc, tensor, parameters):
-    phi_prop = BW(PHI_MASS, PHI_WIDTH, phi_sbc)
-    masses = parameters["mass"]
-    widths = parameters["width"]
-    f_prop = np.stack(
-        [BW(masses[index], widths[index], f_sbc) for index in range(masses.shape[0])],
-        axis=1,
-    )
-    propagators = _multiply_event_propagators(phi_prop, f_prop)
-    return _multiple_components(
-        tensor, propagators, parameters["const"], parameters["theta"]
-    )
-
-
-def calculate_BW_flatte980(phi_sbc, f_sbc, tensor, parameters):
-    return np.sum(component_BW_flatte980(phi_sbc, f_sbc, tensor, parameters), axis=1)
-
-
-def calculate_BW_flatte1270(phi_sbc, f_sbc, tensor, parameters):
-    return np.sum(component_BW_flatte1270(phi_sbc, f_sbc, tensor, parameters), axis=1)
-
-
-def calculate_BW_BW(phi_sbc, f_sbc, tensor, parameters):
-    return np.sum(component_BW_BW(phi_sbc, f_sbc, tensor, parameters), axis=1)
-
-
-def _class_components(args, data, prefix):
-    parameters = extract_parameters(args)
-    phi_sbc = data[prefix + "phi_kk"]
-    f_sbc = data[prefix + "f_kk"]
-    f0_tensor = data[prefix + "phif0_kk"]
-    f2_tensor = data[prefix + "phif2_kk"]
-    return (
-        component_BW_flatte980(phi_sbc, f_sbc, f0_tensor, parameters["f0_980"]),
-        component_BW_BW(phi_sbc, f_sbc, f0_tensor, parameters["f0_bw"]),
-        component_BW_flatte1270(phi_sbc, f_sbc, f2_tensor, parameters["f2_1270"]),
-        component_BW_BW(phi_sbc, f_sbc, f2_tensor, parameters["f2_bw"]),
-    )
-
-
-def _total_amplitude(args, data, prefix):
-    components = _class_components(args, data, prefix)
+def _total_amplitude(components):
     return sum(np.sum(component, axis=1) for component in components)
 
 
-def _event_intensity(amplitude):
-    return np.sum(dplex_dabs(amplitude), axis=-1)
-
-
-def fraction_total(args, data):
-    components = _class_components(args, data, "truth_")
-    total_amplitude = sum(np.sum(component, axis=1) for component in components)
-    denominator = np.sum(dplex_dabs(total_amplitude))
-    numerator = sum(np.sum(dplex_dabs(component)) for component in components)
-    return numerator / np.maximum(denominator, LOG_EPSILON)
-
-
-def gaussian_constraint(args):
-    return sum(
-        (args[index] - center) ** 2 / (2.0 * sigma ** 2)
-        for index, center, sigma in GAUSSIAN_CONSTRAINTS
+def _components_for_prefix(args, data, prefix):
+    params = extract_parameters(args)
+    return _category_components(
+        params,
+        np.asarray(data[prefix + "phi_kk"]),
+        np.asarray(data[prefix + "f_kk"]),
+        np.asarray(data[prefix + "phif0_kk"]),
+        np.asarray(data[prefix + "phif2_kk"]),
     )
 
 
-def data_step_function(args, data):
-    f_total = fraction_total(args, data)
-    fraction_penalty = FRACTION_PENALTY_SCALE * (f_total - FRACTION_TARGET) ** 2
-    return fraction_penalty + gaussian_constraint(args)
+def event_intensity(args, data, prefix):
+    total = _total_amplitude(_components_for_prefix(args, data, prefix))
+    return np.sum(dplex_dabs(total), axis=-1)
+
+
+def fraction_values(args, data):
+    components = _components_for_prefix(args, data, "truth_")
+    denominator = np.sum(dplex_dabs(_total_amplitude(components)))
+    denominator = np.maximum(denominator, np.finfo(np.asarray(denominator).dtype).tiny)
+    fractions = np.stack([np.sum(dplex_dabs(component)) / denominator for component in components])
+    return fractions
+
+
+def gaussian_penalty(args):
+    args = np.asarray(args)
+    return sum((args[index] - center) ** 2 / (2.0 * sigma ** 2)
+               for index, center, sigma in GAUSSIAN_CONSTRAINTS)
 
 
 def data_likelihood_kk(args, data_or_jax_data):
-    amplitude = _total_amplitude(args, data_or_jax_data, "data_")
-    intensity = _event_intensity(amplitude)
-    nll = -np.sum(np.log(np.maximum(intensity, LOG_EPSILON)))
-    return nll + data_step_function(args, data_or_jax_data)
+    intensity = event_intensity(args, data_or_jax_data, "data_")
+    tiny = np.finfo(intensity.dtype).tiny
+    fractions = fraction_values(args, data_or_jax_data)
+    fraction_penalty = 1000.0 * (np.sum(fractions) - 1.1) ** 2
+    return -np.sum(np.log(np.maximum(intensity, tiny))) + fraction_penalty + gaussian_penalty(args)
 
 
 def mc_likelihood_kk(args, data_or_jax_data):
-    amplitude = _total_amplitude(args, data_or_jax_data, "mc_")
-    return np.mean(_event_intensity(amplitude))
+    intensity = event_intensity(args, data_or_jax_data, "mc_")
+    return np.mean(intensity)
 
 
 def combined_likelihood(args, data_or_jax_data):
     data_size = data_or_jax_data["data_phi_kk"].shape[0]
-    normalization = mc_likelihood_kk(args, data_or_jax_data)
-    return data_likelihood_kk(args, data_or_jax_data) + data_size * np.log(
-        np.maximum(normalization, LOG_EPSILON)
-    )
+    mc_norm = mc_likelihood_kk(args, data_or_jax_data)
+    tiny = np.finfo(mc_norm.dtype).tiny
+    return data_likelihood_kk(args, data_or_jax_data) + data_size * np.log(np.maximum(mc_norm, tiny))
 
 
 def make_distributed_likelihood(data_size):
-    def distributed_likelihood(args, data_or_jax_data):
-        normalization = mc_likelihood_kk(args, data_or_jax_data)
-        return data_likelihood_kk(args, data_or_jax_data) + data_size * np.log(
-            np.maximum(normalization, LOG_EPSILON)
-        )
-
-    return distributed_likelihood
+    def likelihood(args, data_or_jax_data):
+        mc_norm = mc_likelihood_kk(args, data_or_jax_data)
+        tiny = np.finfo(mc_norm.dtype).tiny
+        return data_likelihood_kk(args, data_or_jax_data) + data_size * np.log(np.maximum(mc_norm, tiny))
+    return likelihood
 
 
-def hvp_combined_likelihood(args, tangent, data_or_jax_data):
-    return jvp(
-        lambda values: grad(combined_likelihood)(values, data_or_jax_data),
-        (args,),
-        (tangent,),
-    )[1]
+def hvp_combined_likelihood(args, vector, data_or_jax_data):
+    gradient = grad(combined_likelihood, argnums=0)
+    return jvp(lambda x: gradient(x, data_or_jax_data), (args,), (vector,))[1]
+
+
+def _load_smoke_subset(n_data=128, n_mc=512, n_truth=256):
+    data = {}
+    for var in ("phi_kk", "f_kk", "b123_kk", "b124_kk"):
+        real = onp.load("data/real_data/" + var + ".npy", mmap_mode="r")
+        mc = onp.load("data/mc_truth/" + var + ".npy", mmap_mode="r")
+        data["data_" + var] = onp.asarray(real[:n_data])
+        data["mc_" + var] = onp.asarray(mc[:n_mc])
+        data["truth_" + var] = onp.asarray(mc[:n_truth])
+    for var in ("phif0_kk", "phif2_kk"):
+        real = onp.load("data/real_data/" + var + ".npy", mmap_mode="r")
+        mc = onp.load("data/mc_truth/" + var + ".npy", mmap_mode="r")
+        data["data_" + var] = onp.asarray(real[:, :n_data, :])
+        data["mc_" + var] = onp.asarray(mc[:, :n_mc, :])
+        data["truth_" + var] = onp.asarray(mc[:, :n_truth, :])
+        regular = 1.0 / onp.mean(onp.sqrt(onp.sum(data["mc_" + var] ** 2, axis=-1)), axis=1)
+        for prefix in ("data_", "mc_", "truth_"):
+            data[prefix + var] = onp.einsum("i,iek->iek", regular, data[prefix + var])
+    return data
 
 
 if __name__ == "__main__":
-    args, _, _ = make_initial_args()
-    data = normalize_data(load_data())
-    values = {
-        "data_likelihood": data_likelihood_kk(args, data),
-        "mc_likelihood": mc_likelihood_kk(args, data),
-        "combined_likelihood": combined_likelihood(args, data),
-        "fraction_total": fraction_total(args, data),
-    }
-    for name, value in values.items():
-        print(name + " =", float(value))
+    initial_args, _, _ = make_initial_args()
+    smoke_data = _load_smoke_subset()
+    data_value = data_likelihood_kk(initial_args, smoke_data)
+    mc_value = mc_likelihood_kk(initial_args, smoke_data)
+    combined_value = combined_likelihood(initial_args, smoke_data)
+    print("n_args =", initial_args.size)
+    print("data_size =", smoke_data["data_phi_kk"].shape[0])
+    print("data_likelihood =", float(data_value))
+    print("mc_likelihood =", float(mc_value))
+    print("combined_likelihood =", float(combined_value))

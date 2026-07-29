@@ -103,4 +103,20 @@ output.all = {"type" = "file", "path" = "run/likelihood_function.py"}
 output.test_result = {"type" = "file", "path" = "run/likelihood_test_result.txt"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_likelihood_transcript.json"}
 
-
+# 交互式 agent：生成分布式 Newton-CG 主入口 run/fit_script.py
+# 复用 run/base_functions.py 与 run/likelihood_function.py，不重复实现物理/似然。
+[stages.generate_fit_script]
+kind = "agent"
+system_prompt = {"type" = "file", "path" = "gen/prompts/generate_fit_script_system.txt"}
+prompt = {"type" = "file", "path" = "gen/prompts/generate_fit_script_task.txt"}
+tools = ["read", "write", "shell", "task", "ask_user"]
+max_turns = 24
+cwd = "."
+workspace_root = "."
+cache = false
+finish_on_message = false
+on_max_turns = "error"
+require_approval = true
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/fit_script.py"}
+output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_fit_script_transcript.json"}

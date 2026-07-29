@@ -1,14 +1,13 @@
-timestamp: 2026-07-28T17:23:57+08:00
-command: ast.parse + import + small real/MC/truth likelihood evaluation
-syntax OK
-import OK
+timestamp: 2026-07-29T16:36:51+08:00
+command: ast.parse + PYTHONPATH=run JAX_PLATFORM_NAME=cpu module import and subset likelihood evaluation
+syntax OK: run/likelihood_function.py
+import OK: likelihood_function
 n_args = 65
-data_size = 256
-mc_size = 1024
-truth_size = 512
-data_likelihood = -1800.3984375
-mc_likelihood = 6077.3955078125
-combined_likelihood = 429.95849609375
-fraction_total = 0.9252583980560303
+data_size = 128
+mc_size = 512
+truth_size = 256
+fractions = [0.13382737338542938, 0.6411231160163879, 0.009901473298668861, 0.15565776824951172]
+data_likelihood = -715.3539428710938
+mc_likelihood = 6145.71142578125
+combined_likelihood = 401.25531005859375
 PASS
-exit_status: 0

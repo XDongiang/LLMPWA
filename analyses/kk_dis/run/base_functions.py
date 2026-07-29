@@ -149,29 +149,31 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 def load_data():
     data = {}
     n_repeat = 1
-    n_truth_mc = 150000  # Truth-MC cost/memory cap; not real-data n_data.
+    n_truth_mc = 150000  # Truth-MC cost/memory cap; not the real-data n_data.
 
-    rank1_vars = ("phi_kk", "f_kk", "b123_kk", "b124_kk")
-    rank3_vars = ("phif0_kk", "phif2_kk")
+    data["data_phi_kk"] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
+    data["mc_phi_kk"] = onp.tile(onp.load("data/mc_truth/phi_kk.npy"), n_repeat)
+    data["truth_phi_kk"] = data["mc_phi_kk"][0:n_truth_mc * n_repeat]
 
-    for var in rank1_vars:
-        data[var] = onp.tile(onp.load("data/real_data/" + var + ".npy"), n_repeat)
-        data["data_" + var] = data.pop(var)
-        data["mc_" + var] = onp.tile(
-            onp.load("data/mc_truth/" + var + ".npy"), n_repeat
-        )
-        data["truth_" + var] = data["mc_" + var][0:n_truth_mc * n_repeat]
+    data["data_f_kk"] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)
+    data["mc_f_kk"] = onp.tile(onp.load("data/mc_truth/f_kk.npy"), n_repeat)
+    data["truth_f_kk"] = data["mc_f_kk"][0:n_truth_mc * n_repeat]
 
-    for var in rank3_vars:
-        data["data_" + var] = onp.tile(
-            onp.load("data/real_data/" + var + ".npy"), (1, n_repeat, 1)
-        )
-        data["mc_" + var] = onp.tile(
-            onp.load("data/mc_truth/" + var + ".npy"), (1, n_repeat, 1)
-        )
-        data["truth_" + var] = data["mc_" + var][
-            :, 0:n_truth_mc * n_repeat, ...
-        ]
+    data["data_phif0_kk"] = onp.tile(onp.load("data/real_data/phif0_kk.npy"), (1, n_repeat, 1))
+    data["mc_phif0_kk"] = onp.tile(onp.load("data/mc_truth/phif0_kk.npy"), (1, n_repeat, 1))
+    data["truth_phif0_kk"] = data["mc_phif0_kk"][:, 0:n_truth_mc * n_repeat, ...]
+
+    data["data_phif2_kk"] = onp.tile(onp.load("data/real_data/phif2_kk.npy"), (1, n_repeat, 1))
+    data["mc_phif2_kk"] = onp.tile(onp.load("data/mc_truth/phif2_kk.npy"), (1, n_repeat, 1))
+    data["truth_phif2_kk"] = data["mc_phif2_kk"][:, 0:n_truth_mc * n_repeat, ...]
+
+    data["data_b123_kk"] = onp.tile(onp.load("data/real_data/b123_kk.npy"), n_repeat)
+    data["mc_b123_kk"] = onp.tile(onp.load("data/mc_truth/b123_kk.npy"), n_repeat)
+    data["truth_b123_kk"] = data["mc_b123_kk"][0:n_truth_mc * n_repeat]
+
+    data["data_b124_kk"] = onp.tile(onp.load("data/real_data/b124_kk.npy"), n_repeat)
+    data["mc_b124_kk"] = onp.tile(onp.load("data/mc_truth/b124_kk.npy"), n_repeat)
+    data["truth_b124_kk"] = data["mc_b124_kk"][0:n_truth_mc * n_repeat]
 
     return data
 
@@ -179,9 +181,7 @@ def load_data():
 def normalize_data(data):
     for var in ("phif0_kk", "phif2_kk"):
         mc_arr = data["mc_" + var]
-        regular = 1.0 / onp.mean(
-            onp.sqrt(onp.sum(mc_arr ** 2, axis=-1)), axis=1
-        )
+        regular = 1.0 / onp.mean(onp.sqrt(onp.sum(mc_arr ** 2, axis=-1)), axis=1)
         for prefix in ("data_", "mc_", "truth_"):
             key = prefix + var
             data[key] = onp.einsum("i,ijk->ijk", regular, data[key])
@@ -190,21 +190,17 @@ def normalize_data(data):
 
 def shard_data_distributed(data, mesh):
     jax_data = {}
-    event_sharding = NamedSharding(mesh, P("event"))
-    amplitude_sharding = NamedSharding(mesh, P(None, "event", None))
-
+    event_1d_sharding = NamedSharding(mesh, P("event"))
+    event_3d_sharding = NamedSharding(mesh, P(None, "event", None))
     for key, value in data.items():
         array = np.asarray(value)
         if array.ndim == 1:
-            sharding = event_sharding
+            sharding = event_1d_sharding
         elif array.ndim == 3:
-            sharding = amplitude_sharding
+            sharding = event_3d_sharding
         else:
-            raise ValueError(
-                "Unsupported data rank for {}: {}".format(key, array.ndim)
-            )
+            raise ValueError("Unsupported data rank for {}: {}".format(key, array.ndim))
         jax_data[key] = device_put(array, sharding)
-
     return jax_data
 
 

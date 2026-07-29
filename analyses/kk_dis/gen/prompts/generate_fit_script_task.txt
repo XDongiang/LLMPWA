@@ -1,0 +1,176 @@
+## Goal
+Generate the distributed fit entry script **run/fit_script.py**.
+
+It is the main program for multi-process JAX data-parallel Newton-CG fitting.
+Helpers and likelihood already exist; this file only wires them together.
+
+## Required workflow
+1. Read (workspace only):
+   - run/base_functions.py
+   - run/likelihood_function.py
+2. Implement **run/fit_script.py** using the architecture below and local module APIs.
+3. Optional light smoke (from analysis workdir):
+   - `python -c "import ast; ast.parse(open('run/fit_script.py').read())"`
+   - do **not** launch multi-node training or a long minimize
+4. Finish:
+   ```
+   task(
+     action="finish",
+     result=<1-10 lines: path, key steps, smoke status>,
+     outputs={"all": "run/fit_script.py"}
+   )
+   ```
+
+## Module contracts (verify with read; adapt if signatures differ)
+
+### run/base_functions.py (MUST import; do not duplicate)
+Expected / typical symbols:
+- path setup already chdirs to analysis root when base_functions is imported
+- `setup_logging()`
+- `make_initial_args() -> (args, ranges, errors)`  (host numpy)
+- `save_result(args, errors, path=...)`
+- `load_data() -> dict` host arrays with keys data_/mc_/truth_*
+- `normalize_data(data) -> data`
+- `shard_data_distributed(data, mesh) -> jax_data`
+- jax/numpy helpers: `np` (jax.numpy), `onp`, `device_put`, `grad`, `jit`, `jvp`,
+  `config`, `NamedSharding`, `P`; fit_script may also import `minimize` / `jax` / `Mesh`
+  itself if missing from base_functions
+
+Current assembled helpers (for reference):
+```python
+<<stages.assemble_help_functions.all>>
+```
+
+### run/likelihood_function.py (MUST import)
+Expected API (adapt to actual definitions):
+- `combined_likelihood(args, data_or_jax_data) -> scalar`
+  (data_size is typically taken from data_or_jax_data inside, or use
+   `make_distributed_likelihood(data_size)` if that factory is preferred)
+- `hvp_combined_likelihood(args, vector, data_or_jax_data) -> vector`
+  OR build HVP via `jvp(grad(...), ...)` when needed for non-addressable sharded data
+
+Likelihood body reference (do not paste wholesale; only for call signatures):
+```python
+<<stages.generate_likelihood.all>>
+```
+
+## Required architecture for run/fit_script.py
+
+Event-level data parallel + Newton-CG:
+- each process/GPU holds an event shard
+- likelihood / grad / HVP reduce across devices via XLA all-reduce on sharded arrays
+- SciPy Newton-CG outer loop runs on every process with the same inputs and collective order
+- only process 0 writes logs/results
+
+### 1) init_distributed()
+```python
+def init_distributed():
+    coordinator = os.environ.get("JAX_COORDINATOR_ADDRESS", "")
+    num_processes = int(os.environ.get("JAX_NUM_PROCESSES", 1))
+    process_id = int(os.environ.get("JAX_PROCESS_ID", 0))
+    if num_processes > 1:
+        jax.distributed.initialize(
+            coordinator_address=coordinator,
+            num_processes=num_processes,
+            process_id=process_id,
+        )
+    return num_processes, process_id
+```
+
+### 2) build_mesh()
+```python
+def build_mesh():
+    return Mesh(jax.devices(), axis_names=("event",))
+```
+
+### 3) main() outline
+1. `num_processes, process_id = init_distributed()`; `is_chief = (process_id == 0)`
+2. `config.update("jax_enable_x64", True)`
+3. `logger = setup_logging()`; only chief logs status / process counts
+4. `data = load_data(); data = normalize_data(data)`
+5. `data_size = len(data["data_phi_kk"])` (or the real-data 1D event key present)
+6. `mesh = build_mesh()`
+7. Inside mesh context (`with jax.set_mesh(mesh):` or equivalent for this JAX version):
+   - `jax_data = shard_data_distributed(data, mesh)`
+   - Build callable NLL over `(args, jax_data)` from likelihood_function
+   - **Do not** close over non-addressable sharded arrays inside jit if multi-process
+     forbids it; pass `jax_data` as an explicit argument.
+   - Grad: `grad(nll, argnums=0)` (differentiate only args)
+   - HVP: prefer jvp-of-grad with zero data tangent, e.g.
+     `zero_data = jax.tree.map(np.zeros_like, jax_data)` then
+     `jvp(grad_fn, (x, jax_data), (v, zero_data))[1]`
+     (or use `hvp_combined_likelihood` if it already matches this contract)
+   - `args_list, _, _ = make_initial_args()`
+   - replicate args: `device_put(np.asarray(args_list), NamedSharding(mesh, P()))`
+   - `jit_likelihood = jit(nll)`, `jit_grad = jit(grad(...))`, `jit_hvp = jit(hvp...)`
+   - smoke: one likelihood eval + one HVP; chief logs scalars/shapes
+   - SciPy:
+     ```python
+     result = minimize(
+         fun=lambda x: float(jit_likelihood(np.asarray(x), jax_data)),
+         x0=onp.asarray(args_list),
+         jac=lambda x: onp.array(jit_grad(np.asarray(x), jax_data)),
+         hessp=lambda x, p: onp.array(jit_hvp(np.asarray(x), np.asarray(p), jax_data)),
+         method="Newton-CG",
+         callback=my_callback,
+         options={"disp": False, "xtol": 1e-8},
+     )
+     ```
+   - **All processes** run the same minimize loop (identical collective order)
+   - callback: every process evaluates likelihood (sync); only chief logs
+   - After optimize: build Hessian columns via HVP on all processes;
+     `ferror = sqrt(diag(inv(H)))`
+   - **Only chief** writes:
+     - `output/fit/fit_result_values.npy`
+     - `output/fit/fit_result_errors.npy`
+     - `save_result(result.x, ferror, "output/fit/free_params_fitted.toml")`
+8. `return 0`
+9. `if __name__ == "__main__": raise SystemExit(main())`
+
+## Import / path policy for run/fit_script.py
+Recommended pattern (adjust to what base_functions already does):
+```python
+import os
+import sys
+import time
+
+_here = os.path.dirname(os.path.abspath(__file__))
+_root = os.path.dirname(_here)
+os.chdir(_root)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+if _here not in sys.path:
+    sys.path.insert(0, _here)
+
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
+import jax
+from jax import config, grad, jit, jvp, device_put
+from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from scipy.optimize import minimize
+import numpy as onp
+
+from base_functions import (
+    setup_logging,
+    make_initial_args,
+    save_result,
+    load_data,
+    normalize_data,
+    shard_data_distributed,
+    # plus any needed aliases such as np
+)
+from likelihood_function import (
+    combined_likelihood,
+    # hvp_combined_likelihood and/or make_distributed_likelihood if useful
+)
+```
+
+Do **not** redefine physics or likelihood bodies. Only write distributed main orchestration.
+
+## Deliverables checklist
+- [ ] run/fit_script.py complete, importable, with main()
+- [ ] uses base_functions data I/O + params I/O
+- [ ] uses likelihood_function for NLL / HVP
+- [ ] multi-process-safe: all ranks minimize; chief-only file writes
+- [ ] no dependency on files outside this analysis workspace
+- [ ] task.finish with outputs={"all": "run/fit_script.py"}
