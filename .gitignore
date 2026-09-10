@@ -140,3 +140,7 @@ venv.bak/
 fragments/
 llm_logs/
 manifes*.toml
+
+# LLMPWA pipeline visualization / pipeline_state export artifacts (regenerated)
+pipeline_report.*
+pipeline_state.json

@@ -137,6 +137,17 @@ $ python run/dplot_run_kk.py
 
 更详细的使用说明和API文档，请访问 [文档链接](Tutorial_CN.md).
 
+### 流水线状态与可视化
+
+- [流水线状态导出器](pipeline_state_exporter.md)：`agent/pipeline_state.py` 将
+  `resonances_config.toml` 汇总为 `gen/pipeline_state.json` 快照。
+- [可视化方案(路线A)](pipeline_visualization_plan.md)：纯报告（Markdown/Mermaid /
+  自包含 HTML）生成器。
+- [DSH 工作台设计稿(路线B)](dsh-client-plugin-design.md)：原生 DeepSeek Harness
+  client-plugin —— 左侧 Sidebar 按钮打开整页工作台，预览 analysis 的流水线 DAG。
+- [为 dsh 写整页插件实战指南](dsh-page-plugin-guide.md)：把本次工作整理成的可复用
+  cookbook —— 建包、slot 接入、四个 props share、三处注册、构建/测试/运行与踩坑清单。
+
 ## 贡献
 
 欢迎任何形式的贡献，包括但不限于新功能、代码修复、文档改进等。请通过Pull Requests或Issues与我们分享您的想法。
