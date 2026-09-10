@@ -1,5 +1,5 @@
 参考文件
-docker/kk_test/run/fit_script.py
+analyses/kk_dis/run/fit_script.py
 可以把这个拟合设计成 数据并行的分布式 Newton-CG/HVP 架构。对你这个脚本来说，最自然的并行轴不是参数，而是事件样本。
 当前结构是：
 result = minimize(

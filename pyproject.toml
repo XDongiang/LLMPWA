@@ -5,34 +5,44 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pwacg"
 version = "0.1.0"
-description = "Partial Wave Analysis Code Generator"
-authors = [
-    { name = "caihao" }
-]
+description = "LLM-Powered Partial Wave Analysis Code Generator (LLMPWA)"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.7"
+requires-python = ">=3.8"
+authors = [{ name = "caihao" }]
+keywords = ["partial-wave-analysis", "code-generation", "llm", "jax"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
+    "openai",
+    "python-dotenv",
+    "toml",
+]
+
+# The generator itself only needs the dependencies above. Running the *generated*
+# fitting code needs the physics/numeric stack below; keep these separate so the
+# generator stays lightweight.
+[project.optional-dependencies]
+runtime = [
     "jax",
     "numpy",
-    "jinja2",
+    "scipy",
     "pandas",
     "iminuit",
     "pynvml",
     "matplotlib",
     "tabulate",
-    "root",
-    "openai",
-    "toml",
-    "python-dotenv",
 ]
-
-[project.scripts]
-pwacg = "create_all_scripts:main"
 
 [project.urls]
 homepage = "https://github.com/caihao/PWACG"
 
 [tool.setuptools]
-packages = ["dlib", "dmultiprocess", "picture", "pwa", "Tensor", "create_code"]
 include-package-data = true
+
+# Only the `agent/` engine is an importable Python package; `analyses/` and
+# `docker/` hold data/config and are shipped as package data, not modules.
+[tool.setuptools.packages.find]
+include = ["agent", "agent.*"]

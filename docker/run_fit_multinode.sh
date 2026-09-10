@@ -70,8 +70,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WORKDIR" ]]; then
-    # 兼容旧默认：docker/kk_test
-    WORKDIR="${SCRIPT_DIR}/kk_test"
+    # 默认使用规范分析 kk_dis
+    WORKDIR="${REPO_ROOT}/analyses/kk_dis"
 fi
 
 # 相对路径相对当前工作目录解析；解析失败时再尝试相对仓库根

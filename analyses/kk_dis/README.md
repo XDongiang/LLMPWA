@@ -330,8 +330,8 @@ output/fit/free_params_fitted.toml    # 与 free_params 同结构的结果 TOML
 
 | 文档 | 关系 |
 |------|------|
-| 根目录 `README.md` | LLMPWA 总览（偏早期生成器说明） |
-| `documentation/README_CN.md` | PWACG/安装与 JAX/ROOT 环境 |
+| 根目录 `README.md` | LLMPWA 总览（安装、快速开始、仓库结构） |
+| `documentation/README_CN.md` | 中文项目说明与环境安装 |
 | `docker/design.md` | 本流水线采用的事件并行 + Newton-CG/HVP 设计原文 |
 | `docker/run_mulit_node.md` | 多机 Docker / NCCL 运行备忘 |
 | 本文 `analyses/kk_dis/README.md` | **kk_dis 拟合脚本生成流程的完成态说明** |

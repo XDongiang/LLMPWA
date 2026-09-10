@@ -1,0 +1,7 @@
+# LLMPWA code-generator runtime dependencies.
+# These are the only packages the `agent/` LLM pipeline needs.
+# Python 3.11+ uses the stdlib `tomllib` where available, but `config_loader.py`
+# and `manifest.py` import the `toml` package directly, so it is listed here.
+openai
+python-dotenv
+toml

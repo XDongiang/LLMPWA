@@ -1,141 +1,90 @@
-# PWACG - 分波分析代码生成器
+# LLMPWA — 大模型驱动的分波分析代码生成器
 
-PWACG（Partial Wave Analysis Code Generator）是一款专为分波分析设计的代码生成工具，它利用先进的代码生成技术，能够产生计算速度极快且显存利用率高的分析代码。本工具支持大数据量下使用牛顿共轭梯度法进行优化，大幅提高了寻找分波分析拟合全局最优点的搜索效率。
+LLMPWA 通过 LLM/Agent 流水线，把声明式的共振态配置转换为分波分析（PWA）拟合代码。
+端到端参考实现是 [`analyses/kk_dis`](../analyses/kk_dis/README.md)：从
+`resonances_config.toml` 出发，产出 **JAX 事件级数据并行 + SciPy Newton-CG** 的分布式拟合入口。
 
+## 工作原理
 
-## 安装与环境配置
+1. 用 TOML 声明共振与振幅（`resonances_config.toml`）。
+2. `agent/` 引擎按 `llm_config_*.toml` 定义的 stage 顺序执行
+   （`kind = python | llm | agent`），每个 stage 的输出登记进 manifest，
+   下游可用 `<<stages.xxx.yyy>>` 引用。
+3. 可复用的数值原语/模板走模板；分析相关逻辑（数据 shape、似然公式、拟合主程序）
+   由 LLM/Agent 分阶段生成。
+4. 最终得到可直接运行的 `run/fit_script.py`，可对接多节点 Docker 集群。
 
-### 1. 获取安装包
-首先，从 GitHub 克隆 PWACG 仓库到您的本地计算机：
+## 环境要求
 
-```bash
-git clone https://github.com/caihao/PWACG.git
-```
+- Python 3.8+（推荐 3.11+，可在有 `tomllib` 时优先使用标准库）
+- EasyTrans 的 LLM API Key（`EASYTRANS_API_KEY`）
 
-这将在当前目录下创建一个名为 `PWACG` 的文件夹，其中包含所有必要的文件。
-
-### 2. 安装 Miniconda
-请根据您的操作系统从 [Miniconda 官方网站](https://www.anaconda.com/docs/getting-started/miniconda/main) 下载并安装 Miniconda。
-
-### 3. 安装 JAX
-JAX 在英伟达 30 系和最新款 GPU 上经过测试，要求提前安装 CUDA 环境和英伟达驱动。请在安装 JAX 后验证其是否可以正常使用 GPU。
-
-根据 CUDA 版本选择对应的安装命令：
-
-```bash
-# 针对 CUDA 12.x
-pip install -U "jax[cuda12]"
-```
-
-**验证 GPU 是否支持 JAX：**
+### 安装生成器依赖
 
 ```bash
-python -c "import jax; print(jax.devices())"
+pip install -r requirements.txt
 ```
 
-**JAX 官方安装教程：** [JAX Installation Guide](https://github.com/jax-ml/jax?tab=readme-ov-file#installation)
+只安装 `openai`、`python-dotenv`、`toml` —— 这三个是生成器本身所需的全部第三方包。
+**运行**生成的拟合代码还需要安装 `pyproject.toml` 中 `runtime` extra 对应的物理/数值栈
+（JAX、NumPy、SciPy 等），并配置好 CUDA/JAX 环境。
 
-### 4. 安装 ROOT
-通过 conda 安装 ROOT 数据分析框架：
+### 配置 API
 
 ```bash
-conda config --set channel_priority strict
-conda install -c conda-forge root
+export EASYTRANS_API_KEY="your_api_key_here"
+# 可选覆盖
+export EASYTRANS_BASE_URL="https://api.easytransnote.com/v1"
+export EASYTRANS_MODEL="gemini-2.5-pro"
 ```
 
-### 5. 安装 Python 依赖
-安装其余的 Python 依赖包：
+## 快速开始（以 kk_dis 为例）
+
+### 生成代码
 
 ```bash
-pip install -U \
-    jinja2 \
-    iminuit \
-    pynvml \
-    matplotlib \
-    pandas \
-    tabulate
+# 静态检查
+python -m agent.cli --workdir analyses/kk_dis --config llm_config_fit.toml --check-only
+
+# 跑完整流水线
+python -m agent.cli --workdir analyses/kk_dis --config llm_config_fit.toml
+
+# 只重跑某一 stage
+python -m agent.cli --workdir analyses/kk_dis --config llm_config_fit.toml --stage generate_fit_script
 ```
 
-## 快速开始
+流水线的 stage 列表与运行时契约见
+[`analyses/kk_dis/README.md`](../analyses/kk_dis/README.md)。
 
-在开始使用 PWACG 之前，请确保您已准备好所有必要的数据和配置文件，并且在 Git 中切换到 main 分支。
-
-### 1. 下载 Demo 数据
-
-从 GitHub 的 Releases 中下载 `data.zip` 数据文件：
+### 运行生成的拟合（单机）
 
 ```bash
-wget https://github.com/caihao/PWACG/releases/download/v1.0.0/data.zip
+cd analyses/kk_dis
+python run/fit_script.py
 ```
 
-解压数据文件：
+### 多节点 Docker 拟合
 
 ```bash
-unzip data.zip
+./docker/run_fit_multinode.sh --workdir analyses/kk_dis
 ```
 
-解压后的文件目录如下：
+## 仓库结构
 
-```bash
-$ ls data
-draw_data  draw_mc  mc_int  mc_truth  real_data  weight
+```
+agent/          通用生成引擎（cli、engine、stage runner、agent tools）
+analyses/       各分析目录：配置、prompts、handlers 与生成代码
+  kk_dis/       端到端参考实现
+docker/         多节点 JAX Docker 拟合工具
+documentation/  指南（流水线状态、可视化、dsh 工作台、教程）
 ```
 
-解压后的 data 目录应位于项目的根目录下。确保程序能够正确读取并使用 data 目录中的数据。
+## 文档索引
 
-
-### 2. 生成分析脚本
-
-使用以下命令生成所需的分析脚本：
-
-```bash
-python create_all_scripts.py
-```
-
-这个命令会根据您提供的数据和配置信息，创建一系列脚本，用于后续的分波分析过程。
-
-### 3. 运行拟合 Demo
-
-在生成脚本后，您可以运行拟合过程：
-
-```bash
-# 产生拟合脚本
-$ python create_all_scripts.py
-
-# 运行拟合
-$ python run/fit_kk.py
-```
-
-这将运行 `fit_kk.py` 脚本，开始对您的数据进行分波分析拟合。根据数据量和配置的不同，这个过程可能需要一些时间。
-
-### 4. 画图
-
-在拟合完成后，您可以生成并查看拟合结果的图表：
-
-```bash
-# 产生拟合结果的画图脚本
-$ python create_all_scripts.py
-
-# 产生拟合结果的权重
-$ python run/draw_wt_kk.py
-
-# 画图
-$ python run/dplot_run_kk.py
-```
-
-画图的结果将保存在 `output/pictures/partial_mods_pictures/` 目录下。
-
-
-## 项目亮点
-
-- **极速计算**：通过代码生成技术，优化算法执行路径，显著提升计算速度。
-- **高效显存利用**：智能管理显存资源，确保高效利用，适合处理大规模数据集。
-- **牛顿共轭梯度法优化**：支持大数据量下使用高效的牛顿共轭梯度法进行优化，提高搜索全局最优解的效率。
-- **适用于大规模数据分析**：特别适合需要处理和分析大量数据的分波分析任务。
-
-## 文档
-
-更详细的使用说明和API文档，请访问 [文档链接](Tutorial_CN.md).
+- [analyses/kk_dis/README.md](../analyses/kk_dis/README.md) — 规范生成流程
+- [Tutorial_CN.md](Tutorial_CN.md) / [Tutorial_EN.md](Tutorial_EN.md)
+- [docker/design.md](../docker/design.md) — 事件并行 Newton-CG/HVP 设计
+- [docker/run_mulit_node.md](../docker/run_mulit_node.md) — 多机 Docker / NCCL 备忘
 
 ### 流水线状态与可视化
 
@@ -150,14 +99,13 @@ $ python run/dplot_run_kk.py
 
 ## 贡献
 
-欢迎任何形式的贡献，包括但不限于新功能、代码修复、文档改进等。请通过Pull Requests或Issues与我们分享您的想法。
+欢迎任何形式的贡献，包括但不限于新功能、代码修复、文档改进等。请通过 Pull Requests
+或 Issues 分享您的想法。
 
 ## 许可证
 
-此项目采用 [MIT 许可证](LICENSE)。详细信息请查阅随附的许可证文件。
+此项目采用 [MIT 许可证](../LICENSE)。
 
 ## 联系方式
-
-如有任何问题或建议，请通过以下方式联系我们：
 
 - GitHub Issues：https://github.com/caihao/PWACG/issues
