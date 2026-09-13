@@ -144,3 +144,6 @@ manifes*.toml
 # LLMPWA pipeline visualization / pipeline_state export artifacts (regenerated)
 pipeline_report.*
 pipeline_state.json
+
+tmp/
+task/

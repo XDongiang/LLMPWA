@@ -1,18 +1,17 @@
 ## Goal
-Interactively generate a likelihood module from the user's LaTeX/formula, save it under
+Generate a likelihood module from the provided formula specification (below), save it under
 `run/likelihood_function.py`, reuse helpers from `run/base_functions.py`, then run a
 smoke test and save the test log.
 
-## Required interactive step
-1. First call ask_user to request the likelihood formula. Ask roughly:
-   "请输入 likelihood 的 LaTeX/公式说明（可包含 data/mc 项、振幅相干求和、约束项等）。
-    若有符号与下面 arg_list / data 名称的对应关系，请一并说明。"
-2. Parse the user's answer. If incomplete, ask_user follow-ups.
-3. Implement the formula as Python in:
+## Required workflow (non-interactive)
+1. Use the formula specification below (full math derivation of the combined likelihood,
+   data/MC terms, amplitude classes, propagators, and fraction constraint):
+   <<ref.likelihood_math>>
+2. Implement the formula as Python in:
    **run/likelihood_function.py**
-4. Run a likelihood smoke test (section "Smoke test") and write the full log to:
+3. Run a likelihood smoke test (section "Smoke test") and write the full log to:
    **run/likelihood_test_result.txt**
-5. Finish with a short summary (not the full .py body):
+4. Finish with a short summary (not the full .py body):
    task(
      action="finish",
      result=<1-10 lines: path, key functions, smoke-test status / scalar values>,
@@ -138,7 +137,7 @@ Suggested procedure (adapt to available files / devices):
    - n_args, data_size (if known)
    - printed likelihood scalar(s) (data / mc / combined if available)
    - PASS or FAIL + exception traceback on failure
-4. If the test FAILs, fix the .py and re-run until PASS (or ask_user if blocked by missing formula/data).
+4. If the test FAILs, fix the .py and re-run until PASS (formula/data are already provided).
 5. Prefer CPU / small subsets if full mc is too heavy; still use real free_params via make_initial_args.
    Do **not** launch a full minimizer fit in this stage.
 

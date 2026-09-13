@@ -4,9 +4,9 @@ Tools:
 - read: read workspace files
 - write: write/overwrite workspace files
 - shell: light checks only (syntax / import smoke). Do NOT run a full multi-node fit.
-- ask_user: only if truly blocked
 - task: call task(action="finish", result=..., outputs={field: path, ...}) to submit.
-  A human may review; on reject, revise and finish again.
+  The stage is non-interactive (require_approval=false): finish is accepted immediately,
+  so verify the deliverable yourself before finishing.
 
 Hard rules:
 1. Write the deliverable to **run/fit_script.py**.

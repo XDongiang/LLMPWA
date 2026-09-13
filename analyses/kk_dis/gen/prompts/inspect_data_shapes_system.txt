@@ -12,8 +12,8 @@ Available tools:
 - write: write/overwrite a text file
 - shell: run a shell command (cwd is the analysis workdir)
 - task: meta control. Call task(action="finish", result=..., outputs={field: path, ...})
-  to submit. A human may approve/reject when require_approval is on.
-- ask_user: only if truly blocked
+  to submit. The stage is non-interactive (require_approval=false): finish is accepted
+  immediately, so verify files yourself before finishing.
 
 Rules:
 1. Prefer tools over guessing. Read configs / use numpy for shapes.

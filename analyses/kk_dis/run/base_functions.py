@@ -147,60 +147,60 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 
 
 def load_data():
-    data = {}
     n_repeat = 1
-    n_truth_mc = 150000  # Truth-MC cost/memory cap; not the real-data n_data.
+    n_truth_mc = 150000  # intentional truth-MC cap; this is not n_data
+    data = {}
 
-    data["data_phi_kk"] = onp.tile(onp.load("data/real_data/phi_kk.npy"), n_repeat)
-    data["mc_phi_kk"] = onp.tile(onp.load("data/mc_truth/phi_kk.npy"), n_repeat)
-    data["truth_phi_kk"] = data["mc_phi_kk"][0:n_truth_mc * n_repeat]
+    data['data_phi_kk'] = onp.tile(onp.load('data/real_data/phi_kk.npy'), n_repeat)
+    data['mc_phi_kk'] = onp.tile(onp.load('data/mc_truth/phi_kk.npy'), n_repeat)
+    data['truth_phi_kk'] = data['mc_phi_kk'][0:n_truth_mc * n_repeat]
 
-    data["data_f_kk"] = onp.tile(onp.load("data/real_data/f_kk.npy"), n_repeat)
-    data["mc_f_kk"] = onp.tile(onp.load("data/mc_truth/f_kk.npy"), n_repeat)
-    data["truth_f_kk"] = data["mc_f_kk"][0:n_truth_mc * n_repeat]
+    data['data_f_kk'] = onp.tile(onp.load('data/real_data/f_kk.npy'), n_repeat)
+    data['mc_f_kk'] = onp.tile(onp.load('data/mc_truth/f_kk.npy'), n_repeat)
+    data['truth_f_kk'] = data['mc_f_kk'][0:n_truth_mc * n_repeat]
 
-    data["data_phif0_kk"] = onp.tile(onp.load("data/real_data/phif0_kk.npy"), (1, n_repeat, 1))
-    data["mc_phif0_kk"] = onp.tile(onp.load("data/mc_truth/phif0_kk.npy"), (1, n_repeat, 1))
-    data["truth_phif0_kk"] = data["mc_phif0_kk"][:, 0:n_truth_mc * n_repeat, ...]
+    data['data_phif0_kk'] = onp.tile(onp.load('data/real_data/phif0_kk.npy'), (1, n_repeat, 1))
+    data['mc_phif0_kk'] = onp.tile(onp.load('data/mc_truth/phif0_kk.npy'), (1, n_repeat, 1))
+    data['truth_phif0_kk'] = data['mc_phif0_kk'][:, 0:n_truth_mc * n_repeat, ...]
 
-    data["data_phif2_kk"] = onp.tile(onp.load("data/real_data/phif2_kk.npy"), (1, n_repeat, 1))
-    data["mc_phif2_kk"] = onp.tile(onp.load("data/mc_truth/phif2_kk.npy"), (1, n_repeat, 1))
-    data["truth_phif2_kk"] = data["mc_phif2_kk"][:, 0:n_truth_mc * n_repeat, ...]
+    data['data_phif2_kk'] = onp.tile(onp.load('data/real_data/phif2_kk.npy'), (1, n_repeat, 1))
+    data['mc_phif2_kk'] = onp.tile(onp.load('data/mc_truth/phif2_kk.npy'), (1, n_repeat, 1))
+    data['truth_phif2_kk'] = data['mc_phif2_kk'][:, 0:n_truth_mc * n_repeat, ...]
 
-    data["data_b123_kk"] = onp.tile(onp.load("data/real_data/b123_kk.npy"), n_repeat)
-    data["mc_b123_kk"] = onp.tile(onp.load("data/mc_truth/b123_kk.npy"), n_repeat)
-    data["truth_b123_kk"] = data["mc_b123_kk"][0:n_truth_mc * n_repeat]
+    data['data_b123_kk'] = onp.tile(onp.load('data/real_data/b123_kk.npy'), n_repeat)
+    data['mc_b123_kk'] = onp.tile(onp.load('data/mc_truth/b123_kk.npy'), n_repeat)
+    data['truth_b123_kk'] = data['mc_b123_kk'][0:n_truth_mc * n_repeat]
 
-    data["data_b124_kk"] = onp.tile(onp.load("data/real_data/b124_kk.npy"), n_repeat)
-    data["mc_b124_kk"] = onp.tile(onp.load("data/mc_truth/b124_kk.npy"), n_repeat)
-    data["truth_b124_kk"] = data["mc_b124_kk"][0:n_truth_mc * n_repeat]
+    data['data_b124_kk'] = onp.tile(onp.load('data/real_data/b124_kk.npy'), n_repeat)
+    data['mc_b124_kk'] = onp.tile(onp.load('data/mc_truth/b124_kk.npy'), n_repeat)
+    data['truth_b124_kk'] = data['mc_b124_kk'][0:n_truth_mc * n_repeat]
 
     return data
 
 
 def normalize_data(data):
-    for var in ("phif0_kk", "phif2_kk"):
-        mc_arr = data["mc_" + var]
-        regular = 1.0 / onp.mean(onp.sqrt(onp.sum(mc_arr ** 2, axis=-1)), axis=1)
-        for prefix in ("data_", "mc_", "truth_"):
+    for var in ('phif0_kk', 'phif2_kk'):
+        mc_arr = data['mc_' + var]
+        regular = 1.0 / onp.mean(
+            onp.sqrt(onp.sum(mc_arr ** 2, axis=-1)), axis=1
+        )
+        for prefix in ('data_', 'mc_', 'truth_'):
             key = prefix + var
-            data[key] = onp.einsum("i,ijk->ijk", regular, data[key])
+            data[key] = onp.einsum('c,cek->cek', regular, data[key])
     return data
 
 
 def shard_data_distributed(data, mesh):
     jax_data = {}
-    event_1d_sharding = NamedSharding(mesh, P("event"))
-    event_3d_sharding = NamedSharding(mesh, P(None, "event", None))
     for key, value in data.items():
         array = np.asarray(value)
         if array.ndim == 1:
-            sharding = event_1d_sharding
+            spec = P('event')
         elif array.ndim == 3:
-            sharding = event_3d_sharding
+            spec = P(None, 'event', None)
         else:
-            raise ValueError("Unsupported data rank for {}: {}".format(key, array.ndim))
-        jax_data[key] = device_put(array, sharding)
+            raise ValueError('Unsupported data rank for ' + key + ': ' + str(array.ndim))
+        jax_data[key] = device_put(array, NamedSharding(mesh, spec))
     return jax_data
 
 

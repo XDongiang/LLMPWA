@@ -3,6 +3,7 @@
 [ref]
 code_template = ["gen/templates/fit.py","gen/templates/shared.py","gen/templates/physics_functions.py"]
 resonances_config = {"type" = "file", "path" = "resonances_config.toml"}
+likelihood_math = {"type" = "file", "path" = "document/combined_likelihood_math.md"}
 
 
 [stages.config_strip]
@@ -16,14 +17,14 @@ output.all_sbc = {"type" = "direct"}
 output.all_amp = {"type" = "direct"}
 output.all_sbc_amp = {"type" = "direct"}
 
-# 交互式 agent：检查 data shape + 生成 load/normalize/shard 三个预处理函数
+# 非交互 agent：检查 data shape + 生成 load/normalize/shard 三个预处理函数
 # agent 用 write 写到下列 path，task.finish 时用 outputs={field:path} 清单；
 # 框架会 harvest 文件内容登记进 manifest，下游可用 <<stages.inspect_data_shapes.load_data>> 等引用。
 [stages.inspect_data_shapes]
 kind = "agent"
 system_prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_system.txt"}
 prompt = {"type" = "file", "path" = "gen/prompts/inspect_data_shapes_task.txt"}
-tools = ["read", "write", "shell", "task", "ask_user"]
+tools = ["read", "write", "shell", "task"]
 max_turns = 24
 cwd = "."
 workspace_root = "."
@@ -82,41 +83,40 @@ output_type = "json"
 output.all = {"type" = "file", "path" = "gen/fragments/classification.json"}
 output.propagator_classification = {"type" = "direct"}
 
-# 交互式 agent：向用户索取 LaTeX 后生成 likelihood，写到 run/likelihood_function.py
-# 通过 import run/base_functions.py 中的符号（COMMON_UTILITIES / dplex / physics / make_initial_args）
+# 非交互 agent：根据已提供的 likelihood 数学说明生成 likelihood，写到 run/likelihood_function.py
+# 公式来源：document/combined_likelihood_math.md（经 ref.likelihood_math 注入 prompt）
 # 生成后跑一遍 likelihood 冒烟测试，测试日志写入 output.test_result
-# task.finish 后默认人工审阅；reject 可回灌反馈
 [stages.generate_likelihood]
 kind = "agent"
 system_prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_system.txt"}
 prompt = {"type" = "file", "path" = "gen/prompts/generate_likelihood_task.txt"}
-tools = ["read", "write", "shell", "task", "ask_user"]
+tools = ["read", "write", "shell", "task"]
 max_turns = 32
 cwd = "."
 workspace_root = "."
 cache = false
 finish_on_message = false
 on_max_turns = "error"
-require_approval = true
+require_approval = false
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/likelihood_function.py"}
 output.test_result = {"type" = "file", "path" = "run/likelihood_test_result.txt"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_likelihood_transcript.json"}
 
-# 交互式 agent：生成分布式 Newton-CG 主入口 run/fit_script.py
+# 非交互 agent：生成分布式 Newton-CG 主入口 run/fit_script.py
 # 复用 run/base_functions.py 与 run/likelihood_function.py，不重复实现物理/似然。
 [stages.generate_fit_script]
 kind = "agent"
 system_prompt = {"type" = "file", "path" = "gen/prompts/generate_fit_script_system.txt"}
 prompt = {"type" = "file", "path" = "gen/prompts/generate_fit_script_task.txt"}
-tools = ["read", "write", "shell", "task", "ask_user"]
+tools = ["read", "write", "shell", "task"]
 max_turns = 24
 cwd = "."
 workspace_root = "."
 cache = false
 finish_on_message = false
 on_max_turns = "error"
-require_approval = true
+require_approval = false
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/fit_script.py"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_fit_script_transcript.json"}
