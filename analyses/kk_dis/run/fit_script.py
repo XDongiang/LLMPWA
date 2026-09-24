@@ -90,6 +90,7 @@ def main():
 
         x0 = replicated_array(initial_args)
         direction0 = replicated_array(onp.zeros_like(initial_args))
+        
         smoke_value = jit_nll(x0, jax_data)
         smoke_hvp = jit_hvp(x0, direction0, jax_data)
         if is_chief:

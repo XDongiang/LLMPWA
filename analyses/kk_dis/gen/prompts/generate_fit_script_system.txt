@@ -13,12 +13,19 @@ Hard rules:
 2. Reuse **run/base_functions.py** and **run/likelihood_function.py** — do not re-implement
    dplex_*, BW/flatte*, load_data / normalize_data / shard_data_distributed,
    make_initial_args / save_result, or the likelihood body.
-3. Build a multi-process JAX event-sharded Newton-CG fit main:
+3. Build a multi-process JAX event-sharded Newton-CG fit main using the **chief-only
+   optimizer + broadcast request/response loop** architecture:
    init_distributed → mesh → load/normalize/shard → jit likelihood/grad/HVP →
-   SciPy Newton-CG on all processes → chief-only I/O.
-4. Adapt call signatures to THIS analysis's actual APIs (read the two modules first).
-5. Stay inside the analysis workspace; do not search or depend on external example scripts.
-6. No markdown fences in the saved .py.
-7. Prefer compact code; no long #==== banner comments.
-8. After writing, run a light syntax/import smoke (not a full minimize) if feasible,
+   **only process 0 (chief) runs SciPy**; every other process (worker) enters a
+   `serve_optimizer_requests()` loop that mirrors the chief's JAX calls one-for-one
+   via `multihost_utils.broadcast_one_to_all`. Chief-only I/O.
+4. Do **NOT** run the minimize loop on every process: Newton-CG's CG sub-iteration
+   count varies between processes, so an all-ranks minimize desynchronizes the
+   collective order and deadlocks. The request/response loop keeps both sides'
+   collectives strictly one-to-one (chief dispatches before every JAX eval).
+5. Adapt call signatures to THIS analysis's actual APIs (read the two modules first).
+6. Stay inside the analysis workspace; do not search or depend on external example scripts.
+7. No markdown fences in the saved .py.
+8. Prefer compact code; no long #==== banner comments.
+9. After writing, run a light syntax/import smoke (not a full minimize) if feasible,
    then task.finish.

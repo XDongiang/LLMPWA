@@ -1,0 +1,99 @@
+## Goal
+Generate a ROOT-based plotting script **run/draw_plot_script.py** for THIS analysis.
+
+It reads the fitted weights produced by the draw-weight stage and draws, for each
+physical kinematic variable, an overlay of:
+
+- **Data** histogram (real data, unweighted)
+- **Fit total** histogram (MC events weighted by `all_mods_wt`)
+- **partial-wave** histogram(s) (MC events weighted by each `"<mode>_<basis>"` entry,
+  one curve per resonance class actually present)
+
+and saves PNGs under `output/pictures/`.
+
+## Required workflow (non-interactive)
+1. Read the analysis-specific inputs:
+   - `output/draw/weight.npz` / `output/draw/weight_truth.npz` (if present from the
+     weight stage; otherwise read `run/draw_weight_script.py` to learn the exact keys
+     and shapes)
+   - `run/base_functions.py` (data loading / normalization to reproduce the arrays the
+     weights were computed on)
+   - `gen/fragments/classification.json` — the actual resonance class names/basis counts
+     (mode names like `phif0_kk_BW_flatte980`, basis indices 0..N)
+   - this analysis's real-data keys (phi_kk, f_kk, plus any draw.extra_sbc like
+     b123_kk / b124_kk)
+2. Write **run/draw_plot_script.py** that:
+   - loads weights (`np.load(..., allow_pickle=False)` keyed by the weight-stage names),
+     and the data arrays via base_functions load/normalize (or reproduces the same
+     normalization when the arrays are local)
+   - for each variable (from `<all_sbc>` plus `<extra_sbc>` and the resonance fit
+     fractions use weight_truth): creates TH1D data / fit-total / per-wave histograms,
+     scales fit-total and partial waves by `data_size / sum_wt`, draws them on a
+     `TCanvas`, adds a TLegend and the fit-fraction latex label, saves PNG
+   - handles >1 basis index per mode (loop basis j) and skips missing keys gracefully
+   - `os.makedirs("output/pictures", exist_ok=True)` (or a subdir like
+     `output/pictures/partial_mods_pictures`)
+   - defines a `__main__` that runs all variables
+3. Run a light smoke (see Context "Smoke test") and write the log to
+   **run/draw_plot_test_result.txt**.
+4. Finish with a short summary (not the whole .py body):
+   task(
+     action="finish",
+     result=<1-10 lines: path, key functions, smoke status / plots produced>,
+     outputs={
+       "all": "run/draw_plot_script.py",
+       "test_result": "run/draw_plot_test_result.txt"
+     }
+   )
+
+## Context
+
+### 0) Weight files produced by the weight stage
+Keys you can rely on (verify against `run/draw_weight_script.py` if available):
+- `all_mods_wt`  : total per-event weight (shape (E,) for this analysis)
+- `"<mode>_<j>"` : per-mode, per-basis weight, e.g. `phif0_kk_BW_flatte980_0`
+- `fit_value` / `sum_wt`
+
+### 1) Kinematic variables to plot
+sbc keys (actual real-data variables used by this analysis, see stripped_config):
+```
+all_sbc   = <<stages.config_strip.all_sbc>>
+```
+Typical real-data keys: `phi_kk`, `f_kk`, plus `b123_kk`, `b124_kk` when
+`[draw] extra_sbc` is set in resonances_config.toml.
+
+### 2) Data arrays (same normalization as the weight stage)
+Use `run/base_functions.py::load_data()` + `normalize_data()`; the histograms should
+use the same event ordering as the weights (both come from the MC evaluation sample
+via the same `mc_*` arrays). `data_size = <data_phi_kk>.shape[0]` (the real-data
+event count used to scale the fit).
+
+### 3) Plot layout (adapt names/keys to THIS analysis)
+For each `var` in the plot list:
+- `hist_data` : fill from `data_<var>` (real data)
+- `hist_fit`  : fill from `mc_<var>` with weight `all_mods_wt`; `Scale(data_size/sum_wt)`
+- for each mode/basis present in the weight keys:
+  `hist_comp` : fill from `mc_<var>` with weight `"<mode>_<j>"`; `Scale(data_size/sum_wt)`
+- `frac = sum(truth_wt["<mode>_<j>"]) / sum(truth_wt["all_mods_wt"])` (fit fraction
+  from the truth sample)
+- `TCanvas(name, title, 900, 600)`; data markers, fit red line, each partial wave a
+  distinct color; TLegend; TLatex fit-fraction label; `c.SaveAs("output/pictures/.../<resonance>_<var>.png")`
+- return frac (and accumulate the total)
+
+### 4) ROOT availability
+pyROOT must be imported as `import ROOT`. If available, run the script on a small
+subset/single var as a smoke; otherwise do only:
+```bash
+python -c "import ast; ast.parse(open('run/draw_plot_script.py').read())"
+```
+and record `ROOT unavailable: syntax-only check` in `run/draw_plot_test_result.txt`.
+
+## Deliverables checklist
+- [ ] run/draw_plot_script.py complete, importable
+- [ ] reads weight.npz / weight_truth.npz with THIS analysis's keys
+- [ ] correct data/fit-total/partial-wave histograms + scaling + fraction
+- [ ] writes PNGs under output/pictures/
+- [ ] skips missing keys/basis indices gracefully
+- [ ] no dependency on files outside this analysis workspace
+- [ ] draw_plot_test_result.txt with smoke status (PASS or ROOT-unavailable note)
+- [ ] task.finish with outputs={"all": ..., "test_result": ...}

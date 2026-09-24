@@ -272,7 +272,10 @@ pnpm exec dsh --profile web --port 3081
 3. ✅ `FooterButton` + `Workbench` 组件 + i18n + `store`，接两个 slot（共用一个 store/face）。
 4. ✅ 分析面板改版：预览区顶部加「DAG / 文档」分页；「文档」页列出该 analysis 的
    参考文件并预览文本；蓝色「打开 Agent」按钮弹出右侧抽屉，在 analysis 目录启动 dsh
-   agent 会话（`sessions.create({ cwd })`），就绪后跳回主对话区查看。
+   agent 会话（`sessions.create({ workspaceId })`，指向该 analysis 自动创建/复用的
+   workspace），就绪后跳回主对话区查看。列表 discovery 阶段会为每个 analysis 目录
+   自动创建（或复用）一个 workspace 记录，并把目录下已存在的「未分组」agent 会话
+   计入该 workspace，使这些会话归入「analysis」组而非「未分组」。
 5. ✅ 组件/注册/卸载测试（103 个单测，每文件 100% 覆盖，含分支）；`test:web` 快照留待后续。
 6. ✅ `pnpm run build`（host+client）通过；`lib/client.js` 已产出。
 7. ⏳ 实机验证（`dsh --profile web --port 3081` 读真实 `kk_dis` 快照）作为现场验收；
@@ -283,8 +286,10 @@ pnpm exec dsh --profile web --port 3081
 > 列表读与快照读都经 `face.ts` 异步执行并写回 store，组件不直接 await。
 > 读会话选择：`workspaceFiles` 按 session 的 `header.cwd`（sandbox policy）解析工作区根，
 > 若当前对话是嵌套的 agent 会话（面板「打开 Agent」会切到 `…/analyses/<dir>` cwd），
-> `LLMPWA/analyses` 就解析不到。因此面板用一个**属于 LLMPWA workspace 的读会话**
-> （`useWorkspaces(...).items[].sessionIds` 取一个）来做读，而非裸用 `useSessions.current`；
+> `LLMPWA/analyses` 就解析不到。因此面板用一个**属于 LLMPWA 项目工作区的读会话**
+> （该工作区路径是当前 cwd 的祖先，`sessionIds` 取一个）来做读，而非裸用
+> `useSessions.current`，也不是「含当前 session 的工作区」（那可能是 analysis 自身的工作区）；
+> 优先级为：路径为当前 cwd 严格祖先的工作区 → 与 cwd 相等的工作区 → 会话最多的项目工作区。
 > 无可用读会话时显示 `noWorkspace` 提示。
 > 已知约束：抽屉内不内嵌整段对话渲染（`conversation` 仅随 shell 当前 session 声明），
 > 改版首版采用「创建并打开 session 后跳回主对话区」的手持交付；若要在抽屉内渲染任意

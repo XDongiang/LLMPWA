@@ -120,3 +120,46 @@ require_approval = false
 output_type = "python"
 output.all = {"type" = "file", "path" = "run/fit_script.py"}
 output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_fit_script_transcript.json"}
+
+# 非交互 agent：生成画图权重计算脚本 run/draw_weight_script.py
+# 从共振配置/分类/似然推导：extract_parameters + 逐 class 的 component_* 振幅
+# + weight_kk / weight_truth_kk（data/MC pass 与 truth 两套权重）
+# + run_weight 主入口（读 output/fit/fit_result_values.npy，写 output/draw/weight*.npz）。
+# 复用 run/base_functions.py 的传播子与 dplex_*，不复制模板、不复制似然主体的拟合逻辑。
+[stages.generate_draw_weight]
+kind = "agent"
+system_prompt = {"type" = "file", "path" = "gen/prompts/generate_draw_weight_system.txt"}
+prompt = {"type" = "file", "path" = "gen/prompts/generate_draw_weight_task.txt"}
+tools = ["read", "write", "shell", "task"]
+max_turns = 28
+cwd = "."
+workspace_root = "."
+cache = false
+finish_on_message = false
+on_max_turns = "error"
+require_approval = false
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/draw_weight_script.py"}
+output.test_result = {"type" = "file", "path" = "run/draw_weight_test_result.txt"}
+output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_draw_weight_transcript.json"}
+
+# 非交互 agent：生成画图绘图脚本 run/draw_plot_script.py
+# 读 output/draw/weight.npz 与 weight_truth.npz（由 draw_weight_script 产出），
+# 对每个物理量/共振画 data vs fit 叠加图（含 partial-wave 分量），写 output/pictures/。
+# 依赖环境中存在 ROOT（本流水线只生成代码；本地若无可跳过冒烟，仅做语法检查）。
+[stages.generate_draw_plot]
+kind = "agent"
+system_prompt = {"type" = "file", "path" = "gen/prompts/generate_draw_plot_system.txt"}
+prompt = {"type" = "file", "path" = "gen/prompts/generate_draw_plot_task.txt"}
+tools = ["read", "write", "shell", "task"]
+max_turns = 28
+cwd = "."
+workspace_root = "."
+cache = false
+finish_on_message = false
+on_max_turns = "error"
+require_approval = false
+output_type = "python"
+output.all = {"type" = "file", "path" = "run/draw_plot_script.py"}
+output.test_result = {"type" = "file", "path" = "run/draw_plot_test_result.txt"}
+output.transcript = {"type" = "file", "path" = "gen/llm_logs/generate_draw_plot_transcript.json"}

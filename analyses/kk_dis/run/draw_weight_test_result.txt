@@ -1,0 +1,8 @@
+Command: python run/draw_weight_script.py --smoke   (local, CPU, 32 events)
+Result: PASS smoke test — wt shapes [(32,), (1,32), (2,32), (4,32)]
+Remote full run (HEP1 container jax-fit:latest, 2xRTX3090, 1200000 events):
+  mode=pass   : total fit fraction = 0.8487773733147771
+  mode=truth  : total fit fraction = 0.8485229839700453
+  outputs: output/draw/weight.npz (10 keys, all_mods_wt (1200000,))
+           output/draw/weight_truth.npz (all_mods_wt (150000,))
+Semantics: weight_kk (mc_* full sample), weight_truth_kk (truth_* 150000 cap).

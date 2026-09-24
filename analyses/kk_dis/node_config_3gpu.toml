@@ -1,0 +1,31 @@
+# kk_dis 2 节点 3 GPU 配置（每卡 1 容器）：
+#   HEP1 (header): 2×RTX 3090 -> Chips=[0,1] -> 容器 _p0 (GPU0), _p1 (GPU1)
+#   HEP3 (worker): 1×RTX 3090 -> Chips=[0]   -> 容器 _p2 (GPU0)
+# 进程数 = 3，数据 30000 事件（n_repeat=3, 10000×3）正好被 3 整除。
+# 互连 1 Gbps 以太网 socket（NCCL_SOCKET_IFNAME），无 IB/RoCE。
+# 注意：CUDA_VISIBLE_DEVICES 不再写在 env（脚本按 chip 注入 -e）。
+
+[header]
+IP = "192.168.200.125"
+PORT = 12347
+Username = "hyx"
+IB_IF = "enp4s0"
+Chips = [0, 1]
+
+[[worker]]
+IP = "192.168.200.171"
+IB_IF = "enp5s0"
+Username = "hyx"
+Chips = [0]
+
+[container]
+image = "jax-fit:latest"
+container = "kkfit3"
+# fit 脚本用 /opt/env/bin/python 运行（jax 环境）
+script = "run/fit_script_dist.py"
+env = [
+    "NCCL_DEBUG=VERSION",
+    "NCCL_IGNORE_CPU_AFFINITY=1",
+    "JAX_COORDINATOR_TIMEOUT=1000",
+    "JAX_ENABLE_X64=1",
+]

@@ -1,0 +1,124 @@
+# syntax=docker/dockerfile:1.6
+#
+# JAX + CUDA multi-GPU Dockerfile, adapted for the remote HEP1 run host.
+#
+# Original (docker/Dockerfile.jax) targeted a DGX Spark (GB10, aarch64, sm_121,
+# CUDA 13, custom NCCL built from source, build proxy). That does NOT apply here.
+#
+# This host's facts (probed 2026-09-15):
+#   - arch:        x86_64
+#   - GPUs:        2x NVIDIA RTX 3090 (compute capability 8.6 / sm_86)
+#   - driver:      535.146.02, CUDA 12.2  (so a CUDA 13 image will not run)
+#   - docker:      26.0.0 + NVIDIA Container Toolkit 1.14.6
+#   - network:     Docker Hub reachable via registry mirrors; PyPI / GitHub / apt OK;
+#                  NO proxy on this host
+#   - known-good:  conda env kk_fit = python 3.11 + jax 0.10.2 (cuda12)
+#
+# Adaptations vs the original:
+#   - Base image:        nvidia/cuda:12.2.0-devel-ubuntu22.04  (was 13.2.0-devel-ubuntu24.04)
+#   - Python/JAX:        python 3.11 + jax 0.10.2 / jaxlib=*=cuda12* via micromamba,
+#                        matching the proven kk_fit env (conda, not pip extras)
+#   - NCCL:              NO source build; use conda-provided libnccl (was built from
+#                        source solely for sm_121 support, which does not apply here)
+#   - cuDNN/cuBLAS:      provided by the conda nvidia channel (no apt libcudnn8 pins)
+#   - Proxy:             removed (host has no proxy); all ARGs/ENV for proxy dropped
+#   - somax:             removed (not imported by the kk_dis fit pipeline)
+#   - IB/RoCE defaults:  no IB devices on this host; NCCL IB env is left to runtime
+#                        overrides and documented below (socket transport for multi-node)
+#
+# Build:
+#   docker build -f Dockerfile.jax -t jax-fit:latest .
+# Run (single-node, both GPUs):
+#   docker run --rm --gpus all --network=host \
+#     -v "$PWD":/workspace/work -w /workspace/work \
+#     jax-fit:latest /opt/env/bin/python run/fit_script.py
+#
+# Multi-node over Ethernet (non-IB) requires, per process:
+#   -e JAX_COORDINATOR_ADDRESS=<head_ip>:1234 \
+#   -e JAX_NUM_PROCESSES=<total_procs> \
+#   -e JAX_PROCESS_ID=<proc_index> \
+#   -e NCCL_SOCKET_IFNAME=<eth_iface>   (NOT NCCL_IB_HCA — no IB here)
+
+ARG PYTHON_VERSION=3.11
+ARG JAX_VERSION=0.10.2
+
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
+
+ARG PYTHON_VERSION
+ARG JAX_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System prerequisites + micromamba (self-contained conda) installer
+# ------------------------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl bzip2 git wget \
+        && rm -rf /var/lib/apt/lists/*
+
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/bin:${PATH}
+
+# Install micromamba (conda-forge) into a directory on PATH
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+        | tar -xj -C /tmp bin/micromamba \
+    && mkdir -p "${MAMBA_ROOT_PREFIX}/bin" \
+    && cp /tmp/bin/micromamba "${MAMBA_ROOT_PREFIX}/bin/micromamba" \
+    && chmod +x "${MAMBA_ROOT_PREFIX}/bin/micromamba" \
+    && micromamba --version
+
+# ------------------------------------------------------------------
+# Create the fit environment (mirrors the proven remote kk_fit env):
+#   python 3.11 + jax + jaxlib=*=cuda12* (conda) with cuda libs (cudnn/nccl)
+#   from the nvidia channel.
+#
+# Notes:
+#   - jax/jaxlib are CONDAs packages here (jax + jaxlib=*=cuda12*). The pip
+#     syntax "jax[cuda12]" is NOT a valid conda matchspec, so it is not used.
+#   - conda detects the CUDA runtime via the __cuda virtual package. Inside a
+#     GPU-less `docker build` step that probe is absent, which makes conda fail
+#     with "__cuda ... is missing on the system". We stub it with
+#     CONDA_OVERRIDE_CUDA so the solver can pull the cuda12 variants.
+# ------------------------------------------------------------------
+ENV CONDA_OVERRIDE_CUDA=12.2
+RUN micromamba create -y -p /opt/env \
+        -c conda-forge -c nvidia \
+        python=${PYTHON_VERSION} \
+        jax=${JAX_VERSION} \
+        "jaxlib=*=cuda12*" \
+        numpy scipy toml \
+    && micromamba clean -ay
+ENV CONDA_OVERRIDE_CUDA=
+
+ENV PATH=/opt/env/bin:${PATH}
+ENV CONDA_PREFIX=/opt/env
+
+# Smoke test: JAX must see both GPUs
+RUN /opt/env/bin/python -c \
+    "import jax, jaxlib; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__); print('devices', jax.devices())"
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Runtime NCCL / JAX knobs. This host has two RTX 3090 and NO IB/RoCE,
+# so the original rocep1s0f0,... values do not apply. Keep everything
+# overridable at `docker run -e ...`.
+# ------------------------------------------------------------------
+
+# NCCL_IGNORE_CPU_AFFINITY=1 avoids CPU affinity warnings on many-core hosts.
+ENV NCCL_IGNORE_CPU_AFFINITY=1
+# Set to INFO or TRACE for debugging: docker run -e NCCL_DEBUG=INFO
+ENV NCCL_DEBUG=WARN
+
+# No InfiniBand/RoCE on this host: leave NCCL_IB_HCA unset and rely on Ethernet.
+# For multi-node over Ethernet, set the right interface at runtime, e.g.:
+#   docker run -e NCCL_SOCKET_IFNAME=eth0 ...
+# (The original NCCL_IB_* block for rocep1s0f0,roceP2p1s0f0 is intentionally removed.)
+
+# JAX distributed init — set at runtime per node:
+#   -e JAX_COORDINATOR_ADDRESS=<head_ip>:1234
+#   -e JAX_NUM_PROCESSES=<total_nodes>
+#   -e JAX_PROCESS_ID=<this_node_index>

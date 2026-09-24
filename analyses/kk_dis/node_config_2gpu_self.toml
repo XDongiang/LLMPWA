@@ -1,0 +1,23 @@
+# kk_dis 单节点 2 GPU 配置（每卡 1 容器，快速自检）：
+#   HEP1 (header): 2×RTX 3090 -> Chips=[0,1] -> 容器 _p0 (GPU0), _p1 (GPU1)
+# 进程数 = 2，数据 30000 事件（n_repeat=3）被 2 整除 = 15000/卡。
+# 互连：单机（板载），用于验证多容器机制 + n_repeat=3 数据。
+
+[header]
+IP = "192.168.200.125"
+PORT = 12348
+Username = "hyx"
+IB_IF = "enp4s0"
+Chips = [0, 1]
+
+[container]
+image = "jax-fit:latest"
+container = "kkfit2"
+# fit 脚本用 /opt/env/bin/python 运行（jax 环境）
+script = "run/fit_script_dist.py"
+env = [
+    "NCCL_DEBUG=VERSION",
+    "NCCL_IGNORE_CPU_AFFINITY=1",
+    "JAX_COORDINATOR_TIMEOUT=1000",
+    "JAX_ENABLE_X64=1",
+]

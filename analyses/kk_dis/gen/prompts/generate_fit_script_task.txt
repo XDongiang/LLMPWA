@@ -56,10 +56,21 @@ Likelihood body reference (do not paste wholesale; only for call signatures):
 
 ## Required architecture for run/fit_script.py
 
-Event-level data parallel + Newton-CG:
+Event-level data parallel + Newton-CG with a **chief-only optimizer**:
+
 - each process/GPU holds an event shard
 - likelihood / grad / HVP reduce across devices via XLA all-reduce on sharded arrays
-- SciPy Newton-CG outer loop runs on every process with the same inputs and collective order
+- **only process 0 (chief)** runs `scipy.optimize.minimize(Newton-CG)`
+- every other process (worker) does NOT run SciPy. Instead it loops in
+  `serve_optimizer_requests()`: each iteration `broadcast_one_to_all`s a request
+  tuple (op, x, vector); op is one of OP_OBJECTIVE / OP_GRADIENT / OP_HESSIAN_PRODUCT /
+  OP_STOP; the worker executes exactly the same JAX call the chief is about to run.
+- **Rationale (required)**: Newton-CG's internal CG sub-iteration count varies, so if
+  every process ran its own minimize the collective order would diverge on the first
+  CG restart → NCCL deadlock. The request/response loop guarantees both sides issue
+  identical, one-to-one collectives: chief always `broadcast`s its request **before**
+  evaluating objective/grad/HVP, so the worker's matching `broadcast` + JAX call is
+  deterministically synchronized.
 - only process 0 writes logs/results
 
 ### 1) init_distributed()
@@ -101,29 +112,84 @@ def build_mesh():
      `jvp(grad_fn, (x, jax_data), (v, zero_data))[1]`
      (or use `hvp_combined_likelihood` if it already matches this contract)
    - `args_list, _, _ = make_initial_args()`
-   - replicate args: `device_put(np.asarray(args_list), NamedSharding(mesh, P()))`
+   - replicate args: `param_sharding = NamedSharding(mesh, P())`;
+     `put_param = lambda v: device_put(np.asarray(v), param_sharding)`
    - `jit_likelihood = jit(nll)`, `jit_grad = jit(grad(...))`, `jit_hvp = jit(hvp...)`
-   - smoke: one likelihood eval + one HVP; chief logs scalars/shapes
-   - SciPy:
+   - smoke: one likelihood eval + one HVP on all processes; chief logs scalars/shapes;
+     then barrier `multihost_utils.sync_global_devices("fit-smoke-complete")` when
+     `num_processes > 1`
+   - **OP codes**: `OP_STOP=0, OP_OBJECTIVE=1, OP_GRADIENT=2, OP_HESSIAN_PRODUCT=3`
+   - **`broadcast_optimizer_request(op, x, vector)`** wraps
+     `multihost_utils.broadcast_one_to_all({"op": onp.asarray(op, onp.int32),
+     "x": onp.asarray(x, onp.float64), "vector": onp.asarray(vector, onp.float64)})`
+   - **worker branch**:
+     ```python
+     if num_processes > 1 and not is_chief:
+         serve_optimizer_requests()
+         return 0
+     ```
+   - `serve_optimizer_requests()` loop (worker side, mirrored one-to-one):
+     ```python
+     def serve_optimizer_requests():
+         while True:
+             packet = broadcast_optimizer_request(OP_STOP, zero_vector, zero_vector)
+             op = int(onp.asarray(packet["op"]))
+             if op == OP_STOP:
+                 break
+             x = onp.asarray(packet["x"])
+             vector = onp.asarray(packet["vector"])
+             if op == OP_OBJECTIVE:
+                 raw_objective(x)
+             elif op == OP_GRADIENT:
+                 raw_objective_grad(x)
+             elif op == OP_HESSIAN_PRODUCT:
+                 raw_objective_hvp(x, vector)
+             else:
+                 raise ValueError("Unknown optimizer request op: {}".format(op))
+     ```
+   - chief-side raw ops and dispatch:
+     ```python
+     def raw_objective(x):   return float(jit_likelihood(put_param(x), jax_data))
+     def raw_objective_grad(x): return onp.asarray(jit_grad(put_param(x), jax_data))
+     def raw_objective_hvp(x, vector):
+         return onp.asarray(jit_hvp(put_param(x), put_param(vector), jax_data))
+
+     def dispatch(op, x, vector=None):
+         if num_processes > 1:
+             broadcast_optimizer_request(op, x, zero_vector if vector is None else vector)
+
+     def objective(x):     dispatch(OP_OBJECTIVE, x); return raw_objective(x)
+     def objective_grad(x): dispatch(OP_GRADIENT, x); return raw_objective_grad(x)
+     def objective_hvp(x, vector):
+         dispatch(OP_HESSIAN_PRODUCT, x, vector); return raw_objective_hvp(x, vector)
+     ```
+   - SciPy (chief only, after the worker branch above has returned on workers):
      ```python
      result = minimize(
-         fun=lambda x: float(jit_likelihood(np.asarray(x), jax_data)),
+         fun=objective,
          x0=onp.asarray(args_list),
-         jac=lambda x: onp.array(jit_grad(np.asarray(x), jax_data)),
-         hessp=lambda x, p: onp.array(jit_hvp(np.asarray(x), np.asarray(p), jax_data)),
+         jac=objective_grad,
+         hessp=objective_hvp,
          method="Newton-CG",
          callback=my_callback,
-         options={"disp": False, "xtol": 1e-8},
+         options={"disp": False, "xtol": 1.0e-8},   # + "maxiter": N when KKDIS_MAXITER>0
      )
+     # finally:
+     #   if num_processes > 1:
+     #       broadcast_optimizer_request(OP_STOP, zero_vector, zero_vector)
      ```
-   - **All processes** run the same minimize loop (identical collective order)
-   - callback: every process evaluates likelihood (sync); only chief logs
-   - After optimize: build Hessian columns via HVP on all processes;
-     `ferror = sqrt(diag(inv(H)))`
-   - **Only chief** writes:
+   - callback: (chief) counts iterations, evaluates objective (this keeps the worker
+     in lock-step) and logs `likelihood=... elapsed=...`; workers stay in the
+     request loop, no logging
+   - After optimize: build Hessian columns via `objective_hvp` on the basis vectors;
+     `hessian = 0.5*(H+H.T)`; `ferror = sqrt(diag(inv(hessian)))`
+   - **Only chief** writes (respect `KKDIS_OUTDIR` env → `output/<dir>/` when set):
      - `output/fit/fit_result_values.npy`
      - `output/fit/fit_result_errors.npy`
      - `save_result(result.x, ferror, "output/fit/free_params_fitted.toml")`
+     - log `Fit finished: success=... status=... likelihood=... iterations=...`
+   - Optional env overrides for multi-start comparison:
+     `KKDIS_X0_NPY` (custom initial args), `KKDIS_OUTDIR`, `KKDIS_MAXITER`
 8. `return 0`
 9. `if __name__ == "__main__": raise SystemExit(main())`
 
@@ -163,6 +229,7 @@ from likelihood_function import (
     combined_likelihood,
     # hvp_combined_likelihood and/or make_distributed_likelihood if useful
 )
+from jax.experimental import multihost_utils   # required for broadcast_one_to_all
 ```
 
 Do **not** redefine physics or likelihood bodies. Only write distributed main orchestration.
@@ -171,6 +238,8 @@ Do **not** redefine physics or likelihood bodies. Only write distributed main or
 - [ ] run/fit_script.py complete, importable, with main()
 - [ ] uses base_functions data I/O + params I/O
 - [ ] uses likelihood_function for NLL / HVP
-- [ ] multi-process-safe: all ranks minimize; chief-only file writes
+- [ ] multi-process-safe: **chief-only minimize + worker serve_optimizer_requests()
+      request/response loop** (symmetric one-to-one collectives, no deadlock);
+      single-process (JAX_NUM_PROCESSES=1) falls back to plain SciPy fit
 - [ ] no dependency on files outside this analysis workspace
 - [ ] task.finish with outputs={"all": "run/fit_script.py"}

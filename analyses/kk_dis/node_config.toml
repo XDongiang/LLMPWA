@@ -1,44 +1,31 @@
+# kk_dis 多节点配置：HEP1 作 header(process 0)，HEP3 作 worker(process 1)。
+# 互连为 1 Gbps 以太网 socket（无 IB/RoCE），故用 NCCL_SOCKET_IFNAME。
+# 注意：脚本 build_docker_cmd 原用 NCCL_IB_HCA=${IB_IF}；已适配为
+#       用 NCCL_SOCKET_IFNAME=${IB_IF}（以太网）。这里 IB_IF 字段存 socket 设备名。
+
 [header]
-IP = "192.168.1.13"
-PORT = 12345 
-# ssh用户名，用于同步docker image与work-dir
-# 需要配置免密码登录
-Username = "nvidia"
-# ETH_IF --- NCCL_SOCKET_IFNAME in container env
-#ETH_IF="enp1s0f0np0"
-# IB_IF --- NCCL_IB_HCA in container env
-# 两卡使用的IB设备
-#IB_IF="rocep1s0f0,roceP2p1s0f0"
-# 四卡使用的IB
-IB_IF="rocep1s0f1,roceP2p1s0f1"
-
+IP = "192.168.200.125"
+PORT = 12345
+# 免密 ssh 用户名（HEP1 已配置自ssh 免密）
+Username = "hyx"
+# socket 设备名（以太网）——脚本作为 NCCL_SOCKET_IFNAME
+IB_IF = "enp4s0"
 
 [[worker]]
-IP = "192.168.1.12"
-#ETH_IF="enp1s0f0np0"
-# 由于spark上一个connectx7接口对应linux系统中两个设备
-#IB_IF="rocep1s0f0,roceP2p1s0f0"
-IB_IF="rocep1s0f1,roceP2p1s0f1"
-Username = "nvidia"
-
-
-[[worker]]
-IP = "192.168.1.11"
-IB_IF="rocep1s0f1,roceP2p1s0f1"
-Username = "nvidia"
-
-[[worker]]
-IP = "192.168.1.10"
-IB_IF="rocep1s0f1,roceP2p1s0f1"
-Username = "nvidia"
+IP = "192.168.200.171"
+# HEP3 的 socket 设备名（以太网）
+IB_IF = "enp5s0"
+Username = "hyx"
 
 [container]
-image = "jax:latest"
+image = "jax-fit:latest"
 container = "kkfit"
-script = "run/fit_script.py"
+# fit 脚本用 /opt/env/bin/python 运行（jax 环境）
+script = "run/fit_script_dist.py"
 env = [
-    "NCCL_DEBUG=VERSION", 
-    #"NCCL_DEBUG=TRACE",
-    #"NCCL_DEBUG_SUBSYS=TUNING",
+    "NCCL_DEBUG=VERSION",
     "NCCL_IGNORE_CPU_AFFINITY=1",
+    "JAX_COORDINATOR_TIMEOUT=1000",
+    "JAX_ENABLE_X64=1",
+    "CUDA_VISIBLE_DEVICES=0",
 ]

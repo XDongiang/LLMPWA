@@ -1,0 +1,166 @@
+## Goal
+Generate a draw-weight computation script **run/draw_weight_script.py** for THIS analysis.
+
+It computes, for a fitted parameter vector (from `output/fit/fit_result_values.npy`):
+
+- per-event intensity weights for the total amplitude and for each partial-wave
+  (per resonance-class × per amplitude basis), on two samples:
+  - mode="pass"  → the (data/MC) evaluation sample stored under `data_*` / `mc_*` keys
+  - mode="truth" → the truth-MC sample stored under `truth_*` keys
+- saves them to `output/draw/weight.npz` and `output/draw/weight_truth.npz`
+- prints each partial wave's fit fraction (per basis index) and the total fit fraction
+
+## Required workflow (non-interactive)
+1. Read the analysis-specific inputs:
+   - `run/base_functions.py`       — import dplex_*, BW/flatte*, `np` (jax.numpy), `onp`
+   - `run/likelihood_function.py`  — read how THIS analysis combines amplitudes
+     into components (the `component_*` / `calculate_*` conventions, how const/theta
+     shape the amplitude basis and how classes are summed)
+   - `run/free_params.toml`        — the actual free parameters (arg_index / path / value)
+   - `gen/fragments/classification.json` — mode→resonance and mode→parameter mappings
+   - `gen/fragments/stripped_config.toml` — sbc/amp keys actually used
+2. Write **run/draw_weight_script.py** that:
+   - imports from `base_functions` (do not redefine physics helpers)
+   - defines `extract_parameters(args)` mapping the 1-D arg vector to per-mode
+     dicts (mass/width/const/theta) exactly matching THIS analysis's free_params;
+     keep fixed true constants (e.g. A_mass=1.02, A_width=0.004) as literals
+   - defines one `component_<mode>(...)` per amplitude class from the classification
+     (same combination convention as likelihood_function's components)
+   - defines `weight_kk(args)` and `weight_truth_kk(args)` that:
+     * sum all mode components (coherently, complex) into `total_wt`
+     * produce a wt_list whose entry 0 is the total intensity and entries 1..N are
+       each mode's per-basis intensity (shape like `einsum("ljk->lj", dabs(comp))`
+       when the basis is a leading index, matching how likelihood does it)
+   - defines `run_weight(args_list, mode="pass")`:
+     * `args = np.array(args_list)`; jit weight_kk / weight_truth_kk
+     * compute wt_list, `sum_wt = onp.sum(wt_list[0])`
+     * collect `total_weight = {"all_mods_wt": wt_list[0]}` and one entry per
+       `"{mode_name}_{basis_index}"` (mode_name as in the classification, e.g.
+       `phif0_kk_BW_flatte980_0`), plus `"fit_value"` and `"sum_wt"`
+     * print each partial-wave fraction = sum(wt[j])/sum_wt and total fit fraction
+     * `os.makedirs("output/draw", exist_ok=True)`; save `output/draw/weight.npz`
+       (mode="pass") or `output/draw/weight_truth.npz` (mode="truth")
+     * return total_fit_frac
+   - defines a `__main__` block (see Context) that loads
+     `output/fit/fit_result_values.npy` and runs both modes, logging progress
+3. Run a light smoke test (see Context "Smoke test") and write the full log to
+   **run/draw_weight_test_result.txt**.
+4. Finish with a short summary (not the whole .py body):
+   task(
+     action="finish",
+     result=<1-10 lines: path, key functions, smoke-test status / weights produced>,
+     outputs={
+       "all": "run/draw_weight_script.py",
+       "test_result": "run/draw_weight_test_result.txt"
+     }
+   )
+
+## Context
+
+### 0) Shared runtime: run/base_functions.py (MUST use; do not duplicate)
+It provides COMMON_UTILITIES, PATH setup, dplex_*, PHYSICS_FUNCTIONS, make_initial_args.
+Current content (for reference; prefer `read run/base_functions.py` if needed):
+
+```python
+<<stages.assemble_help_functions.all>>
+```
+
+### 1) Resonance / amplitude configuration (THIS analysis)
+stripped config:
+
+```toml
+<<stages.config_strip.stripped_config>>
+```
+
+free params (arg_index / path / value / fixed / range):
+
+```toml
+<<stages.config_strip.free_params>>
+```
+
+classification (mode → resonances, mode → parameter lists):
+
+```json
+<<stages.classification.all>>
+```
+
+sbc / amplitude keys:
+
+```
+sbc      = <<stages.config_strip.all_sbc>>
+amp      = <<stages.config_strip.all_amp>>
+sbc_amp  = <<stages.config_strip.all_sbc_amp>>
+```
+
+### 2) Amplitude-combination convention (from likelihood_function)
+Read `run/likelihood_function.py` for the exact component/combination pattern used by
+this analysis. Typical shape conventions (verify by reading):
+
+- complex tensors are stacked with axis 0 = (real, imag) via dplex_dconstruct
+- amplitude basis is a leading index (e.g. `phif0_kk` shape (2, E, 2),
+  `phif2_kk` shape (5, E, 2)); after combining with const/theta the per-event
+  intensity is `dplex_dabs(...)` summed over the last (k) index
+- `component_<mode>` returns a complex array; the weight of a mode is
+  `einsum("ljk->lj", dplex_dabs(component))` where `l` is the basis index
+
+### 3) Data layout (from load_data / normalize_data)
+`run/base_functions.py::load_data()` loads `data/mc_truth/*.npy`, keyed
+`data_<var>` / `mc_<var>` / `truth_<var>`, with `truth_*` capped at 150000 events.
+`normalize_data` normalizes phif0/phif2-like tensors. 1-D kinematic variables
+(phi_kk, f_kk, b123_kk, b124_kk) and 3-D amplitudes (phif0_kk, phif2_kk) are pushed
+to JAX via a `prepare_data_for_jax`-style device_put (see base_functions / likelihood
+for the exact local arrays available).
+
+Expected per-mode inputs for a `component_<mode>` call (adapt to actual names):
+A_propagator(sbc=phi_kk), B_propagator(sbc=f_kk), amplitude tensor (phif0_kk/phif2_kk),
+const/theta arrays.
+
+### 4) Main block
+```python
+if __name__ == "__main__":
+    logger = setup_logging()   # base_functions.setup_logging reads config/logconfig_fit.json
+    config.update("jax_enable_x64", True)
+
+    args_list = onp.load("output/fit/fit_result_values.npy")
+
+    logger.info("计算数据权重 (mode=pass)...")
+    run_weight(args_list, mode="pass")
+
+    logger.info("计算 truth MC 权重 (mode=truth)...")
+    run_weight(args_list, mode="truth")
+
+    logger.info("权重计算完成，结果已保存至 output/draw/")
+```
+(Adjust `setup_logging`/logger name to whatever the module provides; the point is to
+log progress and write both weight files.)
+
+### 5) Smoke test
+Run with a tiny subset so it is fast, e.g.:
+
+```bash
+cd <analysis workdir>          # base_functions chdirs on import
+python run/draw_weight_script.py --smoke
+```
+
+If you add a `--smoke` branch, keep it minimal: use a sub-sampled index range
+(e.g. first 512 events) on the `data_*` / `truth_*` arrays, compute
+`run_weight`-style wt_list once, and print shapes/sums:
+
+```python
+# inside __main__ if "--smoke" in sys.argv:
+#   subset arrays (first N events), build args = make_initial_args()[0],
+#   jit weight_kk once, print wt_list[0].shape and float(sum(wt_list[0]))
+```
+
+Write the full output (commands + results) to `run/draw_weight_test_result.txt`.
+A "PASS" line at the end with wt shapes/sums is a good accepted marker.
+
+## Deliverables checklist
+- [ ] run/draw_weight_script.py complete, importable
+- [ ] extract_parameters matches THIS analysis's free_params exactly
+- [ ] weight_kk / weight_truth_kk produce (1 + N_modes) wt_list with correct shapes
+- [ ] run_weight saves weight.npz and weight_truth.npz under output/draw/
+- [ ] imports from base_functions; no duplicated physics helpers
+- [ ] no dependency on files outside this analysis workspace
+- [ ] draw_weight_test_result.txt: smoke test log with PASS
+- [ ] task.finish with outputs={"all": ..., "test_result": ...}

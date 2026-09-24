@@ -1,0 +1,24 @@
+# Per-analysis remote configuration for the remote_* tools.
+# Target: hyx@127.0.0.1:20402 (HEP1), reached through the jump host root@www.insolitude.me:22.
+# Follows the same host/credentials as analyses/kk_dis/.dsh/config.yml.
+# The new kk_pipi analysis keeps the same remote compute node (HEP1) as kk_dis:
+#   remoteRoot points at the kk_pipi work directory on that host.
+# Auth for both hops: the user's existing key ~/.ssh/id_ed25519 (no key is copied into this analysis).
+# Host keys are pinned by SHA256 fingerprint; strict verification (no TOFU).
+remote:
+  host: 127.0.0.1
+  port: 20402
+  user: hyx
+  remoteRoot: /home/hyx/LLMPWA/kk_pipi
+  auth:
+    kind: key
+    keyPath: /home/iso/.ssh/id_ed25519
+  hostKeyFingerprint: 8BqvxGt5Yqu9wEw8obolttmFU6+nkV0TUPo0Z2MYS7A=
+  proxyJump:
+    host: www.insolitude.me
+    port: 22
+    user: root
+    auth:
+      kind: key
+      keyPath: /home/iso/.ssh/id_ed25519
+    hostKeyFingerprint: J4n4uBx+NofmhQ98QF9qNj27VzV4W0vIRIJY3sMkm7U=

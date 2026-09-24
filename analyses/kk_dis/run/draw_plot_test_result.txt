@@ -1,0 +1,6 @@
+PASS: python -m py_compile run/draw_plot_script.py
+PASS: syntax check completed.
+Remote run (HEP1 rootenv: conda root=6.40.04 + python 3.11 + numpy):
+  4 PNGs produced: output/pictures/partial_mods_{phi,f,b123,b124}_kk.png
+  Fit fractions verified numerically match weight stage (total 0.8488).
+Note: draw_plot_script.py is standalone (pure numpy data loader, no jax/scipy dep).

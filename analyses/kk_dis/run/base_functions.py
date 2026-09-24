@@ -147,7 +147,7 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
 
 
 def load_data():
-    n_repeat = 1
+    n_repeat = 3
     n_truth_mc = 150000  # intentional truth-MC cap; this is not n_data
     data = {}
 
