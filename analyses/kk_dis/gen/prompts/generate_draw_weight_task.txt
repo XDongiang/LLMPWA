@@ -11,6 +11,10 @@ It computes, for a fitted parameter vector (from `output/fit/fit_result_values.n
 - prints each partial wave's fit fraction (per basis index) and the total fit fraction
 
 ## Required workflow (non-interactive)
+0. Read **document/draw_plot_constraints.md** first — it fixes the resonance/basis set,
+   the weight-key naming (`all_mods_wt` + `"<mode>_<basis>"`), the data source sample
+   sizes (mode="pass" on the full MC evaluation sample, mode="truth" on the truth-MC
+   150000-cap), and the exact keys the downstream draw_plot stage expects.
 1. Read the analysis-specific inputs:
    - `run/base_functions.py`       — import dplex_*, BW/flatte*, `np` (jax.numpy), `onp`
    - `run/likelihood_function.py`  — read how THIS analysis combines amplitudes

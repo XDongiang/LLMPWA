@@ -121,6 +121,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.conda_home/
+.pyroot_envs/
+.pyroot_pkgs/
 
 # Spyder project settings
 .spyderproject

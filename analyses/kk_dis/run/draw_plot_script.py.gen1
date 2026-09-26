@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""ROOT plots from the draw-stage weight files.
+
+This module deliberately reads the raw one-dimensional kinematic arrays rather
+than using the fit data loader.  It therefore has no JAX or SciPy dependency.
+"""
+import os
+import re
+import tomllib
+from pathlib import Path
+
+import numpy as np
+
+ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
+WEIGHT_PATH = ANALYSIS_ROOT / "output" / "draw" / "weight.npz"
+TRUTH_PATH = ANALYSIS_ROOT / "output" / "draw" / "weight_truth.npz"
+PICTURE_DIR = ANALYSIS_ROOT / "output" / "pictures"
+PLOT_VARIABLES = ["phi_kk", "f_kk", "b123_kk", "b124_kk"]
+MODE_RESONANCES = {
+    "phif0_kk_BW_flatte980": ["phif0_980"],
+    "phif0_kk_BW_BW": ["phif0_1710", "phif0_2470"],
+    "phif2_kk_BW_BW": ["phif2_1270", "phif2_1525", "phif2_2150", "phif2_2340"],
+}
+AXIS_TITLES = {
+    "phi_kk": "M_{#phi} (GeV)",
+    "f_kk": "M_{KK} (GeV)",
+    "b123_kk": "M_{#phi K} (GeV)",
+    "b124_kk": "M_{#phi K} (GeV)",
+}
+COLORS = ["kBlue", "kGreen", "kMagenta", "kOrange", "kCyan", "kViolet", "kAzure", "kRed"]
+ROOT = None
+
+
+def _root():
+    global ROOT
+    if ROOT is None:
+        import ROOT as root
+        root.gROOT.SetBatch(True)
+        root.gStyle.SetOptStat(0)
+        ROOT = root
+    return ROOT
+
+
+def _npz(path):
+    with np.load(str(path), allow_pickle=False) as archive:
+        return {key: np.asarray(archive[key]) for key in archive.files}
+
+
+def load_weights():
+    weights = _npz(WEIGHT_PATH)
+    truth = _npz(TRUTH_PATH)
+    if "all_mods_wt" not in weights:
+        raise KeyError("weight.npz does not contain all_mods_wt")
+    return weights, truth
+
+
+def load_data(var):
+    """Return sqrt(s) arrays and the real-data event count for *var*."""
+    real = np.sqrt(np.asarray(np.load(str(ANALYSIS_ROOT / "data" / "real_data" / (var + ".npy"))), dtype=float))
+    mc = np.sqrt(np.asarray(np.load(str(ANALYSIS_ROOT / "data" / "mc_truth" / (var + ".npy"))), dtype=float))
+    if real.ndim != 1 or mc.ndim != 1:
+        raise ValueError("%s is not a scalar kinematic variable" % var)
+    return real, mc, real.size
+
+
+def available_components(weights):
+    """Discover present mode_basis keys, restricted to configured modes."""
+    found = []
+    pattern = re.compile(r"^(.*)_(\d+)$")
+    order = {mode: i for i, mode in enumerate(MODE_RESONANCES)}
+    for key in weights:
+        match = pattern.match(key)
+        if match and match.group(1) in MODE_RESONANCES:
+            mode, basis = match.group(1), int(match.group(2))
+            if basis < len(MODE_RESONANCES[mode]):
+                found.append((mode, basis, key, MODE_RESONANCES[mode][basis]))
+    return sorted(found, key=lambda x: (order[x[0]], x[1]))
+
+
+def _matching_weights(values, weights):
+    """Accommodate doubled b123/b124 combination arrays when encountered."""
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float).ravel()
+    if values.size == 2 * weights.size:
+        weights = np.tile(weights, 2)
+    n = min(values.size, weights.size)
+    return values[:n], weights[:n]
+
+
+def _limits(data, mc):
+    finite = np.concatenate((data[np.isfinite(data)], mc[np.isfinite(mc)]))
+    if finite.size == 0:
+        return 0.0, 1.0
+    lo, hi = float(np.min(finite)), float(np.max(finite))
+    if hi <= lo:
+        d = max(1.0, abs(lo) * 0.01)
+        return lo - d, hi + d
+    return lo, hi
+
+
+def _hist(root, name, values, weights, bins, limits):
+    hist = root.TH1D(name, name, bins, limits[0], limits[1])
+    hist.SetDirectory(0)
+    values = np.asarray(values, dtype=float)
+    if weights is None:
+        for value in values[np.isfinite(values)]:
+            hist.Fill(float(value))
+    else:
+        values, weights = _matching_weights(values, weights)
+        good = np.isfinite(values) & np.isfinite(weights)
+        for value, weight in zip(values[good], weights[good]):
+            hist.Fill(float(value), float(weight))
+    return hist
+
+
+def _scale(hist, weights, data_size):
+    total = float(np.sum(np.asarray(weights, dtype=float)))
+    if np.isfinite(total) and total != 0.0:
+        hist.Scale(float(data_size) / total)
+    return total
+
+
+def fit_fraction(truth, key):
+    denominator = float(np.sum(np.asarray(truth.get("all_mods_wt", []), dtype=float)))
+    numerator = float(np.sum(np.asarray(truth.get(key, []), dtype=float)))
+    return numerator / denominator if denominator else 0.0
+
+
+def _parameter_lines(resonance, fit_values):
+    """Build kk_<parameter>_result lines using free_params.toml ordering."""
+    path = ANALYSIS_ROOT / "run" / "free_params.toml"
+    if not path.exists():
+        return []
+    try:
+        entries = tomllib.load(path.open("rb")).get("data", [])
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    lines = []
+    for entry in sorted(entries, key=lambda item: item.get("arg_index", 10**9)):
+        full_path = str(entry.get("path", ""))
+        marker = "resonances." + resonance + "."
+        if not full_path.startswith(marker):
+            continue
+        parameter = full_path.rsplit(".", 1)[-1]
+        index = int(entry.get("arg_index", -1))
+        if 0 <= index < len(fit_values):
+            lines.append("kk_%s_result:%.6g" % (parameter, float(fit_values[index])))
+    return lines
+
+
+def _style(hdata, hfit, axis_title, bins, limits):
+    width = (limits[1] - limits[0]) / float(bins)
+    hdata.SetTitle(";%s;Events/%.3g GeV" % (axis_title, width))
+    hdata.SetMarkerStyle(20)
+    hdata.SetMarkerSize(0.65)
+    hdata.SetLineColor(_root().kBlack)
+    hfit.SetLineColor(_root().kRed + 1)
+    hfit.SetLineWidth(3)
+    hfit.SetFillStyle(0)
+
+
+def _draw_canvas(var, data, mc, weights, truth, entries, selected, output):
+    root = _root()
+    bins = 60
+    limits = _limits(data, mc)
+    total = np.asarray(weights["all_mods_wt"], dtype=float).ravel()
+    mc_total, total = _matching_weights(mc, total)
+    canvas = root.TCanvas("c_%s_%s" % (var, selected or "all"), var, 900, 600)
+    hdata = _hist(root, "hdata_%s_%s" % (var, selected or "all"), data, None, bins, limits)
+    hfit = _hist(root, "hfit_%s_%s" % (var, selected or "all"), mc_total, total, bins, limits)
+    _scale(hfit, total, data.size)
+    _style(hdata, hfit, AXIS_TITLES[var], bins, limits)
+    hdata.Draw("E1")
+    hfit.Draw("HIST SAME")
+    legend = root.TLegend(0.57, 0.52, 0.90, 0.90)
+    legend.SetBorderSize(0)
+    legend.SetFillStyle(0)
+    legend.AddEntry(hdata, "Data", "lep")
+    legend.AddEntry(hfit, "Fit total", "l")
+    objects = [hdata, hfit, legend]
+    chosen = entries if selected is None else [item for item in entries if item[3] == selected]
+    fractions = {}
+    for i, (mode, basis, key, resonance) in enumerate(chosen):
+        component = np.asarray(weights[key], dtype=float).ravel()
+        mc_comp, component = _matching_weights(mc, component)
+        hcomp = _hist(root, "hcomp_%s_%s_%s" % (var, mode, basis), mc_comp, component, bins, limits)
+        _scale(hcomp, component, data.size)
+        color = getattr(root, COLORS[i % len(COLORS)])
+        hcomp.SetLineColor(color + 1)
+        hcomp.SetLineWidth(2)
+        hcomp.SetLineStyle(1 + (i // len(COLORS)) % 3)
+        hcomp.Draw("HIST SAME")
+        frac = fit_fraction(truth, key)
+        fractions[resonance] = frac
+        label = "%s (%.3f)" % (resonance, frac)
+        legend.AddEntry(hcomp, label, "l")
+        objects.append(hcomp)
+    legend.Draw()
+    if selected is not None:
+        latex = root.TLatex()
+        latex.SetNDC(True)
+        latex.SetTextSize(0.028)
+        lines = _parameter_lines(selected, np.asarray(weights.get("fit_value", []), dtype=float))
+        lines.append("fit fraction : %.6g" % fractions.get(selected, 0.0))
+        y = 0.88
+        for line in lines:
+            latex.DrawLatex(0.56, y, line)
+            y -= 0.035
+        objects.append(latex)
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    canvas.SaveAs(str(output))
+    return fractions
+
+
+def draw_variable(var, weights, truth):
+    data, mc, _ = load_data(var)
+    entries = available_components(weights)
+    _draw_canvas(var, data, mc, weights, truth, entries, None,
+                 PICTURE_DIR / (var + "_weight.png"))
+    for _, _, _, resonance in entries:
+        _draw_canvas(var, data, mc, weights, truth, entries, resonance,
+                     PICTURE_DIR / (var + resonance + "_kk_weight.png"))
+    return [var + "_weight.png"] + [var + r + "_kk_weight.png" for _, _, _, r in entries]
+
+
+def main(variables=None):
+    os.chdir(str(ANALYSIS_ROOT))
+    weights, truth = load_weights()
+    variables = PLOT_VARIABLES if variables is None else list(variables)
+    produced = []
+    for var in variables:
+        real_path = ANALYSIS_ROOT / "data" / "real_data" / (var + ".npy")
+        mc_path = ANALYSIS_ROOT / "data" / "mc_truth" / (var + ".npy")
+        if real_path.exists() and mc_path.exists():
+            produced.extend(draw_variable(var, weights, truth))
+    return produced
+
+
+if __name__ == "__main__":
+    main()

@@ -52,6 +52,8 @@ analyses/kk_dis/
 | `document/ENV_NOTES.md` | 环境依赖清单与坑（本地 venv / 远程 kk_fit） |
 | `document/combined_likelihood_math.md` | 似然函数数学说明（**生成似然的唯一公式来源**） |
 | `document/random_initial_perturbation.md` | 随机初值扰动算法（多起点拟合用） |
+| `document/draw_plot_constraints.md` | **画图约束规范**（`generate_draw_weight`/`generate_draw_plot` 的唯一约束来源） |
+| `document/draw_plot_environment.md` | 画图运行环境（本地 `.pyroot_envs/rootplot` / 远程 `rootenv`） |
 | `document/README_architecture.md` | 项目架构说明（原 README 存档） |
 
 **规则**：

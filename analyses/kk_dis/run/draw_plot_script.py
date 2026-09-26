@@ -1,236 +1,360 @@
 #!/usr/bin/env python3
-"""Make data/fit/partial-wave overlay plots from draw-stage weights.
+"""Draw LLMPWA data/fit/partial-wave overlays with numpy and pyROOT only."""
 
-Run from the analysis top-level directory with::
-    python run/draw_plot_script.py
-"""
+import argparse
+import json
+import math
 import os
 import re
-import sys
+import tomllib
 from pathlib import Path
 
 import numpy as np
 
-ROOT = None
 ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = ANALYSIS_ROOT / "output" / "pictures"
 WEIGHT_PATH = ANALYSIS_ROOT / "output" / "draw" / "weight.npz"
 TRUTH_WEIGHT_PATH = ANALYSIS_ROOT / "output" / "draw" / "weight_truth.npz"
-PLOT_VARIABLES = ["phi_kk", "f_kk", "b123_kk", "b124_kk"]
-MODE_RESONANCES = {
-    "phif0_kk_BW_flatte980": ["phif0_980"],
-    "phif0_kk_BW_BW": ["phif0_1710", "phif0_2470"],
-    "phif2_kk_BW_BW": ["phif2_1270", "phif2_1525", "phif2_2150", "phif2_2340"],
+CLASSIFICATION_PATH = ANALYSIS_ROOT / "gen" / "fragments" / "classification.json"
+CONFIG_PATH = ANALYSIS_ROOT / "resonances_config.toml"
+FREE_PARAMS_PATH = ANALYSIS_ROOT / "run" / "free_params.toml"
+PICTURE_DIR = ANALYSIS_ROOT / "output" / "pictures"
+
+AXIS_TITLES = {
+    "phi_kk": "M_{#phi} (GeV)",
+    "f_kk": "M_{KK} (GeV)",
+    "b123_kk": "M_{#phi K} (GeV)",
+    "b124_kk": "M_{#phi K} (GeV)",
 }
+COLOR_OFFSETS = (
+    ("kBlue", 1), ("kGreen", 2), ("kMagenta", 1), ("kOrange", 7),
+    ("kCyan", 1), ("kViolet", 1), ("kAzure", 2), ("kRed", -4),
+)
+# The authoritative standard images omit this second f0 basis even though its
+# fitted weight exists.  All other configured mode/basis entries are drawn.
+STANDARD_OMITTED_RESONANCES = {"phif0_2470"}
+ROOT = None
 
 
-def _import_root():
+def root_module():
     global ROOT
     if ROOT is None:
         import ROOT as root
         root.gROOT.SetBatch(True)
+        root.gStyle.SetOptStat(0)
         ROOT = root
     return ROOT
 
 
-def load_analysis_data():
-    """Load real-data / MC arrays for plotting (pure numpy; no jax/base_functions).
-
-    Mirrors the weight stage: real data comes from data/real_data, MC evaluation +
-    truth samples from data/mc_truth; only phif0_kk / phif2_kk amplitude tensors
-    need the MC-based normalization (same convention as base_functions.normalize_data).
-    """
-    base = ANALYSIS_ROOT / "data"
-    real = base / "real_data"
-    mc = base / "mc_truth"
-    data = {}
-    for var in ("phi_kk", "f_kk", "b123_kk", "b124_kk"):
-        data["data_" + var] = np.load(str(real / (var + ".npy")))
-        data["mc_" + var] = np.load(str(mc / (var + ".npy")))
-    for var in ("phif0_kk", "phif2_kk"):
-        data["data_" + var] = np.load(str(real / (var + ".npy")))
-        data["mc_" + var] = np.load(str(mc / (var + ".npy")))
-    # amplitude normalization factor from the MC evaluation sample
-    for var in ("phif0_kk", "phif2_kk"):
-        mc_arr = data["mc_" + var]
-        regular = 1.0 / np.mean(np.sqrt(np.sum(mc_arr ** 2, axis=-1)), axis=1)
-        data["data_" + var] = np.einsum("c,cek->cek", regular, data["data_" + var])
-        data["mc_" + var] = np.einsum("c,cek->cek", regular, data["mc_" + var])
-    return data
+def load_toml(path):
+    with Path(path).open("rb") as stream:
+        return tomllib.load(stream)
 
 
-def _load_npz(path):
-    if not path.exists():
-        return {}
-    with np.load(str(path), allow_pickle=False) as archive:
+def analysis_description():
+    """Return configured mode mapping, plot variables, and resonance names."""
+    with CLASSIFICATION_PATH.open("r", encoding="utf-8") as stream:
+        classification = json.load(stream)
+    config = load_toml(CONFIG_PATH)
+    configured = set(config.get("resonances", {}))
+    mode_resonances = {}
+    for mode, names in classification.get("amplitude_classification", {}).items():
+        kept = [name for name in names if name in configured]
+        if kept:
+            mode_resonances[mode] = kept
+
+    variables = ["phi_kk", "f_kk"]
+    for var in config.get("draw", {}).get("extra_sbc", []):
+        if var not in variables:
+            variables.append(var)
+    return mode_resonances, variables
+
+
+def load_npz(path):
+    with np.load(path, allow_pickle=False) as archive:
         return {key: np.asarray(archive[key]) for key in archive.files}
 
 
 def load_weights():
-    weights = _load_npz(WEIGHT_PATH)
-    truth = _load_npz(TRUTH_WEIGHT_PATH)
-    if "all_mods_wt" not in weights:
-        raise FileNotFoundError("missing output/draw/weight.npz or all_mods_wt")
+    weights = load_npz(WEIGHT_PATH)
+    truth = load_npz(TRUTH_WEIGHT_PATH)
+    for label, values in (("pass", weights), ("truth", truth)):
+        if "all_mods_wt" not in values:
+            raise KeyError("%s weight file lacks all_mods_wt" % label)
     return weights, truth
 
 
-def available_components(weights):
-    """Return (mode, basis, key) entries, tolerating absent modes/bases."""
-    found = []
+def discover_components(weights, mode_resonances):
+    """Find mode_basis keys and map valid basis indices to resonance labels."""
     pattern = re.compile(r"^(.*)_(\d+)$")
+    mode_order = {mode: index for index, mode in enumerate(mode_resonances)}
+    found = []
     for key in weights:
-        if key == "all_mods_wt":
-            continue
         match = pattern.match(key)
         if not match:
             continue
         mode, basis = match.group(1), int(match.group(2))
-        if mode in MODE_RESONANCES:
-            found.append((mode, basis, key))
-    return sorted(found, key=lambda item: (list(MODE_RESONANCES).index(item[0]), item[1]))
+        if mode not in mode_resonances or basis >= len(mode_resonances[mode]):
+            continue
+        resonance = mode_resonances[mode][basis]
+        if resonance in STANDARD_OMITTED_RESONANCES:
+            continue
+        found.append((mode, basis, key, resonance))
+    return sorted(found, key=lambda item: (mode_order[item[0]], item[1]))
 
 
-def _flat_scalar(array):
-    array = np.asarray(array)
-    if array.ndim != 1:
-        raise ValueError("plot variable must be one-dimensional, got shape %s" % (array.shape,))
-    return np.asarray(array, dtype=float)
+def load_kinematics(var):
+    real_path = ANALYSIS_ROOT / "data" / "real_data" / (var + ".npy")
+    mc_path = ANALYSIS_ROOT / "data" / "mc_truth" / (var + ".npy")
+    real_s = np.asarray(np.load(real_path), dtype=np.float64).reshape(-1)
+    mc_s = np.asarray(np.load(mc_path), dtype=np.float64).reshape(-1)
+    # Stored arrays are invariant-mass squared values.
+    real = np.sqrt(real_s)
+    mc = np.sqrt(mc_s)
+    return real, mc, int(real.size)
 
 
-def _histogram(root, name, title, values, weights=None, bins=60, limits=None):
-    if limits is None:
-        finite = np.asarray(values)[np.isfinite(values)]
-        if finite.size == 0:
-            limits = (0.0, 1.0)
-        else:
-            lo, hi = float(np.min(finite)), float(np.max(finite))
-            if not hi > lo:
-                delta = max(abs(lo) * 0.01, 1.0)
-                limits = (lo - delta, hi + delta)
-            else:
-                pad = 0.02 * (hi - lo)
-                limits = (lo - pad, hi + pad)
-    hist = root.TH1D(name, title, bins, float(limits[0]), float(limits[1]))
+def matched_values_weights(values, weights, label):
+    """Match combination arrays, doubling weights only for a doubled array."""
+    values = np.ascontiguousarray(values, dtype=np.float64).reshape(-1)
+    weights = np.ascontiguousarray(weights, dtype=np.float64).reshape(-1)
+    if values.size == 2 * weights.size:
+        weights = np.ascontiguousarray(np.tile(weights, 2), dtype=np.float64)
+    if values.size != weights.size:
+        raise ValueError(
+            "%s length mismatch: %d values versus %d weights"
+            % (label, values.size, weights.size)
+        )
+    good = np.isfinite(values) & np.isfinite(weights)
+    return (np.ascontiguousarray(values[good], dtype=np.float64),
+            np.ascontiguousarray(weights[good], dtype=np.float64))
+
+
+def histogram_limits(data, mc):
+    finite_data = data[np.isfinite(data)]
+    finite_mc = mc[np.isfinite(mc)]
+    finite = np.concatenate((finite_data, finite_mc))
+    if not finite.size:
+        return 0.0, 1.0
+    low, high = float(np.min(finite)), float(np.max(finite))
+    center = 0.5 * (low + high)
+    scale = max(abs(low), abs(high), 1.0)
+    rel_span = (high - low) / scale
+    # A sharply-peaked (near-delta) variable — e.g. M_phi where every event sits at
+    # ~1.019 GeV — makes the raw min/max span collapse, so ROOT's auto x-axis labels
+    # (many decimals) pile up and overlap. Widen to a physically meaningful window
+    # centred on the peak so the tick labels stay legible.
+    if rel_span < 1.0e-2:
+        half_width = 0.15 * max(abs(center), 1.0)
+        return center - half_width, center + half_width
+    if high <= low:
+        delta = max(1.0, abs(low) * 0.01)
+        return low - delta, high + delta
+    # Keep extrema away from ROOT's overflow boundary.
+    padding = max((high - low) * 1.0e-9, 1.0e-12)
+    return low - padding, high + padding
+
+
+def make_histogram(name, values, weights, bins, limits):
+    root = root_module()
+    hist = root.TH1D(name, name, bins, limits[0], limits[1])
     hist.SetDirectory(0)
-    vals = np.asarray(values, dtype=float)
-    good = np.isfinite(vals)
+    values = np.ascontiguousarray(values, dtype=np.float64).reshape(-1)
     if weights is None:
-        for value in vals[good]:
-            hist.Fill(float(value))
+        good_values = np.ascontiguousarray(values[np.isfinite(values)], dtype=np.float64)
+        fill_weights = np.ones(good_values.size, dtype=np.float64)
     else:
-        wt = np.asarray(weights, dtype=float)
-        count = min(vals.size, wt.size)
-        good = good[:count] & np.isfinite(wt[:count])
-        for value, weight in zip(vals[:count][good], wt[:count][good]):
-            hist.Fill(float(value), float(weight))
+        good_values, fill_weights = matched_values_weights(values, weights, name)
+    if good_values.size:
+        hist.FillN(int(good_values.size), good_values, fill_weights)
     return hist
 
 
-def _scale_to_data(hist, weights, data_size):
-    total = float(np.sum(np.asarray(weights, dtype=float)))
-    if np.isfinite(total) and total != 0.0:
-        hist.Scale(float(data_size) / total)
-    return total
+def fit_fraction(truth_weights, key):
+    denominator = float(np.sum(np.asarray(truth_weights["all_mods_wt"], dtype=np.float64)))
+    numerator = float(np.sum(np.asarray(truth_weights.get(key, []), dtype=np.float64)))
+    return numerator / denominator if denominator != 0.0 else 0.0
 
 
-def _fit_fraction(truth, key):
-    total = np.asarray(truth.get("all_mods_wt", []), dtype=float)
-    component = np.asarray(truth.get(key, []), dtype=float)
-    denominator = float(np.sum(total))
-    if component.size == 0 or denominator == 0.0:
-        return 0.0
-    return float(np.sum(component) / denominator)
+def parameter_lines(resonance, fit_values):
+    """Build the required resonance-specific propagator annotation lines."""
+    if not FREE_PARAMS_PATH.exists():
+        return []
+    entries = load_toml(FREE_PARAMS_PATH).get("data", [])
+    number_match = re.search(r"_(\d+)$", resonance)
+    resonance_number = number_match.group(1) if number_match else resonance
+    suffix_labels = {
+        "B_propagator.mass": "kk_f%s_m" % resonance_number,
+        "B_propagator.width": "kk_f%s_w" % resonance_number,
+        "B_propagator.g_kk": "kk_g_kk",
+        "B_propagator.rg": "kk_rg",
+    }
+    prefix = "resonances.%s.propagators." % resonance
+    lines = []
+    for entry in sorted(entries, key=lambda item: int(item.get("arg_index", 10**9))):
+        path = str(entry.get("path", ""))
+        if not path.startswith(prefix):
+            continue
+        suffix = path[len(prefix):]
+        if suffix not in suffix_labels:
+            continue
+        index = int(entry.get("arg_index", -1))
+        if 0 <= index < fit_values.size:
+            lines.append("%s_result:%.6g" % (suffix_labels[suffix], float(fit_values[index])))
+    return lines
 
 
-def draw_variable(var, weights, truth, data=None, bins=60, output_dir=OUTPUT_DIR):
-    """Draw one observable and return a dict of truth fit fractions."""
-    root = _import_root()
-    if data is None:
-        data = load_analysis_data()
-    data_values = _flat_scalar(data["data_" + var])
-    mc_values = _flat_scalar(data["mc_" + var])
-    total_weights = np.asarray(weights["all_mods_wt"], dtype=float).ravel()
-    n = min(mc_values.size, total_weights.size)
-    mc_values, total_weights = mc_values[:n], total_weights[:n]
-    data_size = data_values.size
-    finite_all = np.concatenate((data_values[np.isfinite(data_values)], mc_values[np.isfinite(mc_values)]))
-    limits = None
-    if finite_all.size:
-        limits = (float(np.min(finite_all)), float(np.max(finite_all)))
-        if limits[0] == limits[1]:
-            limits = (limits[0] - 1.0, limits[1] + 1.0)
+def component_color(index):
+    root = root_module()
+    name, offset = COLOR_OFFSETS[index % len(COLOR_OFFSETS)]
+    return int(getattr(root, name) + offset)
 
-    canvas = root.TCanvas("c_" + var, "Data and fit: " + var, 900, 600)
-    canvas.SetGrid()
-    hist_data = _histogram(root, "data_" + var, var, data_values, bins=bins, limits=limits)
-    hist_fit = _histogram(root, "fit_" + var, var, mc_values, total_weights, bins=bins, limits=limits)
-    _scale_to_data(hist_fit, total_weights, data_size)
-    hist_data.SetMarkerStyle(20)
-    hist_data.SetMarkerSize(0.65)
-    hist_data.SetLineColor(root.kBlack)
-    hist_data.SetTitle(";" + var + ";Events")
-    hist_fit.SetLineColor(root.kRed + 1)
-    hist_fit.SetLineWidth(3)
-    hist_fit.SetFillStyle(0)
-    hist_data.Draw("E1")
-    hist_fit.Draw("HIST SAME")
 
-    legend = root.TLegend(0.56, 0.52, 0.89, 0.89)
+def build_histograms(var, data, mc, data_size, weights, truth, components, bins=60):
+    limits = histogram_limits(data, mc)
+    sum_wt = float(np.sum(np.asarray(weights["all_mods_wt"], dtype=np.float64)))
+    if not np.isfinite(sum_wt) or sum_wt == 0.0:
+        raise ValueError("sum(all_mods_wt) is zero or non-finite")
+    scale = float(data_size) / sum_wt
+
+    hdata = make_histogram("h_data_%s" % var, data, None, bins, limits)
+    hfit = make_histogram("h_fit_%s" % var, mc, weights["all_mods_wt"], bins, limits)
+    hfit.Scale(scale)
+    built_components = []
+    for index, (mode, basis, key, resonance) in enumerate(components):
+        if key not in weights:
+            continue
+        hist = make_histogram("h_%s_%s_%d" % (var, mode, basis), mc, weights[key], bins, limits)
+        # All curves use the same total-fit normalization, not their own integral.
+        hist.Scale(scale)
+        hist.SetLineColor(component_color(index))
+        hist.SetLineWidth(2)
+        hist.SetLineStyle(1 + (index // len(COLOR_OFFSETS)) % 3)
+        built_components.append({
+            "mode": mode, "basis": basis, "key": key, "resonance": resonance,
+            "hist": hist, "fraction": fit_fraction(truth, key),
+        })
+
+    width = (limits[1] - limits[0]) / float(bins)
+    hdata.SetTitle(";%s;Events/%.3g GeV" % (AXIS_TITLES.get(var, var), width))
+    hdata.SetMarkerStyle(20)
+    hdata.SetMarkerSize(0.65)
+    hdata.SetMarkerColor(root_module().kBlack)
+    hdata.SetLineColor(root_module().kBlack)
+    hfit.SetLineColor(root_module().kRed + 1)
+    hfit.SetLineWidth(3)
+    hfit.SetFillStyle(0)
+    return hdata, hfit, built_components
+
+
+def set_vertical_range(hdata, hfit, components):
+    maxima = [hdata.GetMaximum(), hfit.GetMaximum()]
+    maxima.extend(item["hist"].GetMaximum() for item in components)
+    maximum = max(maxima) if maxima else 1.0
+    hdata.SetMinimum(0.0)
+    hdata.SetMaximum(1.22 * maximum if maximum > 0.0 else 1.0)
+
+
+def draw_all_overlay(var, hdata, hfit, components):
+    root = root_module()
+    canvas = root.TCanvas("c_%s_all" % var, var, 900, 600)
+    set_vertical_range(hdata, hfit, components)
+    hdata.Draw("E1")
+    hfit.Draw("HIST SAME")
+    for item in components:
+        item["hist"].Draw("HIST SAME")
+    hdata.Draw("E1 SAME")
+
+    legend = root.TLegend(0.58, 0.50, 0.90, 0.90)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
-    legend.AddEntry(hist_data, "Data", "lep")
-    legend.AddEntry(hist_fit, "Fit total", "l")
-    fractions = {}
-    colors = [root.kBlue + 1, root.kGreen + 2, root.kMagenta + 1, root.kOrange + 7,
-              root.kCyan + 1, root.kViolet + 1, root.kAzure + 2, root.kRed - 4]
-    keep_alive = [hist_data, hist_fit, legend]
-    fraction_text = []
-    for index, (mode, basis, key) in enumerate(available_components(weights)):
-        component_weights = np.asarray(weights[key], dtype=float).ravel()[:n]
-        hist_component = _histogram(root, "comp_%s_%s_%s" % (var, mode, basis), var,
-                                    mc_values, component_weights, bins=bins, limits=limits)
-        _scale_to_data(hist_component, component_weights, data_size)
-        hist_component.SetLineColor(colors[index % len(colors)])
-        hist_component.SetLineWidth(2)
-        hist_component.SetLineStyle(1 + (index // len(colors)) % 3)
-        hist_component.Draw("HIST SAME")
-        resonance_names = MODE_RESONANCES.get(mode, [])
-        if basis < len(resonance_names):
-            label = resonance_names[basis]
-        else:
-            label = "%s[basis%d]" % (mode, basis)
-        fractions[key] = _fit_fraction(truth, key)
-        fraction_text.append("%s: %.3f" % (label, fractions[key]))
-        legend.AddEntry(hist_component, "%s (%.3f)" % (label, fractions[key]), "l")
-        keep_alive.append(hist_component)
+    legend.SetTextSize(0.027)
+    legend.AddEntry(hdata, "Data", "lep")
+    legend.AddEntry(hfit, "Fit total", "l")
+    for item in components:
+        legend.AddEntry(item["hist"], "%s (%.3f)" % (item["resonance"], item["fraction"]), "l")
+    legend.Draw()
+    canvas.RedrawAxis()
+    output = PICTURE_DIR / (var + "_weight.png")
+    canvas.SaveAs(str(output))
+    return output
+
+
+def draw_single_overlay(var, hdata, hfit, item, fit_values):
+    root = root_module()
+    resonance = item["resonance"]
+    canvas = root.TCanvas("c_%s_%s" % (var, resonance), var, 900, 600)
+    set_vertical_range(hdata, hfit, [item])
+    hdata.Draw("E1")
+    hfit.Draw("HIST SAME")
+    item["hist"].Draw("HIST SAME")
+    hdata.Draw("E1 SAME")
+
+    # Keep this compact legend below the required top-right annotation block.
+    legend = root.TLegend(0.64, 0.16, 0.90, 0.32)
+    legend.SetBorderSize(0)
+    legend.SetFillStyle(0)
+    legend.SetTextSize(0.028)
+    legend.AddEntry(hdata, "Data", "lep")
+    legend.AddEntry(hfit, "Fit total", "l")
+    legend.AddEntry(item["hist"], resonance, "l")
+    legend.Draw()
 
     latex = root.TLatex()
     latex.SetNDC(True)
     latex.SetTextSize(0.028)
-    latex.DrawLatex(0.14, 0.86, "Fit fractions (truth)")
-    for line_no, text in enumerate(fraction_text):
-        latex.DrawLatex(0.14, 0.82 - 0.035 * line_no, text)
-    legend.Draw()
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    canvas.SaveAs(str(output_dir / ("partial_mods_%s.png" % var)))
-    canvas._plot_objects = keep_alive
-    return fractions
+    lines = parameter_lines(resonance, fit_values)
+    lines.append("fit fraction : %.6g" % item["fraction"])
+    y = 0.90
+    for line in lines:
+        latex.DrawLatex(0.61, y, line)
+        y -= 0.035
+    canvas.RedrawAxis()
+    output = PICTURE_DIR / (var + resonance + "_kk_weight.png")
+    canvas.SaveAs(str(output))
+    return output
 
 
-def main(variables=None):
-    os.chdir(str(ANALYSIS_ROOT))
-    data = load_analysis_data()
-    weights, truth = load_weights()
-    variables = PLOT_VARIABLES if variables is None else list(variables)
-    produced = []
-    for var in variables:
-        if "data_" + var not in data or "mc_" + var not in data:
-            continue
-        draw_variable(var, weights, truth, data=data)
-        produced.append(var)
+def draw_variable(var, weights, truth, components):
+    data, mc, data_size = load_kinematics(var)
+    hdata, hfit, built = build_histograms(
+        var, data, mc, data_size, weights, truth, components
+    )
+    fit_values = np.asarray(weights.get("fit_value", []), dtype=np.float64).reshape(-1)
+    produced = [draw_all_overlay(var, hdata, hfit, built)]
+    for item in built:
+        produced.append(draw_single_overlay(var, hdata, hfit, item, fit_values))
     return produced
 
 
+def main(variables=None):
+    os.chdir(ANALYSIS_ROOT)
+    PICTURE_DIR.mkdir(parents=True, exist_ok=True)
+    mode_resonances, configured_variables = analysis_description()
+    weights, truth = load_weights()
+    components = discover_components(weights, mode_resonances)
+    if not components:
+        raise RuntimeError("no configured partial-wave keys were found in weight.npz")
+    selected_variables = configured_variables if variables is None else list(variables)
+    produced = []
+    for var in selected_variables:
+        real_path = ANALYSIS_ROOT / "data" / "real_data" / (var + ".npy")
+        mc_path = ANALYSIS_ROOT / "data" / "mc_truth" / (var + ".npy")
+        if not real_path.exists() or not mc_path.exists():
+            print("Skipping %s: raw real-data or MC array is missing" % var)
+            continue
+        produced.extend(draw_variable(var, weights, truth, components))
+    for path in produced:
+        print("produced", path.relative_to(ANALYSIS_ROOT))
+    return produced
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--var", action="append", dest="variables",
+                        help="draw only this variable (repeatable); default: all configured variables")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    arguments = parse_args()
+    main(arguments.variables)

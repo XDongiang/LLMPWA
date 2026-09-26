@@ -2,118 +2,242 @@ import os
 import sys
 
 from base_functions import (
-    BW, dplex_dabs, dplex_deinsum, dplex_deinsum_ord, dplex_dconstruct,
-    flatte1270, flatte980, jit, make_initial_args, np, onp,
+    BW,
+    config,
+    dplex_dabs,
+    dplex_dconstruct,
+    dplex_deinsum,
+    dplex_deinsum_ord,
+    flatte1270,
+    flatte980,
+    jit,
+    make_initial_args,
+    np,
+    onp,
+    setup_logging,
 )
 
-# MODE_BASIS = 每个 mode 内的 state（共振）数——与附件参考一致：
-#   component 的 ljk 中 l 维 = state 数（f0_980=1, f0_BW=2, f2_BW=4），
-#   权重键 "{mode}_{j}" 的 j 枚举 state 0..n-1
-MODE_NAMES = ("phif0_kk_BW_flatte980", "phif0_kk_BW_BW", "phif2_kk_BW_BW")
-MODE_BASIS = {MODE_NAMES[0]: 1, MODE_NAMES[1]: 2, MODE_NAMES[2]: 4}
+
+MODE_NAMES = (
+    "phif0_kk_BW_flatte980",
+    "phif0_kk_BW_BW",
+    "phif2_kk_BW_BW",
+)
+MODE_BASIS = {
+    "phif0_kk_BW_flatte980": 1,
+    "phif0_kk_BW_BW": 2,
+    "phif2_kk_BW_BW": 4,
+}
+TRUTH_MC_CAP = 150000
+_DATA_CACHE = {}
 
 
 def extract_parameters(args):
+    """Map the 65 fitted arguments to this analysis's resonance parameters."""
     args = np.asarray(args)
     return {
-        "phif0_980": {"mass": args[0], "g_kk": args[1], "rg": args[2], "const": np.asarray([0.1, args[3]]), "theta": np.asarray([0.1, args[4]])},
-        "phif0_1710": {"mass": args[5], "width": args[6], "const": args[7:9], "theta": args[9:11]},
-        "phif2_1270": {"mass": args[11], "width": args[12], "const": args[13:18], "theta": args[18:23]},
-        "phif2_1525": {"mass": args[23], "width": args[24], "const": args[25:30], "theta": args[30:35]},
-        "phif2_2150": {"mass": args[35], "width": args[36], "const": args[37:42], "theta": args[42:47]},
-        "phif2_2340": {"mass": args[47], "width": args[48], "const": args[49:54], "theta": args[54:59]},
-        "phif0_2470": {"mass": args[59], "width": args[60], "const": args[61:63], "theta": args[63:65]},
+        "phif0_980": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[0],
+            "B_g_kk": args[1],
+            "B_rg": args[2],
+            "const": np.asarray([0.1, args[3]]),
+            "theta": np.asarray([0.1, args[4]]),
+        },
+        "phif0_1710": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[5],
+            "B_width": args[6],
+            "const": args[7:9],
+            "theta": args[9:11],
+        },
+        "phif2_1270": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[11],
+            "B_width": args[12],
+            "const": args[13:18],
+            "theta": args[18:23],
+        },
+        "phif2_1525": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[23],
+            "B_width": args[24],
+            "const": args[25:30],
+            "theta": args[30:35],
+        },
+        "phif2_2150": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[35],
+            "B_width": args[36],
+            "const": args[37:42],
+            "theta": args[42:47],
+        },
+        "phif2_2340": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[47],
+            "B_width": args[48],
+            "const": args[49:54],
+            "theta": args[54:59],
+        },
+        "phif0_2470": {
+            "A_mass": 1.02,
+            "A_width": 0.004,
+            "B_mass": args[59],
+            "B_width": args[60],
+            "const": args[61:63],
+            "theta": args[63:65],
+        },
     }
 
 
-def _propagator_product(phi_s, f_props):
-    phi_prop = BW(1.02, 0.004, phi_s)
-    n_states = f_props.shape[1]
-    phi_props = np.broadcast_to(phi_prop[:, None, :], (2, n_states, phi_s.shape[0]))
-    return dplex_deinsum("le,le->le", phi_props, f_props)
+def _propagator_product(phi_s, f_propagators):
+    phi_propagator = BW(1.02, 0.004, phi_s)
+    n_states = f_propagators.shape[1]
+    phi_propagators = np.broadcast_to(
+        phi_propagator[:, None, :], (2, n_states, phi_s.shape[0])
+    )
+    return dplex_deinsum("le,le->le", phi_propagators, f_propagators)
 
 
-def _coupled_component(tensor, const, theta, propagators):
-    # tensor (i, E, K) 实数振幅；const/theta (l, i) l=state 数；propagators (2, l, E) 复数
-    couplings = dplex_dconstruct(const, theta)          # (2, l, i)
-    weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)  # (2, l, E, K)
-    return dplex_deinsum("lek,le->lek", weighted, propagators)
+def _coupled_component(amplitude_tensor, const, theta, propagators):
+    couplings = dplex_dconstruct(const, theta)
+    weighted_amplitude = dplex_deinsum_ord(
+        "iek,li->lek", amplitude_tensor, couplings
+    )
+    return dplex_deinsum("lek,le->lek", weighted_amplitude, propagators)
 
 
 def component_phif0_kk_BW_flatte980(args, phi_s, f_s, phif0_s, phif2_s):
     del phif2_s
-    p = extract_parameters(args)["phif0_980"]
-    prop = _propagator_product(phi_s, flatte980(p["mass"], p["g_kk"], p["rg"], f_s)[:, None, :])
-    # 单 state：const/theta (1, i) → l 展开为 1
-    return _coupled_component(phif0_s, p["const"][None, :], p["theta"][None, :], prop)
+    parameter = extract_parameters(args)["phif0_980"]
+    f_propagators = flatte980(
+        parameter["B_mass"], parameter["B_g_kk"], parameter["B_rg"], f_s
+    )[:, None, :]
+    propagators = _propagator_product(phi_s, f_propagators)
+    return _coupled_component(
+        phif0_s,
+        parameter["const"][None, :],
+        parameter["theta"][None, :],
+        propagators,
+    )
 
 
 def component_phif0_kk_BW_BW(args, phi_s, f_s, phif0_s, phif2_s):
-    # 2 states (phif0_1710, phif0_2470)：堆叠 const/theta 与传播子，l 展开为 2
     del phif2_s
-    p = extract_parameters(args)
-    states = ("phif0_1710", "phif0_2470")
-    const = np.stack([p[n]["const"] for n in states])          # (2, 2)
-    theta = np.stack([p[n]["theta"] for n in states])          # (2, 2)
-    f_props = np.stack([BW(p[n]["mass"], p[n]["width"], f_s) for n in states], axis=1)  # (2, 2, E)
-    prop = _propagator_product(phi_s, f_props)
-    return _coupled_component(phif0_s, const, theta, prop)
+    parameters = extract_parameters(args)
+    state_names = ("phif0_1710", "phif0_2470")
+    const = np.stack([parameters[name]["const"] for name in state_names])
+    theta = np.stack([parameters[name]["theta"] for name in state_names])
+    f_propagators = np.stack(
+        [
+            BW(
+                parameters[name]["B_mass"],
+                parameters[name]["B_width"],
+                f_s,
+            )
+            for name in state_names
+        ],
+        axis=1,
+    )
+    propagators = _propagator_product(phi_s, f_propagators)
+    return _coupled_component(phif0_s, const, theta, propagators)
 
 
 def component_phif2_kk_BW_BW(args, phi_s, f_s, phif0_s, phif2_s):
-    # 4 states (f2_1270/1525/2150/2340)：堆叠，l 展开为 4
     del phif0_s
-    p = extract_parameters(args)
-    states = ("phif2_1270", "phif2_1525", "phif2_2150", "phif2_2340")
-    const = np.stack([p[n]["const"] for n in states])          # (4, 5)
-    theta = np.stack([p[n]["theta"] for n in states])          # (4, 5)
-    f_props = np.stack([BW(p[n]["mass"], p[n]["width"], f_s) for n in states], axis=1)  # (2, 4, E)
-    prop = _propagator_product(phi_s, f_props)
-    return _coupled_component(phif2_s, const, theta, prop)
+    parameters = extract_parameters(args)
+    state_names = ("phif2_1270", "phif2_1525", "phif2_2150", "phif2_2340")
+    const = np.stack([parameters[name]["const"] for name in state_names])
+    theta = np.stack([parameters[name]["theta"] for name in state_names])
+
+    first = parameters["phif2_1270"]
+    f_propagators = [
+        flatte1270(first["B_mass"], first["B_width"], f_s)
+    ]
+    for name in state_names[1:]:
+        parameter = parameters[name]
+        f_propagators.append(
+            BW(parameter["B_mass"], parameter["B_width"], f_s)
+        )
+    f_propagators = np.stack(f_propagators, axis=1)
+    propagators = _propagator_product(phi_s, f_propagators)
+    return _coupled_component(phif2_s, const, theta, propagators)
 
 
 def _components(args, data, prefix):
-    phi = np.asarray(data[prefix + "phi_kk"])
-    f = np.asarray(data[prefix + "f_kk"])
-    f0 = np.asarray(data[prefix + "phif0_kk"])
-    f2 = np.asarray(data[prefix + "phif2_kk"])
-    return (component_phif0_kk_BW_flatte980(args, phi, f, f0, f2),
-            component_phif0_kk_BW_BW(args, phi, f, f0, f2),
-            component_phif2_kk_BW_BW(args, phi, f, f0, f2))
+    phi_s = np.asarray(data[prefix + "phi_kk"])
+    f_s = np.asarray(data[prefix + "f_kk"])
+    phif0_s = np.asarray(data[prefix + "phif0_kk"])
+    phif2_s = np.asarray(data[prefix + "phif2_kk"])
+    return (
+        component_phif0_kk_BW_flatte980(args, phi_s, f_s, phif0_s, phif2_s),
+        component_phif0_kk_BW_BW(args, phi_s, f_s, phif0_s, phif2_s),
+        component_phif2_kk_BW_BW(args, phi_s, f_s, phif0_s, phif2_s),
+    )
 
 
 def _weight_from_data(args, data, prefix):
     components = _components(args, data, prefix)
-    total = sum(np.sum(component, axis=1) for component in components)
-    return (np.sum(dplex_dabs(total), axis=-1),) + tuple(
-        np.einsum("ljk->lj", dplex_dabs(component)) for component in components)
+    total_amplitude = sum(np.sum(component, axis=1) for component in components)
+    total_intensity = np.sum(dplex_dabs(total_amplitude), axis=-1)
+    component_intensities = tuple(
+        np.einsum("ljk->lj", dplex_dabs(component))
+        for component in components
+    )
+    return (total_intensity,) + component_intensities
 
 
-def _load_data_for_weight(prefix, n_events=None):
-    # 权重施加在 MC 评估样本上（与 draw_weight 参考实现一致）：
-    #   prefix="mc_"    → data/mc_truth/*.npy 全样本（weight_kk，mode="pass"）
-    #   prefix="truth_" → data/mc_truth/*.npy 前 150000 事件（weight_truth_kk，mode="truth"）
-    source = "data/mc_truth"
+def _normalization_factors():
+    factors = {}
+    for variable in ("phif0_kk", "phif2_kk"):
+        mc_array = onp.load(
+            os.path.join("data/mc_truth", variable + ".npy"), mmap_mode="r"
+        )
+        factors[variable] = 1.0 / onp.mean(
+            onp.sqrt(onp.sum(mc_array ** 2, axis=-1)), axis=1
+        )
+    return factors
+
+
+def _load_data_for_weight(prefix, n_events=None, use_cache=True):
+    if prefix not in ("mc_", "truth_"):
+        raise ValueError("weight data prefix must be 'mc_' or 'truth_'")
+    if n_events is None and prefix == "truth_":
+        n_events = TRUTH_MC_CAP
+
+    cache_key = (prefix, n_events)
+    if use_cache and cache_key in _DATA_CACHE:
+        return _DATA_CACHE[cache_key]
+
     data = {}
-    if n_events is None:
-        n_events = 150000 if prefix == "truth_" else None
-    for var in ("phi_kk", "f_kk", "phif0_kk", "phif2_kk"):
-        arr = onp.load(os.path.join(source, var + ".npy"))
-        if n_events is None:
-            data[prefix + var] = arr
-        elif arr.ndim == 1:
-            data[prefix + var] = arr[:n_events]
-        else:
-            data[prefix + var] = arr[:, :n_events, :]
-    mc0 = onp.load("data/mc_truth/phif0_kk.npy")
-    mc2 = onp.load("data/mc_truth/phif2_kk.npy")
-    if n_events is not None:
-        mc0 = mc0[:, :n_events, :]
-        mc2 = mc2[:, :n_events, :]
-    r0 = 1.0 / onp.mean(onp.sqrt(onp.sum(mc0 ** 2, axis=-1)), axis=1)
-    r2 = 1.0 / onp.mean(onp.sqrt(onp.sum(mc2 ** 2, axis=-1)), axis=1)
-    data[prefix + "phif0_kk"] = onp.einsum("c,cek->cek", r0, data[prefix + "phif0_kk"])
-    data[prefix + "phif2_kk"] = onp.einsum("c,cek->cek", r2, data[prefix + "phif2_kk"])
+    for variable in ("phi_kk", "f_kk"):
+        array = onp.load(
+            os.path.join("data/mc_truth", variable + ".npy"), mmap_mode="r"
+        )
+        data[prefix + variable] = onp.asarray(
+            array if n_events is None else array[:n_events]
+        )
+
+    normalization = _normalization_factors()
+    for variable in ("phif0_kk", "phif2_kk"):
+        array = onp.load(
+            os.path.join("data/mc_truth", variable + ".npy"), mmap_mode="r"
+        )
+        selected = onp.asarray(
+            array if n_events is None else array[:, :n_events, :]
+        )
+        data[prefix + variable] = onp.einsum(
+            "c,cek->cek", normalization[variable], selected
+        )
+
+    if use_cache:
+        _DATA_CACHE[cache_key] = data
     return data
 
 
@@ -127,47 +251,81 @@ def weight_truth_kk(args):
 
 def run_weight(args_list, mode="pass"):
     args = np.array(args_list)
+    if args.ndim != 1 or args.shape[0] != 65:
+        raise ValueError("expected a one-dimensional fitted parameter vector of length 65")
+
     if mode == "pass":
-        wt_list, output_path = jit(weight_kk)(args), "output/draw/weight.npz"
+        wt_list = jit(weight_kk)(args)
+        output_path = "output/draw/weight.npz"
     elif mode == "truth":
-        wt_list, output_path = jit(weight_truth_kk)(args), "output/draw/weight_truth.npz"
+        wt_list = jit(weight_truth_kk)(args)
+        output_path = "output/draw/weight_truth.npz"
     else:
         raise ValueError("mode must be 'pass' or 'truth'")
-    wt_list = tuple(onp.asarray(x) for x in wt_list)
+
+    wt_list = tuple(onp.asarray(weight) for weight in wt_list)
     sum_wt = float(onp.sum(wt_list[0]))
+    if not onp.isfinite(sum_wt) or sum_wt <= 0.0:
+        raise ValueError("total intensity sum is non-positive or non-finite")
+
     total_weight = {"all_mods_wt": wt_list[0]}
     total_fit_frac = 0.0
-    for j, name in enumerate(MODE_NAMES, 1):
-        for basis_index in range(MODE_BASIS[name]):
-            value = wt_list[j][basis_index]
-            total_weight[f"{name}_{basis_index}"] = value
+    for list_index, mode_name in enumerate(MODE_NAMES, start=1):
+        mode_weights = wt_list[list_index]
+        expected_basis = MODE_BASIS[mode_name]
+        if mode_weights.shape[0] != expected_basis:
+            raise ValueError(
+                "%s produced %d bases, expected %d"
+                % (mode_name, mode_weights.shape[0], expected_basis)
+            )
+        for basis_index in range(expected_basis):
+            key = "%s_%d" % (mode_name, basis_index)
+            value = mode_weights[basis_index]
+            total_weight[key] = value
             fraction = float(onp.sum(value)) / sum_wt
             total_fit_frac += fraction
-            print(f"{name}_{basis_index} fit fraction =", fraction)
-    print("total fit fraction =", total_fit_frac)
+            print("%s fit fraction = %.12g" % (key, fraction))
+
+    print("total fit fraction = %.12g" % total_fit_frac)
     total_weight["fit_value"] = onp.asarray(args_list)
     total_weight["sum_wt"] = onp.asarray(sum_wt)
     os.makedirs("output/draw", exist_ok=True)
     onp.savez(output_path, **total_weight)
+    print("saved", output_path, "with", len(total_weight), "keys")
     return total_fit_frac
 
 
-def _smoke():
+def _smoke(n_events=512):
     args, _, _ = make_initial_args()
-    data = _load_data_for_weight("mc_", n_events=32)
-    wt = jit(lambda x: _weight_from_data(x, data, "mc_"))(np.array(args))
-    print("smoke wt shapes =", [tuple(onp.asarray(x).shape) for x in wt])
-    print("smoke wt sums =", [float(onp.sum(x)) for x in wt])
-    print("PASS smoke test")
+    data = _load_data_for_weight("mc_", n_events=n_events, use_cache=False)
+    wt_list = jit(lambda values: _weight_from_data(values, data, "mc_"))(
+        np.array(args)
+    )
+    shapes = [tuple(onp.asarray(weight).shape) for weight in wt_list]
+    sums = [float(onp.sum(onp.asarray(weight))) for weight in wt_list]
+    expected_shapes = [
+        (n_events,),
+        (1, n_events),
+        (2, n_events),
+        (4, n_events),
+    ]
+    print("smoke event count =", n_events)
+    print("smoke wt shapes =", shapes)
+    print("smoke wt sums =", sums)
+    if shapes != expected_shapes or not all(onp.isfinite(value) for value in sums):
+        raise RuntimeError("smoke-test shape or finiteness check failed")
+    print("PASS: draw-weight smoke test completed with finite weights")
 
 
 if __name__ == "__main__":
+    config.update("jax_enable_x64", True)
     if "--smoke" in sys.argv:
         _smoke()
     else:
+        logger = setup_logging()
         args_list = onp.load("output/fit/fit_result_values.npy")
-        print("计算数据权重 (mode=pass)...")
+        logger.info("计算数据权重 (mode=pass)...")
         run_weight(args_list, mode="pass")
-        print("计算 truth MC 权重 (mode=truth)...")
+        logger.info("计算 truth MC 权重 (mode=truth)...")
         run_weight(args_list, mode="truth")
-        print("权重计算完成，结果已保存至 output/draw/")
+        logger.info("权重计算完成，结果已保存至 output/draw/")

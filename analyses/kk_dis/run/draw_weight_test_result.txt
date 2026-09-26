@@ -1,8 +1,13 @@
-Command: python run/draw_weight_script.py --smoke   (local, CPU, 32 events)
-Result: PASS smoke test — wt shapes [(32,), (1,32), (2,32), (4,32)]
-Remote full run (HEP1 container jax-fit:latest, 2xRTX3090, 1200000 events):
-  mode=pass   : total fit fraction = 0.8487773733147771
-  mode=truth  : total fit fraction = 0.8485229839700453
-  outputs: output/draw/weight.npz (10 keys, all_mods_wt (1200000,))
-           output/draw/weight_truth.npz (all_mods_wt (150000,))
-Semantics: weight_kk (mc_* full sample), weight_truth_kk (truth_* 150000 cap).
+Command: .venv/bin/python -m py_compile run/draw_weight_script.py
+py_compile: PASS
+
+Command: .venv/bin/python run/draw_weight_script.py --smoke
+smoke event count = 512
+smoke wt shapes = [(512,), (1, 512), (2, 512), (4, 512)]
+smoke wt sums = [3151832.018505144, 359799.4744492624, 2079441.6665726963, 476259.8585457497]
+PASS: draw-weight smoke test completed with finite weights
+
+Command: numerical component cross-check against run/likelihood_function.py (64 events)
+classified-mode maximum absolute differences = [0.0, 0.0, 0.0]
+total maximum relative difference (floating summation order) = 1.1123698193600403e-07
+PASS: likelihood amplitude/component convention cross-check

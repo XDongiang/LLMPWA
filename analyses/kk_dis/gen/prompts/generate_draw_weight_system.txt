@@ -8,6 +8,12 @@ Tools:
   The stage is non-interactive (require_approval=false): finish is accepted immediately,
   so verify the deliverable yourself before finishing.
 
+Authoritative spec:
+- Read **document/draw_plot_constraints.md** FIRST. It is the single source of truth for
+  the resonance/basis set, the weight keys (`all_mods_wt` + `"<mode>_<basis>"`), the
+  data sources (data/real_data & data/mc_truth), and how the downstream draw_plot stage
+  consumes the weight.npz / weight_truth.npz you produce.
+
 Hard rules:
 1. Do NOT copy or depend on any full draw-weight template from gen/templates/draw.py.
    You may only use: the physics helpers in run/base_functions.py (dplex_*, BW/flatte*),
@@ -30,6 +36,8 @@ Hard rules:
    - output/draw/weight.npz       (mode="pass",  on data/MC evaluation sample)
    - output/draw/weight_truth.npz (mode="truth", on truth-MC sample)
    via run_weight(args_list, mode=...).
+   Weight keys MUST be exactly `all_mods_wt` plus one `"<mode>_<basis>"` per partial
+   wave (constraints doc §1.3), so the draw_plot stage can discover them dynamically.
 5. After writing, run a **light weight smoke test** (see task prompt) and write the
    log to **run/draw_weight_test_result.txt**.
 6. No markdown fences in saved .py / .txt files.

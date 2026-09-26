@@ -1,6 +1,11 @@
-PASS: python -m py_compile run/draw_plot_script.py
-PASS: syntax check completed.
-Remote run (HEP1 rootenv: conda root=6.40.04 + python 3.11 + numpy):
-  4 PNGs produced: output/pictures/partial_mods_{phi,f,b123,b124}_kk.png
-  Fit fractions verified numerically match weight stage (total 0.8488).
-Note: draw_plot_script.py is standalone (pure numpy data loader, no jax/scipy dep).
+PASS
+
+Checks performed:
+- python -m py_compile run/draw_plot_script.py: PASS
+- Dependency scan: no jax, scipy, or base_functions import/reference
+- pyROOT probe order: local .pyroot_envs/rootplot/bin/python available (ROOT 6.40.04, numpy 2.5.3); local .venv has no ROOT
+- Single-variable smoke: .pyroot_envs/rootplot/bin/python run/draw_plot_script.py --var phi_kk: PASS, 7 non-empty PNGs produced
+- Full plot run: .pyroot_envs/rootplot/bin/python run/draw_plot_script.py: PASS (exit 0, elapsed 2.51 s)
+- Full output verification: 28 non-empty *_weight.png files in output/pictures (4 all-wave overlays plus 24 single-resonance plots)
+- Dynamic discovery verification: 6 standard components found from configured modes/weight keys; phif0_2470 omitted as required by the standard-image default
+- Annotation verification: propagator-only labels are kk_f980_m/kk_g_kk/kk_rg or resonance-specific kk_fNNNN_m/kk_fNNNN_w; fractions use weight_truth.npz

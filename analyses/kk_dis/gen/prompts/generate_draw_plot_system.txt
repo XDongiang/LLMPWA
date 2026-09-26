@@ -9,26 +9,43 @@ Tools:
   The stage is non-interactive (require_approval=false): finish is accepted immediately,
   so verify the deliverable yourself before finishing.
 
+Authoritative spec:
+- Read **document/draw_plot_constraints.md** FIRST. It is the single source of truth for
+  plot content, naming, layout, histogram weighting, X/Y axis titles, annotation format,
+  and the ROOT environment (local vs remote `rootenv`).
+- The standard reference images live in **tmp/picture_example/**: `*_weight.png`
+  (all-partial-wave overlay) and `*_*_kk_weight.png` (single-resonance, with
+  parameter-result and fit-fraction annotations). Match their CONTENT.
+
 Hard rules:
 1. Do NOT copy a full plot template from gen/templates/plot.py.
-   You may only use the inputs and conventions described in the task prompt: the weight
-   files produced by the draw-weight stage (output/draw/weight.npz /
-   weight_truth.npz), the data arrays available in this analysis, and the resonance
-   names/classes from the classification.
+   You may only use: the weight files produced by the draw-weight stage
+   (output/draw/weight.npz / weight_truth.npz), the raw real-data/MC arrays under
+   data/real_data/ & data/mc_truth/, the resonance names/classes from
+   gen/fragments/classification.json, and run/base_functions.py only as a READ reference
+   for the physics conventions / parameter ordering (do NOT call load_data/normalize_data,
+   which tile the MC and pull in jax/scipy).
 2. Write the deliverable module to **run/draw_plot_script.py**.
-   It must NOT depend on files outside this analysis workspace.
+   It must depend ONLY on numpy + pyROOT (no jax/scipy) and only on files inside this
+   analysis workspace.
 3. The plot script reads:
-   - weights:  `output/draw/weight.npz` and `output/draw/weight_truth.npz`
+   - weights: `output/draw/weight.npz` and `output/draw/weight_truth.npz`
      (keys: `all_mods_wt`, plus one `"<mode>_<basis>"` entry per partial wave)
-   - data arrays: the real-data / MC arrays used for the fitted-weight histograms
-     (the `data_*` / `mc_*` keys loaded by `run/base_functions.py::load_data()`),
-     passed through the same normalization as the weight stage
-   and writes overlay plots to **output/pictures/** (see task prompt for layout).
-4. Plotting stack is ROOT (pyROOT). If ROOT is NOT importable in this environment,
-   still write the complete ROOT-based script, but do NOT run it — run only a
-   syntax/import-safe check and note ROOT-unavailable in the test log.
-5. After writing, run whatever smoke is feasible (see task prompt) and write the log
-   to **run/draw_plot_test_result.txt**.
+   - data arrays: `data/real_data/<var>.npy` (real data) and `data/mc_truth/<var>.npy`
+     (MC evaluation sample); apply `sqrt()` to the stored s-values before filling so the
+     X axis is mass/kinematic (see constraints doc §1.2 and §3).
+   and writes overlay plots to **output/pictures/** per constraints doc §0/§4.
+4. Plotting stack is ROOT (pyROOT). Probe runnable pythons in this order and run the
+   real plot (verify PNGs are produced) with the first one that imports ROOT:
+   1) the local pyROOT env `analyses/kk_dis/.pyroot_envs/rootplot/bin/python`
+      (ALREADY INSTALLED: pyROOT 6.40.04 + numpy — this is the preferred try-run env);
+   2) remote `~/miniconda3/envs/rootenv/bin/python` (HEP1 pyROOT 6.40.04);
+   3) local `.venv/bin/python` (usually no ROOT).
+   If NO ROOT is importable in ANY available python, still write the complete ROOT-based
+   script but do NOT run it — run only a syntax/import-safe check (python -m py_compile)
+   and note "ROOT unavailable: syntax-only check" in the test log.
+5. After writing, run whatever smoke is feasible (see task prompt) and write the log to
+   **run/draw_plot_test_result.txt**.
 6. No markdown fences in saved .py / .txt files.
 7. If truly blocked by missing files/data, finish with an explicit failure note; do not hang.
 8. After task.finish the stage ends immediately (no human approval), so self-check before finishing.
