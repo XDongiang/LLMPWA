@@ -1,3 +1,5 @@
+import os
+
 from base_functions import (
     BW,
     dplex_dabs,
@@ -126,6 +128,10 @@ def fraction_values(args, data):
 
 
 def gaussian_penalty(args):
+    # When RUN_FREE_RANGE=1 the range (gaussian prior) penalty is DISABLED for
+    # testing whether unconstrained fits find non-physical solutions.
+    if os.environ.get("RUN_FREE_RANGE") == "1":
+        return 0.0
     args = np.asarray(args)
     return sum((args[index] - center) ** 2 / (2.0 * sigma ** 2)
                for index, center, sigma in GAUSSIAN_CONSTRAINTS)
@@ -136,6 +142,8 @@ def data_likelihood_kk(args, data_or_jax_data):
     tiny = np.finfo(intensity.dtype).tiny
     fractions = fraction_values(args, data_or_jax_data)
     fraction_penalty = 1000.0 * (np.sum(fractions) - 1.1) ** 2
+    if os.environ.get("RUN_FREE_RANGE") == "1":
+        fraction_penalty = 0.0
     return -np.sum(np.log(np.maximum(intensity, tiny))) + fraction_penalty + gaussian_penalty(args)
 
 
