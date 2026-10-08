@@ -5,6 +5,10 @@ from base_functions import (
     BW,
     config,
     dplex_dabs,
+    apply_helicity,
+    helicity_layer_enabled,
+    intensity_from_amplitude,
+    to_helicity,
     dplex_dconstruct,
     dplex_deinsum,
     dplex_deinsum_ord,
@@ -185,10 +189,9 @@ def _components(args, data, prefix):
 def _weight_from_data(args, data, prefix):
     components = _components(args, data, prefix)
     total_amplitude = sum(np.sum(component, axis=1) for component in components)
-    total_intensity = np.sum(dplex_dabs(total_amplitude), axis=-1)
+    total_intensity = intensity_from_amplitude(apply_helicity(total_amplitude))
     component_intensities = tuple(
-        np.einsum("ljk->lj", dplex_dabs(component))
-        for component in components
+        intensity_from_amplitude(apply_helicity(component)) for component in components
     )
     return (total_intensity,) + component_intensities
 

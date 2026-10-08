@@ -67,9 +67,11 @@ def main():
     mesh = build_mesh()
     initial_args, _, _ = make_initial_args()
     replicated = NamedSharding(mesh, P())
-
+    print("mesh setted")
     with _mesh_context(mesh):
         jax_data = shard_data_distributed(data, mesh)
+        print("load data to gpu")
+        print("datasize = ",data_size)
         nll = make_distributed_likelihood(data_size)
         grad_nll = grad(nll, argnums=0)
 
@@ -84,15 +86,18 @@ def main():
         jit_nll = jit(nll)
         jit_grad = jit(grad_nll)
         jit_hvp = jit(hvp_nll)
-
+        print("likehood func compile")
         def replicated_array(value):
             return device_put(jnp.asarray(value), replicated)
 
         x0 = replicated_array(initial_args)
+        print("share x for all gpu")
         direction0 = replicated_array(onp.zeros_like(initial_args))
-        
+        print("ini dirction for all gpu")
         smoke_value = jit_nll(x0, jax_data)
+        print("1")
         smoke_hvp = jit_hvp(x0, direction0, jax_data)
+        print("likehood func calculated")
         if is_chief:
             logger.info("likelihood smoke: value=%s, hvp_shape=%s", float(smoke_value), tuple(smoke_hvp.shape))
 

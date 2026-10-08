@@ -2,6 +2,11 @@ import os
 
 from base_functions import (
     BW,
+    apply_helicity,
+    helicity_layer_enabled,
+    intensity_from_amplitude,
+    precomputed_helicity_basis,
+    to_helicity,
     dplex_dabs,
     dplex_dconstruct,
     dplex_deinsum,
@@ -68,8 +73,21 @@ def _propagator_product(phi_mass, phi_width, phi_s, f_propagators):
 
 
 def _coupled_components(tensor, const, theta, propagators):
+    """Couplings x propagators, in whatever basis the cache is stored in.
+
+    The EPS_A rotation is deliberately NOT applied here: it commutes with
+    everything below and is applied once to the total amplitude in
+    `event_intensity` / `fraction_values` via `apply_helicity`, which is
+    sum(l) = 7 times cheaper than rotating each coupled block (report 8.6).
+    """
     couplings = dplex_dconstruct(const, theta)
-    weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)
+    if precomputed_helicity_basis():
+        # method 3: the cache is already W_i(e, lambda), i.e. complex, so the
+        # contraction is complex x complex (4 real einsums) instead of
+        # real x complex (2 real einsums, `dplex_deinsum_ord`).
+        weighted = dplex_deinsum("iek,li->lek", tensor, couplings)
+    else:
+        weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)
     return dplex_deinsum("lek,le->lek", weighted, propagators)
 
 
@@ -116,14 +134,20 @@ def _components_for_prefix(args, data, prefix):
 
 def event_intensity(args, data, prefix):
     total = _total_amplitude(_components_for_prefix(args, data, prefix))
-    return np.sum(dplex_dabs(total), axis=-1)
+    # P1-3: Cartesian -> sum over the stored (x, y); helicity -> sum over
+    # lambda = +-1.  The two agree to machine precision (report section 4).
+    return intensity_from_amplitude(apply_helicity(total))
 
 
 def fraction_values(args, data):
     components = _components_for_prefix(args, data, "truth_")
-    denominator = np.sum(dplex_dabs(_total_amplitude(components)))
+    total = apply_helicity(_total_amplitude(components))
+    denominator = np.sum(intensity_from_amplitude(total))
     denominator = np.maximum(denominator, np.finfo(np.asarray(denominator).dtype).tiny)
-    fractions = np.stack([np.sum(dplex_dabs(component)) / denominator for component in components])
+    fractions = np.stack(
+        [np.sum(intensity_from_amplitude(apply_helicity(component))) / denominator
+         for component in components]
+    )
     return fractions
 
 

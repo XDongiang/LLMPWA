@@ -1,6 +1,11 @@
 from base_functions import (
     BW,
     dplex_dabs,
+    apply_helicity,
+    helicity_layer_enabled,
+    intensity_from_amplitude,
+    precomputed_helicity_basis,
+    to_helicity,
     dplex_dconstruct,
     dplex_deinsum,
     dplex_deinsum_ord,
@@ -67,7 +72,12 @@ def _propagator_product(phi_mass, phi_width, phi_s, f_propagators):
 
 def _coupled_components(tensor, const, theta, propagators):
     couplings = dplex_dconstruct(const, theta)
-    weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)
+    if precomputed_helicity_basis():
+        # method 3: complex cache -> complex x complex contraction.
+        weighted = dplex_deinsum("iek,li->lek", tensor, couplings)
+    else:
+        weighted = dplex_deinsum_ord("iek,li->lek", tensor, couplings)
+    # Rotation applied once to the total instead, see likelihood_function.py.
     return dplex_deinsum("lek,le->lek", weighted, propagators)
 
 
@@ -114,14 +124,18 @@ def _components_for_prefix(args, data, prefix):
 
 def event_intensity(args, data, prefix):
     total = _total_amplitude(_components_for_prefix(args, data, prefix))
-    return np.sum(dplex_dabs(total), axis=-1)
+    return intensity_from_amplitude(apply_helicity(total))
 
 
 def fraction_values(args, data):
     components = _components_for_prefix(args, data, "truth_")
-    denominator = np.sum(dplex_dabs(_total_amplitude(components)))
+    total = apply_helicity(_total_amplitude(components))
+    denominator = np.sum(intensity_from_amplitude(total))
     denominator = np.maximum(denominator, np.finfo(np.asarray(denominator).dtype).tiny)
-    fractions = np.stack([np.sum(dplex_dabs(component)) / denominator for component in components])
+    fractions = np.stack(
+        [np.sum(intensity_from_amplitude(apply_helicity(component))) / denominator
+         for component in components]
+    )
     return fractions
 
 

@@ -24,7 +24,11 @@ analyses/kk_dis/
 ├── config/                   ← 运行配置（logconfig_fit.json）
 ├── data/                     ← 物理数据（real_data/mc_truth/draw/weight），**只读，勿改**
 ├── document/                 ← 参考文档与操作手册（见 §2）
-├── tmp/                      ← 临时文件（同步分片、临时日志等；**可随时清理**）
+├── literature/               ← 外部文献的**原始来源**（论文 LaTeX 源码、ar5iv 渲染版、
+│                                检索结果）；自己的分析与翻译放 document/。见 literature/README.md
+├── tmp/                      ← 草稿区（探针脚本、中间数组、审阅包构建器）；内部有 README.md 索引。
+│                                **清理前先 grep**：其中 minima_*.json / summary_converged.txt /
+│                                tf-pwa/ 等被 task/ 文档按路径引用，不能直接删
 ├── task/                     ← 拟合任务记录（见 §3；跨节点互连测试已归档为 ⭐）
 ├── gen/                      ← 生成器中间产物（prompts/handlers/templates/fragments/llm_logs）
 ├── run/                      ← 生成/手写的可执行代码（见 §4、§5）
@@ -55,10 +59,14 @@ analyses/kk_dis/
 | `document/draw_plot_constraints.md` | **画图约束规范**（`generate_draw_weight`/`generate_draw_plot` 的唯一约束来源） |
 | `document/draw_plot_environment.md` | 画图运行环境（本地 `.pyroot_envs/rootplot` / 远程 `rootenv`） |
 | `document/README_architecture.md` | 项目架构说明（原 README 存档） |
+| `document/HC_tensor_EN.md` | **Chung, PRD 48 (1993) 1225** 的英文逐页转录（数学保留 LaTeX） |
+| `document/张量形式中的螺旋度耦合振幅.md` | 同上那篇 Chung 1993 的**中文翻译** |
+| `document/ψ衰变到介子的分波分析协变张量形式.md` | **Zou & Bugg (2003)** 的中文全译（原文源码见 `literature/zb2003_arxiv/`） |
 
 **规则**：
 - 新增/修改文档放这里，不散落根目录。
 - 公式类（似然、扰动算法）改动会直接影响生成器的 `[ref]` 引用，改完要同步 `llm_config_fit.toml` 的 ref 路径。
+- **`document/` 放"我们自己的文档"（含外文论文的转录/翻译）；别人的文献原始件放 `literature/`**（LaTeX 源码、渲染版网页、检索结果）。
 
 ---
 

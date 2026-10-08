@@ -15,6 +15,46 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# Reasoning-capable models for which the EasyTrans gateway refuses function
+# tools on /v1/chat/completions unless reasoning_effort="none" (HTTP 400:
+# "Function tools with reasoning_effort are not supported for <model>").
+# Only these get the automatic default -- other models keep their normal
+# reasoning behaviour. Extend the tuple as new restricted models appear.
+_TOOL_REASONING_NONE_MODELS = ("gpt-6-sol",)
+
+# Environment override for the reasoning effort sent to the gateway.
+# <none|low|medium|high>; unset means "let the model decide" (see below).
+_REASONING_EFFORT_ENV = "EASYTRANS_REASONING_EFFORT"
+
+
+def resolve_reasoning_effort(
+    model: str,
+    has_function_tools: bool,
+    reasoning_effort: Optional[str] = None,
+) -> Optional[str]:
+    """Pick the reasoning_effort to send, or None to omit the parameter.
+
+    Precedence:
+      1. explicit ``reasoning_effort`` argument
+      2. ``EASYTRANS_REASONING_EFFORT`` environment variable
+      3. ``"none"`` when the call carries function tools and the model is
+         known to reject them otherwise (e.g. gpt-6-sol)
+    """
+    if reasoning_effort is not None:
+        return reasoning_effort
+
+    env_value = os.getenv(_REASONING_EFFORT_ENV)
+    if env_value:
+        return env_value
+
+    if has_function_tools and any(
+        name in model for name in _TOOL_REASONING_NONE_MODELS
+    ):
+        return "none"
+
+    return None
+
+
 class EasyTransClient:
     """极易云开放平台 API 客户端"""
 
@@ -56,7 +96,17 @@ class EasyTransClient:
         function_call: Optional[Union[str, Dict[str, str]]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """
+        对话补全。
+
+        ``reasoning_effort`` is forwarded to the gateway when set. When it is
+        omitted, ``EASYTRANS_REASONING_EFFORT`` wins if present, and function
+        tool calls to models listed in ``_TOOL_REASONING_NONE_MODELS``
+        (e.g. gpt-6-sol) default to ``"none"`` -- the gateway rejects them
+        otherwise (HTTP 400).
+        """
         model = model or self.model
 
         kwargs: Dict[str, Any] = {
@@ -75,6 +125,14 @@ class EasyTransClient:
             kwargs["tools"] = tools
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
+
+        effort = resolve_reasoning_effort(
+            model=model,
+            has_function_tools=bool(tools) or bool(functions),
+            reasoning_effort=reasoning_effort,
+        )
+        if effort is not None:
+            kwargs["reasoning_effort"] = effort
 
         try:
             response = self.client.chat.completions.create(**kwargs)

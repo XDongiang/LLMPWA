@@ -52,6 +52,146 @@ def dplex_dabs(aa):
 def dplex_dtomine(aa):
     return np.stack([np.real(aa), np.imag(aa)], axis=0) # 组合而成的数组 axis=0 的第一个数组为实部，第二个数组为虚部
 
+# ---------------------------------------------------------------------------
+# Hybrid helicity amplitude layer.
+#
+# Reference: task/20260929_螺旋度耦合振幅推导/3_报告/tensor_jax_helicity_rewrite.md
+#            (P0-3 fixes the convention, P1-1/P1-3 are implemented here)
+#
+# EPS_A contracts the covariant tensor T(e, mu) with the psi(2S) polarisation
+# vectors to give helicity amplitudes:
+#
+#     rows    = lambda = +1, 0, -1
+#     columns = mu     = x, y, z          (metric diag(-1,-1,-1,1))
+#
+#     EPS_A = [[ 1/sqrt2, -i/sqrt2, 0],
+#              [ 0,        0,       1],
+#              [-1/sqrt2, -i/sqrt2, 0]]
+#
+# The row convention is load bearing: with the mirrored (1,+i) convention the
+# per-event overlap with tf-pwa's HelicityDecay(+add_covariant_term) drops from
+# 1.000000 to 0.62-0.67 on the reference 2000-event sample.  Do not transpose
+# EPS_A: A^T_{mu,lambda} T_mu is a different object.
+#
+# Only the two transverse rows are reachable while the cached tensors store
+# (x, y) only; the lambda = 0 slot is then EXACTLY zero.  Cache the z component
+# too (P2-1) and the same code picks it up with no further change.
+# ---------------------------------------------------------------------------
+EPS_A = onp.array(
+    [
+        [1.0 / onp.sqrt(2.0), -1.0j / onp.sqrt(2.0), 0.0],
+        [0.0, 0.0, 1.0],
+        [-1.0 / onp.sqrt(2.0), -1.0j / onp.sqrt(2.0), 0.0],
+    ],
+    dtype=onp.complex128,
+)
+
+# Slots of the helicity axis that carry the transverse initial state.
+#   k = 3  -> (lambda=+1, lambda=0, lambda=-1)   -> (0, 2)
+#   k = 2  -> (lambda=+1, lambda=-1)             -> (0, 1)
+HELICITY_TRANSVERSE = {2: (0, 1), 3: (0, 2)}
+
+HELICITY_LAYER_ENV = "HELICITY_LAYER"
+TENSOR_BASIS_ENV = "TENSOR_BASIS"
+
+
+def helicity_layer_enabled():
+    """Runtime switch, so old and new amplitude layers can be compared in one
+    process (HELICITY_LAYER=1 selects the helicity layer)."""
+    return os.environ.get(HELICITY_LAYER_ENV, "0") == "1"
+
+
+def precomputed_helicity_basis():
+    """True when the cached arrays are ALREADY W_i(e,lambda).
+
+    TENSOR_BASIS=helicity means the EPS_A rotation was folded into tensor
+    generation, so the fit loop must not rotate again.  See report section 8.6
+    for why this is mathematically valid but usually a pessimisation: the
+    Cartesian cache is real, so `dplex_deinsum_ord` contracts it with 2 real
+    einsums, while a rotated cache is complex and needs 4.
+    """
+    return os.environ.get(TENSOR_BASIS_ENV, "cartesian") == "helicity"
+
+
+def helicity_transverse(n_components):
+    n = int(n_components)
+    return HELICITY_TRANSVERSE.get(n, tuple(range(n)))
+
+
+def to_helicity(total):
+    """Cartesian -> helicity amplitudes, keeping the dplex (Re, Im) layout.
+
+    `total` has shape (2, ..., k) with axis 0 = (Re, Im) and k = 2 or 3
+    Cartesian components (x, y[, z]).  The result has shape (2, ..., 3) with
+    the last axis ordered (lambda=+1, lambda=0, lambda=-1); when k == 2 the
+    lambda=0 slot is exactly zero because z was never cached.
+
+        a_{+1} = ( A_x - i A_y) / sqrt2
+        a_{ 0} =   A_z
+        a_{-1} = (-A_x - i A_y) / sqrt2
+
+    Summing |a|^2 over lambda = +-1 reproduces |A_x|^2 + |A_y|^2 exactly (it is
+    an algebraic identity, see report section 4), so this layer is numerically
+    a no-op for the current likelihood.
+    """
+    re, im = total[0], total[1]
+    rx, ry = re[..., 0], re[..., 1]
+    ix, iy = im[..., 0], im[..., 1]
+    r2 = 1.0 / np.sqrt(2.0)
+    if re.shape[-1] >= 3:
+        re0, im0 = re[..., 2], im[..., 2]
+    else:
+        re0 = np.zeros_like(rx)
+        im0 = np.zeros_like(rx)
+    return np.stack(
+        [
+            np.stack([(rx + iy) * r2, (ix - ry) * r2], axis=0),   # lambda = +1
+            np.stack([re0, im0], axis=0),                         # lambda =  0
+            np.stack([(iy - rx) * r2, (-ix - ry) * r2], axis=0),  # lambda = -1
+        ],
+        axis=-1,
+    )
+
+
+def apply_helicity(amplitude):
+    """Rotate a dplex amplitude block to the helicity basis when needed.
+
+    `to_helicity` is linear on the component axis and commutes with the
+    couplings, the propagators and the sum over states, so it can be applied
+    once to the TOTAL amplitude instead of once per coupled block.  Doing it
+    here (rather than inside `_coupled_components`) cuts the rotation work by
+    sum(l) / 1 = 7x for the current model, which is a measurable saving since
+    the rotation is allocation-heavy.
+    """
+    if helicity_layer_enabled() and not precomputed_helicity_basis():
+        return to_helicity(amplitude)
+    return amplitude
+
+
+# Slots of the Cartesian component axis that the transverse initial state
+# reaches.  With k = 2 the cache already holds exactly these; with k = 3 the
+# z component is cached for the helicity layer but must NOT enter this sum.
+CARTESIAN_TRANSVERSE = (0, 1)
+
+
+def intensity_from_amplitude(component):
+    """|amplitude|^2 summed over the physical components, per event.
+
+    Cartesian layer: |T_x|^2 + |T_y|^2 -- the two directions the transverse
+        initial state reaches.  Written explicitly rather than "sum whatever is
+        cached" so that a 3-component (P2-1) cache does not silently add the
+        lambda = 0 strength, which no initial state can populate.
+    Helicity layer : only lambda = +-1 (P1-3) -- the transverse initial state.
+    Accepts the (2, ..., k) dplex layout and returns the trailing shape with the
+    component axis contracted away.  `component` must already be in the basis
+    selected by TENSOR_BASIS (use `apply_helicity`).
+    """
+    abs2 = dplex_dabs(component)
+    if helicity_layer_enabled():
+        return np.sum(abs2[..., helicity_transverse(abs2.shape[-1])], axis=-1)
+    return np.sum(abs2[..., CARTESIAN_TRANSVERSE], axis=-1)
+
+
 def dplex_dconstruct(aa, bb):
     return np.stack([aa, bb], axis=0) # 纵向叠加数组 第一维为实部，第二维为虚部
 
@@ -146,47 +286,103 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
         toml.dump({"data": _data}, f)
 
 
+def _load_cached_tensor(path):
+    """Load one cached channel-tensor file, honouring TENSOR_BASIS.
+
+    Cartesian: real `(n_ch, N, k)`, k = 2 or 3 Lorentz components (x, y[, z]).
+    Helicity : complex `(n_ch, N, 3)` -> dplex `(2, n_ch, N, 3)`, axis 0 = (Re, Im).
+
+    Mixing the two silently would give a wrong but plausible-looking answer, so
+    the mismatch is a hard error rather than a coercion.
+    """
+    arr = onp.load(path)
+    if precomputed_helicity_basis():
+        if not onp.iscomplexobj(arr):
+            raise ValueError(
+                "%s holds real data but TENSOR_BASIS=helicity; regenerate it with "
+                "task/.../4_三条路线/method3_helicity_native/gen_tensor.py" % path
+            )
+        return onp.stack([arr.real, arr.imag], axis=0)
+    if onp.iscomplexobj(arr):
+        raise ValueError(
+            "%s holds complex data but TENSOR_BASIS=%s; set TENSOR_BASIS=helicity "
+            "(method 3) or point at the Cartesian cache"
+            % (path, os.environ.get(TENSOR_BASIS_ENV, "cartesian"))
+        )
+    return arr
+
+
+def _tile_cached_tensor(arr, n_repeat, n_truth_mc):
+    """Repeat events `n_repeat` times and slice the truth-MC prefix."""
+    if arr.ndim == 4:                      # dplex (2, n_ch, N, k)
+        rep = onp.tile(arr, (1, 1, n_repeat, 1))
+    elif arr.ndim == 3:                    # real (n_ch, N, k)
+        rep = onp.tile(arr, (1, n_repeat, 1))
+    else:
+        raise ValueError("unsupported cached-tensor rank %d" % arr.ndim)
+    return rep, rep[..., 0:n_truth_mc * n_repeat, :]
+
+
 def load_data():
-    n_repeat = 3
+    n_repeat = int(os.environ.get("N_REPEAT", "3"))
     n_truth_mc = 150000  # intentional truth-MC cap; this is not n_data
+    # KK_DATA_ROOT lets a regenerated dataset (e.g. the 3-component P2-1 caches
+    # under data/tensor3/) be used without touching the production arrays.  The
+    # tensor component count is picked up automatically: k=2 -> lambda=+-1 only,
+    # k=3 -> the helicity layer also sees lambda=0.
+    root = os.environ.get("KK_DATA_ROOT", "data")
+    real = os.path.join(root, "real_data")
+    mc = os.path.join(root, "mc_truth")
     data = {}
 
-    data['data_phi_kk'] = onp.tile(onp.load('data/real_data/phi_kk.npy'), n_repeat)
-    data['mc_phi_kk'] = onp.tile(onp.load('data/mc_truth/phi_kk.npy'), n_repeat)
+    data['data_phi_kk'] = onp.tile(onp.load(os.path.join(real, 'phi_kk.npy')), n_repeat)
+    data['mc_phi_kk'] = onp.tile(onp.load(os.path.join(mc, 'phi_kk.npy')), n_repeat)
     data['truth_phi_kk'] = data['mc_phi_kk'][0:n_truth_mc * n_repeat]
 
-    data['data_f_kk'] = onp.tile(onp.load('data/real_data/f_kk.npy'), n_repeat)
-    data['mc_f_kk'] = onp.tile(onp.load('data/mc_truth/f_kk.npy'), n_repeat)
+    data['data_f_kk'] = onp.tile(onp.load(os.path.join(real, 'f_kk.npy')), n_repeat)
+    data['mc_f_kk'] = onp.tile(onp.load(os.path.join(mc, 'f_kk.npy')), n_repeat)
     data['truth_f_kk'] = data['mc_f_kk'][0:n_truth_mc * n_repeat]
 
-    data['data_phif0_kk'] = onp.tile(onp.load('data/real_data/phif0_kk.npy'), (1, n_repeat, 1))
-    data['mc_phif0_kk'] = onp.tile(onp.load('data/mc_truth/phif0_kk.npy'), (1, n_repeat, 1))
-    data['truth_phif0_kk'] = data['mc_phif0_kk'][:, 0:n_truth_mc * n_repeat, ...]
+    for var in ('phif0_kk', 'phif2_kk'):
+        data['data_' + var], _ = _tile_cached_tensor(
+            _load_cached_tensor(os.path.join(real, var + '.npy')), n_repeat, n_truth_mc)
+        data['mc_' + var], data['truth_' + var] = _tile_cached_tensor(
+            _load_cached_tensor(os.path.join(mc, var + '.npy')), n_repeat, n_truth_mc)
 
-    data['data_phif2_kk'] = onp.tile(onp.load('data/real_data/phif2_kk.npy'), (1, n_repeat, 1))
-    data['mc_phif2_kk'] = onp.tile(onp.load('data/mc_truth/phif2_kk.npy'), (1, n_repeat, 1))
-    data['truth_phif2_kk'] = data['mc_phif2_kk'][:, 0:n_truth_mc * n_repeat, ...]
-
-    data['data_b123_kk'] = onp.tile(onp.load('data/real_data/b123_kk.npy'), n_repeat)
-    data['mc_b123_kk'] = onp.tile(onp.load('data/mc_truth/b123_kk.npy'), n_repeat)
+    data['data_b123_kk'] = onp.tile(onp.load(os.path.join(real, 'b123_kk.npy')), n_repeat)
+    data['mc_b123_kk'] = onp.tile(onp.load(os.path.join(mc, 'b123_kk.npy')), n_repeat)
     data['truth_b123_kk'] = data['mc_b123_kk'][0:n_truth_mc * n_repeat]
 
-    data['data_b124_kk'] = onp.tile(onp.load('data/real_data/b124_kk.npy'), n_repeat)
-    data['mc_b124_kk'] = onp.tile(onp.load('data/mc_truth/b124_kk.npy'), n_repeat)
+    data['data_b124_kk'] = onp.tile(onp.load(os.path.join(real, 'b124_kk.npy')), n_repeat)
+    data['mc_b124_kk'] = onp.tile(onp.load(os.path.join(mc, 'b124_kk.npy')), n_repeat)
     data['truth_b124_kk'] = data['mc_b124_kk'][0:n_truth_mc * n_repeat]
 
     return data
 
 
+def _cached_tensor_magnitude(arr):
+    """|tensor| per (channel, event); basis aware.
+
+    Cartesian `(n_ch, N, k)` -> sqrt(sum_k T_k^2)
+    dplex     `(2, n_ch, N, k)` -> sqrt(sum_k Re^2 + Im^2)
+    """
+    if arr.ndim == 4:
+        return onp.sqrt(onp.sum(arr[0] ** 2 + arr[1] ** 2, axis=-1))
+    return onp.sqrt(onp.sum(arr ** 2, axis=-1))
+
+
 def normalize_data(data):
     for var in ('phif0_kk', 'phif2_kk'):
         mc_arr = data['mc_' + var]
-        regular = 1.0 / onp.mean(
-            onp.sqrt(onp.sum(mc_arr ** 2, axis=-1)), axis=1
-        )
+        regular = 1.0 / onp.mean(_cached_tensor_magnitude(mc_arr), axis=1)
         for prefix in ('data_', 'mc_', 'truth_'):
             key = prefix + var
-            data[key] = onp.einsum('c,cek->cek', regular, data[key])
+            arr = data[key]
+            if arr.ndim == 4:
+                # dplex (2, n_ch, N, k): the channel axis is 1, not 0
+                data[key] = onp.einsum('c,ecnk->ecnk', regular, arr)
+            else:
+                data[key] = onp.einsum('c,cek->cek', regular, arr)
     return data
 
 
@@ -198,6 +394,9 @@ def shard_data_distributed(data, mesh):
             spec = P('event')
         elif array.ndim == 3:
             spec = P(None, 'event', None)
+        elif array.ndim == 4:
+            # dplex helicity cache (2, n_ch, N, k): only the event axis is sharded
+            spec = P(None, None, 'event', None)
         else:
             raise ValueError('Unsupported data rank for ' + key + ': ' + str(array.ndim))
         jax_data[key] = device_put(array, NamedSharding(mesh, spec))
