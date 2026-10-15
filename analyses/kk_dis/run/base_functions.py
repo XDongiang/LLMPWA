@@ -101,6 +101,25 @@ def helicity_layer_enabled():
     return os.environ.get(HELICITY_LAYER_ENV, "0") == "1"
 
 
+def precomputed_omega_basis():
+    """True when the phif2 cache is the CHANNEL-INDEPENDENT Omega + constants.
+
+    Method 4 (2026-10-07).  On disk:
+
+        Omega.npy  (N, 3, 3, 5) complex   D^{1*}_{lam_A, lam_phi-lam_f}
+                                          x f^1_{|lam_phi|}(gamma_phi)
+                                          x f^2_{|lam_f|}(gamma_f2)
+                                          x a_phi[lam_phi] x a_f[lam_f]
+        K.npy      (5, N)       float     per-channel node factors (Blatt-Weisskopf x q^l)
+        M.npy      (5, 3, 5)    float     constant CG matrix (== tf-pwa's _get_cg_matrix)
+        g.npy      (5,)         float     per-channel convention constant
+
+    and `W_i[e,lam_A] = g_i K_i(e) sum_{a,b} M_i[lam_A,a,b] Omega[e,lam_A,a,b]`
+    is assembled at load time.  The phif0 channels keep their plain cache.
+    """
+    return os.environ.get(TENSOR_BASIS_ENV, "cartesian") == "omega"
+
+
 def precomputed_helicity_basis():
     """True when the cached arrays are ALREADY W_i(e,lambda).
 
@@ -109,8 +128,12 @@ def precomputed_helicity_basis():
     for why this is mathematically valid but usually a pessimisation: the
     Cartesian cache is real, so `dplex_deinsum_ord` contracts it with 2 real
     einsums, while a rotated cache is complex and needs 4.
+
+    TENSOR_BASIS=omega also lands here: method 4's cache is complex W_i as well,
+    only assembled from the channel-independent Omega instead of stored whole.
+    Everything downstream is therefore shared with method 3.
     """
-    return os.environ.get(TENSOR_BASIS_ENV, "cartesian") == "helicity"
+    return os.environ.get(TENSOR_BASIS_ENV, "cartesian") in ("helicity", "omega")
 
 
 def helicity_transverse(n_components):
@@ -286,15 +309,48 @@ def save_result(args, errors, path="output/free_params_fitted.toml"):
         toml.dump({"data": _data}, f)
 
 
+def _assemble_omega_cache(path):
+    """Rebuild W_i(e,lambda) from the channel-independent Omega + constants.
+
+    Method 4: `W_i[e,lam_A] = g_i K_i(e) sum_{a,b} M_i[lam_A,a,b] Omega[e,lam_A,a,b]`.
+    This is exactly tf-pwa's `H . D`; it reproduces the method-3 cache to
+    ~1e-14 (see 4_三条路线/method4_omega/README.md).
+
+    Two families share this code, distinguished by the file name only:
+
+        phif2*  ->  Omega.npy  (N,3,3,5)   K.npy  (5,N)  M.npy  (5,3,5)  g.npy  (5,)
+        phif0*  ->  Omega0.npy (N,3,3,1)   K0.npy (2,N)  M0.npy (2,3,1)  g0.npy (2,)
+
+    The J_R = 0 case keeps the trailing lambda_f axis of length 1, so the very
+    same `einsum("iab,enab->ien")` works for both (MATH.md §2.5/§3.2).
+    """
+    d = os.path.dirname(path)
+    f0 = os.path.basename(path).startswith("phif0")
+    suf = "0" if f0 else ""
+    Om = onp.load(os.path.join(d, "Omega%s.npy" % suf))   # (N,3,3,5) or (N,3,3,1)
+    K = onp.load(os.path.join(d, "K%s.npy" % suf))        # (5,N) or (2,N)
+    M = onp.load(os.path.join(d, "M%s.npy" % suf))        # (5,3,5) or (2,3,1)
+    g = onp.load(os.path.join(d, "g%s.npy" % suf))        # (5,) or (2,)
+    P = onp.einsum("iab,enab->ien", M, Om)                # (n_ch, N, 3)
+    W = g[:, None, None] * K[:, :, None] * P
+    return onp.stack([W.real, W.imag], axis=0)            # dplex (2, n_ch, N, 3)
+
+
 def _load_cached_tensor(path):
     """Load one cached channel-tensor file, honouring TENSOR_BASIS.
 
     Cartesian: real `(n_ch, N, k)`, k = 2 or 3 Lorentz components (x, y[, z]).
     Helicity : complex `(n_ch, N, 3)` -> dplex `(2, n_ch, N, 3)`, axis 0 = (Re, Im).
+    Omega    : BOTH phif0 and phif2 entries are ASSEMBLED from the
+               channel-independent Omega + K + M + g (see above); every other
+               entry is read as a plain helicity cache.
 
     Mixing the two silently would give a wrong but plausible-looking answer, so
     the mismatch is a hard error rather than a coercion.
     """
+    base = os.path.basename(path)
+    if precomputed_omega_basis() and (base.startswith("phif2") or base.startswith("phif0")):
+        return _assemble_omega_cache(path)
     arr = onp.load(path)
     if precomputed_helicity_basis():
         if not onp.iscomplexobj(arr):

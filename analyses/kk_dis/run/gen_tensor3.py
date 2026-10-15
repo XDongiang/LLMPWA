@@ -53,8 +53,8 @@ F0_NAMES = ["phif001", "phif021"]
 F2_NAMES = ["phif201", "phif221", "phif222", "phif223", "phif243"]
 
 
-def load_tensor_module(x64=True):
-    """Build the channel functions, controlling `psi2s` dtype.
+def load_tensor_module(x64=True, psi_mass=None):
+    """Build the channel functions, controlling `psi2s` dtype and mass.
 
     `CacheTensor.Calculate` does
 
@@ -69,6 +69,20 @@ def load_tensor_module(x64=True):
     is the more accurate choice and the one to use for new datasets; measured
     difference against the float32 caches is ~2e-7 relative on every channel
     (e.g. phif222: 2.79e-7 vs 1.86e-16).  Do not mix the two in one dataset.
+
+    `psi_mass` (opt-in, 2026-10-15) overrides the hard-coded `3.686` in
+    `FUNC.py:15`.  This is the psi four-momentum convention switch documented in
+    `method4_omega/psi_mass_residual.md` §6b: the real sample's actual
+    `E_psi = 3.685782956` is a constant to 2e-10, while the tensor generator
+    hard-codes the nominal 3.686.  Omega is built from the RECONSTRUCTED
+    A = Kp+Km+Pip+Pim, so mixing the two leaves a ~1.8e-4 residual on every
+    ell != 0 channel (real side only; the delivered MC is exactly 3.686).
+    Passing `psi_mass=3.685782956` for the real sample removes it.
+
+    ⚠️ `psi2s` must be set BEFORE `Modifiers()`: that call installs
+    `jit(vmap(...))`, which bakes the constant into the jaxpr.  Assigning to
+    `f.psi2s` afterwards does not recompile (see
+    `method4_omega/checks/f0_psimass_causal.py`).
     """
     import jax
 
@@ -84,6 +98,9 @@ def load_tensor_module(x64=True):
     from Tensor import FUNC as func
 
     f = func.FUNCTION()
+    if psi_mass is not None:
+        import jax.numpy as _jnp
+        f.psi2s = _jnp.array([0.0, 0.0, 0.0, float(psi_mass)])
     f.Modifiers()
     jax.config.update("jax_enable_x64", True)
     return jax, f
@@ -118,11 +135,17 @@ def main():
                          "helicity: store W_i(e,lambda) = EPS_A . T_i (complex), i.e. "
                          "the EPS_A rotation is folded into PRE-COMPUTATION "
                          "(three-route deliverable, method 3)")
+    ap.add_argument("--psi-mass", type=float, default=None,
+                    help="覆盖 FUNC.py 硬编码的 psi 质量 3.686（四动量口径统一，见 "
+                         "method4_omega/psi_mass_residual.md §6b）。真实样本请用 3.685782956；"
+                         "不传则保持现状")
     args = ap.parse_args()
 
-    jax, f = load_tensor_module(x64=(args.dtype == "float64"))
+    jax, f = load_tensor_module(x64=(args.dtype == "float64"),
+                                psi_mass=args.psi_mass)
     print("devices:", jax.devices())
     print("psi2s dtype = %s" % onp.asarray(f.psi2s).dtype)
+    print("psi2s =", onp.asarray(f.psi2s))
     fn = build_batched(jax, f, args.batch)
 
     d = onp.load(args.npz)
