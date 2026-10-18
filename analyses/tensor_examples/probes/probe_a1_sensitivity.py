@@ -76,7 +76,7 @@ def main():
     print("   rel = %.3e" % rel(A4, W))
 
     print()
-    print("注入 5：内层 s 用错 —— (2,1) -> (2,2)（三角允许但宇称/自旋耦合错）")
+    print("注入 5：内层 s 用错 —— (2,1) -> (2,2)（三角允许但自旋耦合错）")
     ls_bad3 = {"psi2s": [(2, 1)], "b1": [(2, 2)], "phi": [(1, 0)]}
     try:
         A5 = HC.chain_amplitude(mom, ch, ls_bad3, ang=HC.node_angles(mom, ch))
@@ -92,17 +92,27 @@ def main():
 
     print()
     print("注入 7：把子粒子螺旋度压成 0（omega 的 _node_decay_d 口径）")
-    # 在**每个节点**上只保留 lam_b = lam_c = 0 的槽，其余清零 —— 这正是
-    # omega 的 `D_lambda(..., [0], [0])` 做的事。
+    # omega 的 `_node_decay_d` 对**每个**节点都只取 D^{J*}_{lam_a, 0-0}，
+    # 即把子粒子的螺旋度固定成 0。逐节点照做：
+    #   A_top[lam_psi, lam_b1, lam_Pim=0]
+    #   A_b1 [lam_b1,  lam_phi=0, lam_Pip=0]
+    #   A_phi[lam_phi=0, lam_K=0]
     ang = HC.node_angles(mom, ch)
     A_top7 = HC.node_amplitude(mom, ch, "psi2s", [(2, 1)], ang=ang)
     A_b17 = HC.node_amplitude(mom, ch, "b1", [(2, 1)], ang=ang)
     A_phi7 = HC.node_amplitude(mom, ch, "phi", [(1, 0)], ang=ang)
-    # omega 只看 D^{J*}_{lam_A, 0-0}：取 lam_b = lam_c = 0 的那一列
-    Zb = onp.zeros_like(A_b17); Zb[:, :, 1, 0] = A_b17[:, :, 1, 0]
-    Zp = onp.zeros_like(A_phi7); Zp[:, :, 0, 0] = A_phi7[:, :, 0, 0]
-    A7 = onp.einsum("eab,eb->ea", Zb, Zp)
+    print("   A_top shape = %s   A_b1 shape = %s   A_phi shape = %s"
+          % (A_top7.shape, A_b17.shape, A_phi7.shape))
+    # 顶层：保留 lam_psi 与 lam_b1，把 lam_Pim 压成 0
+    Ztop = A_top7[:, :, :, 0]                    # (e, lam_psi, lam_b1)
+    # b1 节点：保留 lam_b1，把 lam_phi / lam_Pip 压成 0
+    Zb1 = A_b17[:, :, 0, 0]                      # (e, lam_b1)
+    # phi 节点：把两个 K 的螺旋度压成 0（phi 自旋 1 -> 只剩 lam_phi 那一维）
+    Zphi = A_phi7[:, :, 0, 0]                    # (e, lam_phi)
+    A7 = onp.einsum("eab,eb->ea", Ztop, Zb1)
+    A7 = A7 * Zphi[:, 1:2]                       # lam_phi = 0 那一槽
     print("   rel = %.3e   max|A| = %.3e" % (rel(A7, W), onp.abs(A7).max()))
+    print("   （omega 时代就是这个量；它与协变差 O(1)，正是 §1.1/§1.2 的边界）")
 
 
 if __name__ == "__main__":
