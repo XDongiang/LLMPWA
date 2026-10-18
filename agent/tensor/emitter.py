@@ -4,10 +4,15 @@
 
 产物目录（默认 spec 里的 `[chain].output`）：
 
-    <out>/gen_tensor_<name>.py   生成的预计算脚本（numpy only，无 tf-pwa）
+    <out>/gen_tensor_<name>.py   生成的预计算脚本（jax 优先，无 tf-pwa）
     <out>/runtime.py             运行时副本（kernels/omega.py 原样拷贝）
+    <out>/_backend.py            后端选择层（jax / numpy，原样拷贝）
+    <out>/covariant.py           协变内核副本（kernel=covariant/helicity 时）
     <out>/chain_spec.toml        冻结的输入描述
     <out>/README.md              这次生成了什么、怎么跑
+
+生成的脚本按 batch 做 `jit`（jax 后端；numpy 后端下 jit 是恒等装饰器），
+用哪个后端由环境变量 `TENSOR_BACKEND` 决定（auto / jax / numpy，默认 auto）。
 
 生成脚本做的事（与 method4_omega/gen_tensor.py 相同的产物约定）：
 
@@ -72,7 +77,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-import runtime as RT   # noqa: E402   （同目录的运行时副本，无 tf-pwa 依赖）
+import _backend as _B   # noqa: E402   （同目录的后端选择：jax 优先，回退 numpy）
+import runtime as RT    # noqa: E402   （同目录的运行时副本，无 tf-pwa 依赖）
+
+# 注意这里**不需要** xp：Omega/K 的计算全在 runtime 里（它自己取 xp），
+# 本脚本只负责分批搬运与写盘，用的都是 host numpy。
+jit = _B.jit
+to_numpy = _B.to_numpy
 
 # ------------------------------------------------------------------ 冻结的链描述
 CHAIN = {chain!r}
@@ -108,6 +119,15 @@ def omega(mom, covariant=True):
 
 def node_factors(mom):
     return RT.node_factors(mom, CHAIN, LS_LIST)
+
+
+# 分批 + jit：Omega 是 (N, nA, nb, nc) complex128，1.2M 事例一次算会占掉
+# ~0.9 GB 显存；分批后显存只与 --batch 有关。numpy 后端下 jit 是恒等装饰器。
+#
+# `covariant` 必须声明为 static：jit 默认把 bool 当**追踪值**，函数体里的
+# `if covariant:` 会直接抛 TracerBoolConversionError。
+_OMEGA = jit(omega, static_argnames=("covariant",))
+_NODE_FACTORS = jit(node_factors)
 
 
 def assemble(M, Om, g, K):
@@ -156,6 +176,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--n", type=int, default=0, help="0 = 全部")
     ap.add_argument("--start", type=int, default=0)
+    ap.add_argument("--batch", type=int, default=128,
+                    help="逐批计算的批大小（控制显存占用）")
     ap.add_argument("--calib", default="",
                     help="可选：参照协变张量 cache（EPS_A.T），用来标定 g_i；"
                          "不给则 g_i = 1")
@@ -168,10 +190,22 @@ def main():
     t0 = time.time()
     mom = RT.momenta_from_npz(args.momenta, INPUT_KEYS, args.start, args.n or None,
                               order=INPUT_LAYOUT)
-    print("[%s] %d events from %s" % ({name!r}, mom.shape[0], args.momenta))
+    n = mom.shape[0]
+    print("[%s] %d events from %s  backend=%s"
+          % ({name!r}, n, args.momenta, _B.backend_name()))
 
-    Om = omega(mom, covariant=not args.no_covariant)
-    K = node_factors(mom)
+    # 逐 batch 算 Omega / K 再拼回 host，避免把整份数据留在显存里。
+    batch = args.batch
+    Om = K = None
+    for beg in range(0, n, batch):
+        end = min(beg + batch, n)
+        om_blk = to_numpy(_OMEGA(mom[beg:end], covariant=not args.no_covariant))
+        k_blk = to_numpy(_NODE_FACTORS(mom[beg:end]))
+        if Om is None:
+            Om = onp.zeros((n,) + om_blk.shape[1:], dtype=om_blk.dtype)
+            K = onp.zeros((k_blk.shape[0], n), dtype=k_blk.dtype)
+        Om[beg:end] = om_blk
+        K[:, beg:end] = k_blk
     M = cg_matrices()
     print("  Omega %s   K %s   M %s" % (Om.shape, K.shape, M.shape))
 
@@ -225,10 +259,14 @@ def emit(spec, out_dir=None, runtime_src=None):
                                "files": [], "env": {}, "suffix_map": {}}]
 
     # 运行时副本：产出目录自足，不依赖 agent.tensor
+    kdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kernels")
     rt_dst = os.path.join(out_dir, "runtime.py")
-    rt_src = runtime_src or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "kernels", "omega.py")
+    rt_src = runtime_src or os.path.join(kdir, "omega.py")
     shutil.copyfile(rt_src, rt_dst)
+
+    # 后端选择层：产物脚本 import 它来决定用 jax 还是 numpy。
+    shutil.copyfile(os.path.join(kdir, "_backend.py"),
+                    os.path.join(out_dir, "_backend.py"))
 
     # 冻结描述
     if spec.get("_spec_path"):
@@ -338,19 +376,23 @@ import os
 import sys
 import time
 
-import numpy as np
 import numpy as onp
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-import covariant as CV   # noqa: E402  同目录的协变张量内核副本
+import _backend as _B     # noqa: E402  后端选择（jax 优先，无 jax 回退 numpy）
+import covariant as CV    # noqa: E402  同目录的协变张量内核副本
 from covariant import (  # noqa: E402,F401  道函数体直接调用这些原语
     B1, B2, B3, B4, Gt_con, Gt_cov, P2, P3, P4, Qabc, T1_cov, T2_cov, T3_cov,
     T4_cov, dot, invm, leci_four, metric,
     _einsum, _leci_con, _metric_axis, _raise_last, _s1_vector,
 )
+
+xp = _B.xp
+jit = _B.jit
+to_numpy = _B.to_numpy
 
 CHAIN = {chain!r}
 CHANNELS = {channels!r}
@@ -402,6 +444,11 @@ def stored(mom):
     {store_body}
 
 
+# 每个 batch 走一次 jit：XLA 把 psi(2S) 这类编译期常量折掉，并在 GPU 上并行。
+# numpy 后端下 `jit` 是恒等装饰器，行为不变。
+_STORED = jit(stored)
+
+
 def main():
     ap = argparse.ArgumentParser(description="自动生成的协变/螺度张量预计算（{name}）")
     ap.add_argument("--momenta", "--npz", dest="momenta", required=True)
@@ -415,12 +462,14 @@ def main():
     mom = _momenta_from_npz(args.momenta, INPUT_KEYS, args.start,
                             args.n or None, order=INPUT_LAYOUT)
     n = mom.shape[0]
-    print("[{name}] %d events from %s" % (n, args.momenta))
+    print("[{name}] %d events from %s  backend=%s"
+          % (n, args.momenta, _B.backend_name()))
 
     out = None
     for beg in range(0, n, args.batch):
         end = min(beg + args.batch, n)
-        blk = stored(mom[beg:end])
+        # 搬回 host 再堆叠：产物要写 .npy，且这样显存不随事例数增长。
+        blk = _B.tree_to_numpy(_STORED(mom[beg:end]))
         # 每道 (N, k) -> 堆成 (n_ch, N, k)，与 phif0_kk.npy / phif2_kk.npy 的
         # 既有约定一致（道轴在前）。
         arr = onp.stack([blk[nm] for nm in NAMES], axis=0)
@@ -519,12 +568,12 @@ def _emit_covariant(spec, ch, chain, name, out_dir, suffix, basis):
         store_body = '''EPS_A = onp.array([[1/onp.sqrt(2), -1j/onp.sqrt(2), 0],
                        [0, 0, 1],
                        [-1/onp.sqrt(2), -1j/onp.sqrt(2), 0]], dtype=onp.complex128)
-    return {nm: onp.einsum("lm,em->el", EPS_A, raw[nm][..., :3]) for nm in NAMES}'''
+    return {nm: xp.einsum("lm,em->el", EPS_A, raw[nm][..., :3]) for nm in NAMES}'''
     else:
         out_name = "%s_kk.npy" % chain_name_out
         out_names = "%s    (n_ch, N, 3) float64" % out_name
         kernel_doc = "预计算笛卡尔协变张量 T_i(e,mu)，mu = x,y,z"
-        store_body = '''return {nm: onp.asarray(raw[nm], dtype=onp.float64)[..., :3]
+        store_body = '''return {nm: xp.asarray(raw[nm], dtype=xp.float64)[..., :3]
             for nm in NAMES}'''
 
     script_name = "gen_tensor_%s_%s.py" % (name, kernel)

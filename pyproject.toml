@@ -24,6 +24,10 @@ dependencies = [
 # The generator itself only needs the dependencies above. Running the *generated*
 # fitting code needs the physics/numeric stack below; keep these separate so the
 # generator stays lightweight.
+#
+# `agent/tensor` 的数值内核走 `kernels/_backend.py`：有 jax 就用 jax（生产
+# 路径，GPU 加速），没有就回退 numpy。所以生成器（emit/check/show）**不需要**
+# jax；`emit` 产出的脚本在无 jax 环境下也能用 numpy 跑。
 [project.optional-dependencies]
 runtime = [
     "jax",
@@ -34,6 +38,10 @@ runtime = [
     "pynvml",
     "matplotlib",
     "tabulate",
+]
+# 只想跑生成器 + tensor 内核（不做拟合）时的最小集合：numpy 回退够用。
+tensor = [
+    "numpy",
 ]
 
 [project.urls]

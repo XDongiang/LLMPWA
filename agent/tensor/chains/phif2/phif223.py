@@ -8,7 +8,12 @@
 """
 from __future__ import annotations
 
-import numpy as np
+try:                      # 包内（正常路径）
+    from ...kernels import _backend as _B
+except ImportError:       # 被 emitter 内联进产物脚本后
+    import _backend as _B
+
+xp = _B.xp
 
 from ...kernels.covariant import (  # noqa: F401
     Gt_con, P3, T1_cov, T2_cov, T4_cov, dot, leci_four, metric,
@@ -23,4 +28,4 @@ def phif223(psi, phi, f2, Kp, Km, Pip, Pim):
     t2_phif2 = T2_cov(psi, phi, f2)
     t2_34 = T2_cov(f2, Pip, Pim)
     t1_12 = T1_cov(phi, Kp, Km)
-    return np.einsum("eijklmn,ejk,elm,en->ei", p3_con, t2_phif2, t2_34, t1_12)
+    return xp.einsum("eijklmn,ejk,elm,en->ei", p3_con, t2_phif2, t2_34, t1_12)

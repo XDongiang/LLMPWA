@@ -26,8 +26,9 @@
 """
 from __future__ import annotations
 
-import numpy as np
+import numpy as onp
 
+from .kernels import _backend as _B
 from .kernels import helicity as _hel
 
 __all__ = ["BASES", "get", "names", "env_for", "describe_all", "check_consistency"]
@@ -73,8 +74,12 @@ class Basis:
 
 # --------------------------------------------------------------- 路线 1
 def _cartesian_precompute(T):
-    """笛卡尔表象就是张量本身。"""
-    return np.asarray(T, dtype=np.float64)[..., :3]
+    """笛卡尔表象就是张量本身。
+
+    走 `_B.xp` 而不是 host numpy：拟合侧会在 jit 里调用这个钩子，传进来的是
+    tracer，`onp.asarray` 会直接抛 TracerArrayConversionError。
+    """
+    return _B.xp.asarray(T, dtype=_B.xp.float64)[..., :3]
 
 
 def _identity(contracted):
@@ -201,21 +206,21 @@ def check_consistency(seed=7, n=6):
     `|W_{+1}|^2 + |W_{-1}|^2 == |T_x|^2 + |T_y|^2` 是**严格**等式，
     与 `4_三条路线/method3_helicity_native/gen_tensor.py` 的判据一致。
     """
-    rng = np.random.default_rng(seed)
+    rng = onp.random.default_rng(seed)
     T = rng.normal(size=(n, 3))
     W = BASES["helicity"].precompute(T)
-    lhs = np.abs(W[:, 0]) ** 2 + np.abs(W[:, 2]) ** 2
+    lhs = onp.abs(W[:, 0]) ** 2 + onp.abs(W[:, 2]) ** 2
     rhs = T[:, 0] ** 2 + T[:, 1] ** 2
-    d1 = float(np.abs(lhs - rhs).max())
+    d1 = float(onp.abs(lhs - rhs).max())
 
     # dplex 布局下的旋转：把 T 当成 (2, n, 3) 的 (Re, Im)，旋转后应逐位等于 W
-    blk = np.stack([T, np.zeros_like(T)], axis=0)      # (2, n, 3)
+    blk = onp.stack([T, onp.zeros_like(T)], axis=0)      # (2, n, 3)
     rot = BASES["cov_to_helicity"].amplitude(blk)      # (2, n, 3)
-    d2 = float(np.abs((rot[0] + 1j * rot[1]) - W).max())
+    d2 = float(onp.abs((rot[0] + 1j * rot[1]) - W).max())
 
     # 两条路线的强度必须逐位相同
     i1 = BASES["cartesian"].intensity(blk)
     i2 = BASES["cov_to_helicity"].intensity(rot)
-    d3 = float(np.abs(i1 - i2).max())
+    d3 = float(onp.abs(i1 - i2).max())
     return {"transverse_identity": d1, "rotate_matches_precompute": d2,
             "intensity_cartesian_vs_helicity": d3}

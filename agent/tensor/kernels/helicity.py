@@ -29,16 +29,24 @@ psi(2S) 由 e+e- 产生，初始态横向极化，所以洛伦兹指标 mu 上�
 """
 from __future__ import annotations
 
-import numpy as np
+import numpy as onp
+
+try:                      # 包内（正常路径）
+    from . import _backend as _B
+except ImportError:       # 被 emitter 拷成产物目录里的顶层模块后
+    import _backend as _B
+
+xp = _B.xp
 
 # 行 = lambda(+1, 0, -1)，列 = mu(x, y, z)。取法承重，见模块 docstring。
-EPS_A = np.array(
+# 用 host numpy 建**常量**：它是与事例无关的复数表，jax 侧当常数参与运算。
+EPS_A = onp.array(
     [
-        [1.0 / np.sqrt(2.0), -1.0j / np.sqrt(2.0), 0.0],
+        [1.0 / onp.sqrt(2.0), -1.0j / onp.sqrt(2.0), 0.0],
         [0.0, 0.0, 1.0],
-        [-1.0 / np.sqrt(2.0), -1.0j / np.sqrt(2.0), 0.0],
+        [-1.0 / onp.sqrt(2.0), -1.0j / onp.sqrt(2.0), 0.0],
     ],
-    dtype=np.complex128,
+    dtype=onp.complex128,
 )
 
 # 强度里保留哪几个 lambda 槽（k=3 -> (0, 2) 即 +1 与 -1；k=2 -> (0, 1)）
@@ -54,12 +62,12 @@ def precompute(T):
     T : (..., 3) 实数笛卡尔张量（mu = x, y, z）
     返回 (..., 3) complex128 的螺旋度振幅（lambda = +1, 0, -1）
     """
-    T = np.asarray(T, dtype=np.float64)
+    T = xp.asarray(T, dtype=xp.float64)
     if T.shape[-1] < 3:
         raise ValueError(
             "螺度表象需要 3 个洛伦兹分量 (x,y,z)，收到 %d；"
             "旧 cache 丢掉了 z，EPS_A 的 lambda=0 行无法复现" % T.shape[-1])
-    return np.einsum("lm,...m->...l", EPS_A, T[..., :3])
+    return xp.einsum("lm,...m->...l", EPS_A, T[..., :3])
 
 
 def amplitude(contracted):
@@ -72,17 +80,17 @@ def amplitude(contracted):
     re, im = contracted[0], contracted[1]
     rx, ry = re[..., 0], re[..., 1]
     ix, iy = im[..., 0], im[..., 1]
-    r2 = 1.0 / np.sqrt(2.0)
+    r2 = 1.0 / xp.sqrt(2.0)
     if re.shape[-1] >= 3:
         re0, im0 = re[..., 2], im[..., 2]
     else:
-        re0 = np.zeros_like(rx)
-        im0 = np.zeros_like(rx)
-    return np.stack(
+        re0 = xp.zeros_like(rx)
+        im0 = xp.zeros_like(rx)
+    return xp.stack(
         [
-            np.stack([(rx + iy) * r2, (ix - ry) * r2], axis=0),   # lambda = +1
-            np.stack([re0, im0], axis=0),                         # lambda =  0
-            np.stack([(iy - rx) * r2, (-ix - ry) * r2], axis=0),  # lambda = -1
+            xp.stack([(rx + iy) * r2, (ix - ry) * r2], axis=0),   # lambda = +1
+            xp.stack([re0, im0], axis=0),                         # lambda =  0
+            xp.stack([(iy - rx) * r2, (-ix - ry) * r2], axis=0),  # lambda = -1
         ],
         axis=-1,
     )

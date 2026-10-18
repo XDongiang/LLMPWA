@@ -3,7 +3,7 @@
 r"""Eq.(49) 第二项：$U^\mu_{b_1 DS}$ —— 把粒子 3 与 4 对调。
 
 文档《ψ衰变到介子的分波分析协变张量形式》391–416 行。
-参考实现 `Tensor/FUNC.py::_u_DS_2`（jax），本文件是逐式 numpy 移植。
+参考实现 `Tensor/FUNC.py::_u_DS_2`（jax），本文件是逐式移植（走 `_backend.xp`，jax / numpy 两后端通用）。
 
 粒子编号（与文档一致）：K+=1，K-=2，pi+=3，pi-=4
 
@@ -15,7 +15,12 @@ $\psi\to b_1\pi$ 的 D 波给出 $\tilde T^{(2)\mu\lambda}_{(b_1 3)}$，
 """
 from __future__ import annotations
 
-import numpy as np
+try:                      # 包内（正常路径）
+    from ...kernels import _backend as _B
+except ImportError:       # 被 emitter 内联进产物脚本后
+    import _backend as _B
+
+xp = _B.xp
 
 from ...kernels.covariant import Gt_cov, T1_cov, T2_cov, _metric_axis, _raise_last
 
@@ -27,4 +32,4 @@ def u_DS_2(psi, phi, f2, Kp, Km, Pip, Pim):
     t2_con = _raise_last(t2_cov, 2)
     t1_cov = T1_cov(phi, Kp, Km)            # \tilde t^{(1)}_{(12)\nu}
     t1_con = _metric_axis(t1_cov, 1)
-    return np.einsum("eij,ejk,ek->ei", t2_con, gt_cov, t1_con)
+    return xp.einsum("eij,ejk,ek->ei", t2_con, gt_cov, t1_con)

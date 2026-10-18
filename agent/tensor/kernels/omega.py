@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""与 tf-pwa **无关**的螺旋度级联运行时（纯 numpy，自带 CG / Wigner-D）。
+"""与 tf-pwa **无关**的螺旋度级联运行时（自带 CG / Wigner-D）。
 
 这个文件是 `specgen` 代码生成器的**运行时**：它按一份链描述（`chain` dict）
 算三样东西
@@ -9,8 +9,10 @@
     K_i(e)                          逐道节点标量（位垒因子 x q^l）
     M_i                             常量 CG 矩阵
 
-生成器把**本文件的源码原样嵌进**产出的 `gen_tensor_*.py`，所以产出文件是
-自足的：只依赖 numpy + math，不 import tf-pwa，也不 import specgen。
+生成器把**本文件的源码原样拷进**产出目录（`runtime.py`），所以产出文件是
+自足的：只依赖 `_backend` + numpy + math，不 import tf-pwa，也不 import
+specgen。数组命名空间走 `_backend.xp`：jax 优先、无 jax 回退 numpy，逐事例
+函数在 jax 下可被 `jit` 追踪。
 
 链描述（`chain`）约定
 ---------------------
@@ -34,7 +36,16 @@ import math
 
 import numpy as onp
 
+try:                      # 包内（正常路径）
+    from . import _backend as _B
+except ImportError:       # 被 emitter 拷成产物目录里的顶层 runtime.py
+    import _backend as _B
+
+xp = _B.xp
+
 Q0 = 0.197321                       # BASE.py 的 Q0（R = 1）
+# 度规是**与事例无关的常数**，用 host numpy 建：jax 数组不支持逐项赋值，
+# 也没有理由把常数放到设备上（XLA 会在编译期折叠它）。
 G_METRIC = onp.diag([1.0, -1.0, -1.0, -1.0])   # (E,x,y,z)
 LAM_SLOTS = {0: [0], 1: [-1, 0, 1], 2: [-2, -1, 0, 1, 2],
              3: [-3, -2, -1, 0, 1, 2, 3], 4: [-4, -3, -2, -1, 0, 1, 2, 3, 4]}
@@ -79,6 +90,7 @@ def cg_matrix(ls_list, ja, jb, jc, lam_b, lam_c):
                                  * <l 0; s lam_b-lam_c | ja, lam_b-lam_c>
     """
     m = len(ls_list)
+    # 常量表：host numpy 建（逐项赋值），jax 侧当常数参与运算。
     ret = onp.zeros((m, len(lam_b), len(lam_c)))
     for i, (l, s) in enumerate(ls_list):
         for i1, lb in enumerate(lam_b):
@@ -90,7 +102,7 @@ def cg_matrix(ls_list, ja, jb, jc, lam_b, lam_c):
 
 
 def small_d_weight(j):
-    """tf-pwa `dfun.small_d_weight`；这里的 j 是 **2J**。"""
+    """tf-pwa `dfun.small_d_weight`；这里的 j 是 **2J**。常量表，host numpy 建。"""
     ret = onp.zeros((j + 1, j + 1, j + 1))
 
     def f(x):
@@ -108,38 +120,48 @@ def small_d_weight(j):
 
 
 def small_d_matrix(theta, j):
-    a = onp.arange(0, j + 1)[None, :]
+    a = xp.arange(0, j + 1)[None, :]
     ht = 0.5 * theta
-    sc = onp.sin(ht)[:, None] ** a * onp.cos(ht)[:, None] ** (j - a)
+    sc = xp.sin(ht)[:, None] ** a * xp.cos(ht)[:, None] ** (j - a)
     w = small_d_weight(j).reshape(j + 1, (j + 1) * (j + 1))
     return (sc @ w).reshape(-1, j + 1, j + 1)
 
 
 def D_conj(alpha, beta, gamma, J):
     """D^{J*}_{m1,m2}(alpha,beta,gamma)，行 m1 = -J..J。"""
-    m = onp.arange(-J, J + 1)
+    m = xp.arange(-J, J + 1)
     d = small_d_matrix(beta, 2 * J)
-    ea = onp.exp(1j * m[None, :] * alpha[:, None])
-    eg = onp.exp(1j * m[None, :] * gamma[:, None])
+    ea = xp.exp(1j * m[None, :] * alpha[:, None])
+    eg = xp.exp(1j * m[None, :] * gamma[:, None])
     return ea[:, :, None] * d * eg[:, None, :]
 
 
 def D_lambda(ang, J, la, lb, lc):
-    """取 D^{J*}_{la, lb-lc}；la/lb/lc 是螺旋度列表，|lb-lc|>J 的元素为 0。"""
-    dc = D_conj(ang[0], ang[1], ang[2], J)
-    out = onp.zeros((dc.shape[0], len(la), len(lb), len(lc)), dtype=onp.complex128)
-    for ia, va in enumerate(la):
-        for ib, vb in enumerate(lb):
-            for ic, vc in enumerate(lc):
-                delta = vb - vc
-                if abs(delta) <= J:
-                    out[:, ia, ib, ic] = dc[:, va + J, delta + J]
-    return out
+    """取 D^{J*}_{la, lb-lc}；la/lb/lc 是螺旋度列表，|lb-lc|>J 的元素为 0。
+
+    逐事例函数，**不能用逐项赋值**（jax 数组不可变，jit 里更直接报错）。
+    这里用两次 `take`（行、列各一次）做向量化 gather：把要取的 (行, 列)
+    下标预先算成数组，一次性取出来。越界槽位先夹到合法范围、再用 `where`
+    掩码置 0，等价于原来"只填满足 |lb-lc| <= J 的槽位"。
+    """
+    dc = D_conj(ang[0], ang[1], ang[2], J)          # (N, 2J+1, 2J+1)
+    rows = onp.asarray([va + J for va in la])        # (na,)
+    deltas = onp.asarray([vb - vc for vb in lb for vc in lc])     # (nb*nc,)
+    valid = onp.abs(deltas) <= J
+    # |delta| > J 的槽位要取 0，但下标会越界；先夹到合法范围再靠掩码清零。
+    cols = onp.clip(deltas + J, 0, 2 * J)
+
+    # (N, 2J+1, 2J+1) -> (N, na, nb*nc)：行取 rows、列取 cols
+    picked = xp.take(dc, rows, axis=1)                       # (N, na, 2J+1)
+    picked = xp.take(picked, cols, axis=2)                   # (N, na, nb*nc)
+    picked = xp.where(xp.asarray(valid), picked, 0.0)
+    n = dc.shape[0]
+    return picked.reshape(n, len(la), len(lb), len(lc))
 
 
 # ------------------------------------------------------------------ 运动学
 def _s(p):
-    return onp.einsum("...i,ij,...j->...", p, G_METRIC, p)
+    return xp.einsum("...i,ij,...j->...", p, G_METRIC, p)
 
 
 def q2_relative(a, b, c):
@@ -149,7 +171,7 @@ def q2_relative(a, b, c):
 
 
 def mass(p):
-    return onp.sqrt(onp.maximum(_s(p), 0.0))
+    return xp.sqrt(xp.maximum(_s(p), 0.0))
 
 
 def Bl(l, q):
@@ -159,7 +181,7 @@ def Bl(l, q):
     if num is None:
         raise NotImplementedError("Bl 只支持 l = 0..4，收到 %r" % (l,))
     if l == 0:
-        den = onp.ones_like(q)
+        den = xp.ones_like(q)
     elif l == 1:
         den = q + x0
     elif l == 2:
@@ -169,13 +191,13 @@ def Bl(l, q):
     else:
         den = (q ** 4 + 10 * q ** 3 * x0 + 135 * q ** 2 * x0 ** 2
                + 1575 * q * x0 ** 3 + 11025 * x0 ** 4)
-    return onp.sqrt(num / den)
+    return xp.sqrt(num / den)
 
 
 def node_barrier(l, Q):
     """q^l B_l(q^2) —— 一个节点对 K_i 的贡献。l = 0 时恒为 1。"""
     if l == 0:
-        return onp.ones_like(Q)
+        return xp.ones_like(Q)
     return Q ** (l / 2.0) * Bl(l, Q)
 
 
@@ -193,31 +215,31 @@ def _cov_b(j, m, m0):
 
 def covariant_hel_term(j, spins, gamma):
     """f^J_{|m|}(gamma)（Chung Eq.52），返回 (N, len(spins))。"""
-    gamma = onp.asarray(gamma, dtype=onp.float64)
+    gamma = xp.asarray(gamma, dtype=xp.float64)
     cols = []
     for s in spins:
         m = abs(int(s))
         a = _cov_a(j, m)
-        acc = onp.zeros_like(gamma)
+        acc = xp.zeros_like(gamma)
         m0 = j - m
         while m0 >= 0:
             acc = acc + (a * _cov_b(j, m, m0) * 2 ** m0) * gamma ** m0
             m0 -= 2
         cols.append(acc)
-    return onp.stack(cols, axis=-1)
+    return xp.stack(cols, axis=-1)
 
 
 # ------------------------------------------------------------------ 级联角
 def _unit(v):
-    return v / onp.linalg.norm(v, axis=-1, keepdims=True)
+    return v / xp.linalg.norm(v, axis=-1, keepdims=True)
 
 
 def _cross_unit(a, b):
-    return _unit(onp.cross(a, b))
+    return _unit(xp.cross(a, b))
 
 
 def _angle_from(self, x, y):
-    return onp.arctan2((self * y).sum(-1), (self * x).sum(-1))
+    return xp.arctan2((self * y).sum(-1), (self * x).sum(-1))
 
 
 def angle_zx_z_getx(z1, x1, z2):
@@ -237,12 +259,12 @@ def angle_zx_z_getx(z1, x1, z2):
 def _boost(other, b):
     """把 other 按 3-vector b boost；other/约定 (T,X,Y,Z)。"""
     b2 = (b * b).sum(-1)
-    g = 1.0 / onp.sqrt(1.0 - b2)
+    g = 1.0 / xp.sqrt(1.0 - b2)
     bp = (b * other[:, 1:]).sum(-1)
-    g2 = onp.where(b2 > 1e-12, (g - 1.0) / onp.where(b2 > 1e-12, b2, 1.0), 0.0)
+    g2 = xp.where(b2 > 1e-12, (g - 1.0) / xp.where(b2 > 1e-12, b2, 1.0), 0.0)
     T = g * (other[:, 0] + bp)
     v = other[:, 1:] + (g2 * bp + g * other[:, 0])[:, None] * b
-    return onp.stack([T, v[:, 0], v[:, 1], v[:, 2]], axis=-1)
+    return xp.stack([T, v[:, 0], v[:, 1], v[:, 2]], axis=-1)
 
 
 def rest_vector(p_rest, p):
@@ -270,21 +292,21 @@ def chain_angles(mom, chain):
         for d in nodes[n].get("daughters", []):
             rp[d] = rest_vector(rpA[n], rpA[d])
 
-    one = onp.ones((mom.shape[0], 3))
-    set_x = {top: one * onp.array([1.0, 0.0, 0.0])}
-    set_z = {top: one * onp.array([0.0, 0.0, 1.0])}
+    one = xp.ones((mom.shape[0], 3))
+    set_x = {top: one * xp.array([1.0, 0.0, 0.0])}
+    set_z = {top: one * xp.array([0.0, 0.0, 1.0])}
     ang = {}
 
     def do_node(core, outs):
         # ⚠️ bias 是**每个节点**的局部量，从 -pi 重新开始（tf-pwa 的约定）。
-        bias = -onp.pi
+        bias = -xp.pi
         for j, prest in outs:
             z2 = prest[:, 1:4]
             al, be, x2 = angle_zx_z_getx(set_z[core], set_x[core], z2)
             set_x[j], set_z[j] = x2, z2
-            al = (al - bias) % (2 * onp.pi) + bias
-            ang[j] = (al, be, onp.zeros_like(al))
-            bias -= onp.pi
+            al = (al - bias) % (2 * xp.pi) + bias
+            ang[j] = (al, be, xp.zeros_like(al))
+            bias -= xp.pi
 
     do_node(top, [(d, rpA[d]) for d in nodes[top]["daughters"]])
     for n in names:
@@ -308,7 +330,7 @@ def _node_decay_d(ang, chain, node, n_events):
     nodes = chain["nodes"]
     ds = nodes[node].get("daughters")
     if not ds:
-        return onp.ones((n_events, 1))
+        return xp.ones((n_events, 1))
     J = nodes[node]["J"]
     return D_lambda(ang[ds[0]], J, LAM_SLOTS[J], [0], [0])[:, :, 0, 0]
 
@@ -338,8 +360,8 @@ def omega_from_momenta(mom, chain, covariant=True):
         pb = _node_momentum(mom, chain, nb)
         pc = _node_momentum(mom, chain, nc)
         q2 = q2_relative(pA, pb, pc)
-        fb = covariant_hel_term(Jb, lam_b, onp.sqrt(1.0 + q2 / mass(pb) ** 2))
-        fc = covariant_hel_term(Jc, lam_c, onp.sqrt(1.0 + q2 / mass(pc) ** 2))
+        fb = covariant_hel_term(Jb, lam_b, xp.sqrt(1.0 + q2 / mass(pb) ** 2))
+        fc = covariant_hel_term(Jc, lam_c, xp.sqrt(1.0 + q2 / mass(pc) ** 2))
         D0 = D0 * fb[:, None, :, None] * fc[:, None, None, :]
 
     return (D0 * D1[:, None, :, None] * D2[:, None, None, :])
@@ -359,7 +381,7 @@ def node_factors(mom, chain, ls_list):
     nodes = chain["nodes"]
     pA = _node_momentum(mom, chain, top)
     nb, nc = nodes[top]["daughters"]
-    common = onp.ones_like(mass(pA))
+    common = xp.ones_like(mass(pA))
     for n in (nb, nc):
         ds = nodes[n].get("daughters")
         if not ds:
@@ -372,24 +394,26 @@ def node_factors(mom, chain, ls_list):
         common = common * node_barrier(l, Q)
     Qtop = q2_relative(pA, _node_momentum(mom, chain, nb),
                        _node_momentum(mom, chain, nc))
-    out = onp.zeros((len(ls_list), mom.shape[0]))
-    for i, (l, _s) in enumerate(ls_list):
-        out[i] = node_barrier(l, Qtop) * common
-    return out
+    # 用 stack 而不是 out[i] = ...：jax 数组不可变（jit 里逐项赋值直接报错）。
+    return xp.stack([node_barrier(l, Qtop) * common for (l, _s) in ls_list], axis=0)
 
 
 def assemble(M, Om, g, K):
     """W_i[e,lam_A] = g_i K_i(e) (M_i . Omega)。Om (N,nA,nb,nc) -> (n_ch,N,nA)"""
-    P = onp.einsum("iab,enab->ien", M, Om)
+    P = xp.einsum("iab,enab->ien", M, Om)
     return g[:, None, None] * K[:, :, None] * P
 
 
 # ------------------------------------------------------------------ IO
 def momenta_from_npz(path, keys, start=0, n=None, order="x,y,z,E"):
-    """读 Momentum_kk.npz（默认布局 (x,y,z,E)），返回 (N, n_part, 4) 的 (E,x,y,z)。"""
+    """读 Momentum_kk.npz（默认布局 (x,y,z,E)），返回 (N, n_part, 4) 的 (E,x,y,z)。
+
+    IO 全在 host numpy 上做（切片 + stack），最后一次性搬到设备：jax 下
+    `xp.asarray` 会把每个键都变成一次设备传输，逐键搬运比整体搬慢。
+    """
     d = onp.load(path)
     sl = slice(start, None if n is None else start + n)
     arrs = [onp.asarray(d[k][sl], dtype=onp.float64) for k in keys]
     mom = onp.stack(arrs, axis=1)
     perm = [order.split(",").index(c) for c in ("E", "x", "y", "z")]
-    return mom[..., perm]
+    return _B.to_device(mom[..., perm])

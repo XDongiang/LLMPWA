@@ -27,12 +27,13 @@ agent/tensor/
     phif0/ phif2/    psi->phi f_J 的 7 条道（Eq.36-45）
     rhopi/ b1pi/     例 3 的 10 条 rho'/b1 道（Eq.46-50，见 §11）
   kernels/
+    _backend.py      数值后端：jax 优先，无 jax 时回退 numpy（TENSOR_BACKEND）
     omega.py         tf-pwa 无关的螺旋度级联运行时（CG/Wigner-D/Chung Eq.52）
-    covariant.py     Chung 协变张量的 numpy 移植（A1）
+    covariant.py     Chung 协变张量（原 jax 版的逐式移植）
     helicity.py      EPS_A ∘ covariant
-  emitter.py         按 [[basis]] 产出自足、numpy-only 的生成脚本
+  emitter.py         按 [[basis]] 产出自足、**jax 优先**的生成脚本
   cli.py             python -m agent.tensor show|check|emit|run|bases|chains
-  tests/             spec / 跨表象 / emitter 三组测试 + jax 对拍 + 性能基准
+  tests/             spec / 跨表象 / emitter / 后端一致性 + jax 对拍 + 性能基准
 ```
 
 ## 3. 一份 TOML，多种表象
@@ -176,32 +177,67 @@ python -m agent.tensor run   specs/phif2.toml --momenta mom.npz --out out --n 20
 ```bash
 python generated/gen_tensor_phif2_covariant.py --momenta mom.npz --out data/gen --batch 128
 python generated/gen_tensor_phif2_helicity.py  --momenta mom.npz --out data/gen --batch 128
-python generated/gen_tensor_phif2.py           --momenta mom.npz --out data/gen   # Omega
+python generated/gen_tensor_phif2.py           --momenta mom.npz --out data/gen --batch 128  # Omega
 ```
 
 `--batch` 是必需的：`P4` 是 4⁸ 张量，单事例 float64 就 512 KB，5865 事例一次
-算要 ~3 GB。生产用 `--batch 128`。
+算要 ~3 GB。生产用 `--batch 128`。三个脚本都支持 `--batch`，且都会按 batch
+做 `jit`（见 §7）。
 
-## 7. 性能：numpy / jax CPU / jax GPU
+后端由环境变量 `TENSOR_BACKEND` 控制（`auto` / `jax` / `numpy`，默认 `auto`）：
+有 jax 就用 jax，没有就回退 numpy。产物目录自带 `_backend.py`，所以脚本
+**不依赖 `agent.tensor` 包**，在任意工作目录都能跑。
 
-远程 HEP1（2×RTX3090，jax 0.10.2，float64）上，同一份 5865 事例、同一份
-物理量、`--batch 128`，三种后端：
+## 7. 后端：统一到 jax（numpy 为回退）
+
+`kernels/_backend.py` 是唯一的后端开关：
+
+```bash
+TENSOR_BACKEND=auto    # 默认：有 jax 就用 jax，否则 numpy
+TENSOR_BACKEND=jax     # 强制 jax（没有 jax 直接报错，不静默降级）
+TENSOR_BACKEND=numpy   # 强制 numpy（对拍 / 无 GPU 环境）
+```
+
+**生产路径是 jax**：生成脚本对每个 batch 做一次 `jit`，XLA 负责常量折叠与
+GPU 并行；jax 侧强制 `jax_enable_x64`（float32 会把相对误差抬到 1e-7，够不着
+生产 cache 的 1e-12 验收线）。numpy 路径保留为**回退与数值基准**：
+
+* 生成器本身（`emit` / `check` / `show`）不 import jax，在没有 jax 的机器上
+  照样能出代码；
+* 拟合侧与生产 cache 的一致性检验仍以 numpy 结果为准（它没有后端依赖）。
+
+远程 HEP1（2×RTX3090，float64）上，同一份 5865 事例、同一份物理量、
+`--batch 128`，三种后端的实测：
 
 | 后端 | 总时间 | 吞吐 | 相对 numpy |
 |---|---|---|---|
-| numpy（A1 移植，CPU） | 1.492 s | 3 930 ev/s | 1.00× |
+| numpy（CPU） | 1.492 s | 3 930 ev/s | 1.00× |
 | jax（CPU） | 0.362 s | 16 199 ev/s | **4.1×** |
 | jax（GPU, cuda:0） | 0.071 s | 82 865 ev/s | **21.1×** |
 
-三者的 checksum **完全相同**（5.361629e+07），即移植没有改变数值。
+三者的 checksum **完全相同**（5.361629e+07），即后端切换没有改变数值。
+GPU 相对 CPU 有明确提升（jax GPU 比 jax CPU 快 5.1×，比 numpy 快 21×），
+所以统一用 jax、与拟合部分保持一致。逐道看，`phif243`（P4）在三者里都是
+主导项。
 
-**结论：统一使用 jax，与拟合部分保持一致。** GPU 相对 CPU 有明确提升
-（jax GPU 比 jax CPU 快 5.1×，比 numpy 快 21×），符合"有明确性能提升就统一
-用 jax"的判据。逐道看，`phif243`（P4）在三者里都是主导项。
+### 移植到 jax 时踩到的坑（都在 `test_backend.py` 里锁住）
 
-### 移植过程中定位并修掉的两个热点
+jax 数组**不可变**、`jit` 里不能用 numpy、`jnp.einsum` 不接受 numpy 的
+`einsum_path` 格式。逐条对应：
 
-`covariant.py` 是逐式移植，但直接照搬 `einsum` 会有两处严重低效：
+1. **逐项赋值**：`D_lambda` / `node_factors` / `cg_matrix` / `small_d_weight`
+   原来用 `out[i, j] = ...` 建数组。与事例无关的常量表（CG、Wigner-d、度规、
+   ε 张量）改成 **host numpy 常量**（XLA 编译期折叠）；`D_lambda` 那种逐事例
+   的改成向量化 `take` + `where` 掩码。
+2. **tracer 上不能用 numpy**：道函数体与内核里的 `np.` 一律走 `xp`
+   （`_backend.xp`）。投影算子缓存遇到 tracer 时**不缓存**（tracer 的
+   `tobytes()` 拿不到值），直接交给 XLA 折叠。
+3. **jit 的 bool 参数**：`omega(covariant=...)` 里的 `if covariant:` 会让
+   jit 抛 `TracerBoolConversionError`，必须 `static_argnames=("covariant",)`。
+4. **`einsum` 路径**：numpy 侧仍缓存 `optimize="optimal"` 路径；jax 侧交给
+   XLA 自己的收缩规划。
+
+### numpy 侧保留的两个热点优化
 
 1. **对角度规升指标**：`T^{o...} = Σ G^{oi}…T_{i...}`，G 是对角的，求和只剩
    `i=o, j=p, …` 一项，等价于乘符号外积。P3 那种 6 指标的升指标从
@@ -210,7 +246,7 @@ python generated/gen_tensor_phif2.py           --momenta mom.npz --out data/gen 
    的中间张量。缓存 `optimize="optimal"` 的路径后从 0.10 s 降到 0.0001 s
    （**~1000×**），逐位相同。
 
-合计：整批 5865 事例从 9.75 s 降到 1.49 s，checksum 不变。
+合计：整批 5865 事例从 9.75 s 降到 1.49 s（numpy 侧），checksum 不变。
 
 ## 8. 验收
 
@@ -218,6 +254,8 @@ python generated/gen_tensor_phif2.py           --momenta mom.npz --out data/gen 
 |---|---|---|
 | 1 | **重算生产 cache**：`covariant` → `phif{0,2}_kk.npy`，`omega` → `Omega/K/M.npy` | PASS（rel ≤ 6.6e-15） |
 | 1b | 协变内核与原 jax 版逐式一致（rel < 1e-12） | PASS（14/14 对象，最大 1.3e-15） |
+| 1c | **jax 与 numpy 两后端逐道、逐对象一致**（17 道 + Omega/K） | PASS（rel ≤ 2.7e-15） |
+| 1d | **生成的 3 类脚本在 jax 下跑得动，且与 numpy 后端逐文件一致** | PASS（rel ≤ 1.3e-15） |
 | 2 | 跨表象恒等式 `\|W₊₁\|²+\|W₋₁\|² == \|T_x\|²+\|T_y\|²` | PASS（≤ 4.4e-16） |
 | 3 | `precompute` 与拟合时 `amplitude` 给出同一 W | PASS（0.0） |
 | 4 | 同一 TOML 两次 emit 字节一致 | PASS |
@@ -229,11 +267,15 @@ python generated/gen_tensor_phif2.py           --momenta mom.npz --out data/gen 
 跑测试：
 
 ```bash
-python agent/tensor/tests/test_spec.py              # 8/8
+python agent/tensor/tests/test_spec.py              # 11/11
 python agent/tensor/tests/test_cross_basis.py       # 5/5
-python agent/tensor/tests/test_emitter.py           # 3/3
+python agent/tensor/tests/test_emitter.py           # 4/4（含"产物在 jax 下跑"）
+python agent/tensor/tests/test_backend.py           # 3/3（jax vs numpy，17 道）
 python agent/tensor/tests/test_production_cache.py  # 4/4（需 tmp/bundledata/）
 TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax.py
+
+# 想看 jax 路径的测试：用带 jax 的解释器 + TENSOR_BACKEND=jax
+TENSOR_BACKEND=jax <带 jax 的 python> agent/tensor/tests/test_production_cache.py
 ```
 
 ### 生产 cache 回归（最硬的一条）
@@ -451,7 +493,8 @@ $ grep -c "chain\|nodes" agent/tensor/kernels/covariant.py
 ## 11. 例 3 的 ρ′/b₁ 道（`chains/rhopi` + `chains/b1pi`）
 
 文档 `analyses/kk_dis/document/ψ衰变到介子的分波分析协变张量形式.md` 374–416 行
-的 10 个振幅，逐式 numpy 移植自 `Tensor/FUNC.py::{_u_rho_*, _u_SS/SD/DS/DD_*}`。
+的 10 个振幅，逐式移植自 `Tensor/FUNC.py::{_u_rho_*, _u_SS/SD/DS/DD_*}`（与
+其余内核一样走 `_backend.xp`，jax / numpy 两条后端都可用）。
 
 | 族 | 道 | 文档 | 完备标签 |
 |---|---|---|---|
@@ -475,7 +518,6 @@ TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax
 
 # 纯 numpy 自洽性（8 项，永远能跑）：发现/导入/有限性/旁观者对调/独立性/深度分级/emit
 python agent/tensor/tests/test_ex3_channels.py
-
 # 端到端：合成四动量 -> 生成脚本 -> 产物 vs 内核 + W = EPS_A·T
 analyses/kk_dis/.venv/bin/python analyses/tensor_examples/check_ex3.py --n 500
 ```

@@ -3,7 +3,7 @@
 r"""Eq.(48) 第二项：$U^\mu_{b_1 SD}$ —— 把粒子 3 与 4 对调。
 
 文档《ψ衰变到介子的分波分析协变张量形式》391–416 行。
-参考实现 `Tensor/FUNC.py::_u_SD_2`（jax），本文件是逐式 numpy 移植。
+参考实现 `Tensor/FUNC.py::_u_SD_2`（jax），本文件是逐式移植（走 `_backend.xp`，jax / numpy 两后端通用）。
 
 粒子编号（与文档一致）：K+=1，K-=2，pi+=3，pi-=4
 
@@ -14,7 +14,12 @@ $\tilde t^{(2)\mu\nu}_{(\phi 4)}$。
 """
 from __future__ import annotations
 
-import numpy as np
+try:                      # 包内（正常路径）
+    from ...kernels import _backend as _B
+except ImportError:       # 被 emitter 内联进产物脚本后
+    import _backend as _B
+
+xp = _B.xp
 
 from ...kernels.covariant import T1_cov, T2_cov, _raise_last
 
@@ -24,4 +29,4 @@ def u_SD_2(psi, phi, f2, Kp, Km, Pip, Pim):
     t2_cov = T2_cov(b1, phi, Pim)       # \tilde t^{(2)}_{(\phi 4)\mu\nu}
     t2_con = _raise_last(t2_cov, 2)
     t1_cov = T1_cov(phi, Kp, Km)        # \tilde t^{(1)}_{(12)\nu}
-    return np.einsum("eij,ej->ei", t2_con, t1_cov)
+    return xp.einsum("eij,ej->ei", t2_con, t1_cov)

@@ -10,10 +10,11 @@
       basis.py           4 个表象钩子（precompute/amplitude/intensity/env）
       chains/            chain.<name>/chain.<channel>.py 存储层（生成时组装）
       kernels/
+        _backend.py      数值后端：jax 优先，无 jax 时回退 numpy
         omega.py         tf-pwa 无关的螺旋度级联运行时（CG / Wigner-D / Eq.52）
-        covariant.py     Chung 协变张量的 numpy 移植（A1）
+        covariant.py     Chung 协变张量（原 jax 版的逐式移植）
         helicity.py      EPS_A ∘ covariant
-      emitter.py         按 basis 产出自足、numpy-only 的生成脚本
+      emitter.py         按 basis 产出自足、**jax 优先**的生成脚本
       cli.py             python -m agent.tensor show|check|emit
 """
 from __future__ import annotations

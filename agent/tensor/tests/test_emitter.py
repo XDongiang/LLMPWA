@@ -162,6 +162,59 @@ def test_generated_script_runs_and_is_selfcontained():
         assert np.abs(W - hl).max() < 1e-12, np.abs(W - hl).max()
 
 
+def _jax_python():
+    """找带 jax 的解释器（分析 venv 优先）；没有就返回 None。"""
+    cands = [os.path.join(_ROOT, "analyses", "kk_dis", ".venv", "bin", "python"),
+             sys.executable]
+    for p in cands:
+        if not os.path.exists(p):
+            continue
+        rc = subprocess.call([p, "-c", "import jax"],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        if rc == 0:
+            return p
+    return None
+
+
+def test_generated_scripts_run_under_jax():
+    """产物在 **jax 后端**下跑得动，且与 numpy 后端逐位一致。
+
+    这条是"统一到 jax"的端到端判据：内核在 jit 里必须没有 tracer 违规
+    （逐项赋值 / numpy 调用 / bool 转换），否则这里会直接非零退出。
+    """
+    jax_py = _jax_python()
+    if jax_py is None:
+        print("    跳过：环境里没有 jax")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        s = _spec(tmp)
+        gdir = os.path.join(tmp, "g")
+        r = emitter.emit(s, out_dir=gdir)
+        mom = _momenta(os.path.join(tmp, "mom.npz"))
+        outs = {}
+        for backend in ("numpy", "jax"):
+            out = os.path.join(tmp, "out_" + backend)
+            env = dict(os.environ, TENSOR_BACKEND=backend,
+                       JAX_PLATFORMS="cpu",
+                       XLA_PYTHON_CLIENT_PREALLOCATE="false")
+            for e in r["scripts"]:
+                rc = subprocess.call([jax_py, e["script"], "--momenta", mom,
+                                      "--out", out, "--batch", "8"], env=env)
+                assert rc == 0, "%s（backend=%s）" % (e["script"], backend)
+            outs[backend] = out
+
+        # 逐文件比对两个后端：covariant/helicity 的产物 + Omega/K/M/g/norm
+        names = sorted(os.listdir(outs["numpy"]))
+        assert names, "没有产物"
+        for fn in names:
+            a = np.load(os.path.join(outs["numpy"], fn))
+            b = np.load(os.path.join(outs["jax"], fn))
+            assert a.shape == b.shape, (fn, a.shape, b.shape)
+            rel = np.abs(a - b).max() / max(float(np.abs(a).max()), 1e-300)
+            assert rel < 1e-12, "%s 两后端不一致 rel=%.3e" % (fn, rel)
+
+
 def _momenta(path, n=16, seed=5):
     """写一份真实的 psi(2S) -> phi f2 -> (K+K-)(pi+pi-) 四动量 npz。"""
     rng = np.random.default_rng(seed)

@@ -3,9 +3,9 @@
 r"""Eq.(46)：$U^\mu_{\rho'}$ 的第一项 —— $\psi\to\rho'\pi^+$，$\rho'\to\phi\pi^-$
 
 文档《ψ衰变到介子的分波分析协变张量形式》374–387 行。
-参考实现 `Tensor/FUNC.py::_u_rho_1`（jax），本文件是**逐式 numpy 移植** ——
-只把 `jax.numpy` 换成 `numpy`、把 `self.psi2s` 提成显式参数 `psi`，
-公式一个数字都没动。
+参考实现 `Tensor/FUNC.py::_u_rho_1`（jax），本文件是**逐式移植**
+（走 `_backend.xp`，jax / numpy 两后端通用）：把 `jax.numpy` 换成后端命名空间、
+把 `self.psi2s` 提成显式参数 `psi`，公式一个数字都没动。
 
 粒子编号（与文档一致）：K+=1，K-=2，pi+=3，pi-=4
 
@@ -17,7 +17,12 @@ $\pi^+$（粒子 3）是旁观者，故 $\tilde T^{(1)}_{(\rho'3)}$ 的第三态
 """
 from __future__ import annotations
 
-import numpy as np
+try:                      # 包内（正常路径）
+    from ...kernels import _backend as _B
+except ImportError:       # 被 emitter 内联进产物脚本后
+    import _backend as _B
+
+xp = _B.xp
 
 from ...kernels.covariant import (
     Gt_con, T1_cov, _einsum, _leci_con, _metric_axis, leci_four, metric,
