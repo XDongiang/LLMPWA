@@ -151,3 +151,5 @@ pipeline_state.json
 tmp/
 task/
 literature/
+analyses/tensor_examples/_work/
+
