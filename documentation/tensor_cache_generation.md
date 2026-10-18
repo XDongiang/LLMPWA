@@ -24,6 +24,8 @@ agent/tensor/
   spec.py            统一 TOML schema：粒子/级联 + 道表 + [[basis]]
   basis.py           4 个表象钩子（precompute/amplitude/intensity/env）
   chains/            chain.<name>/chain.<channel>.py 存储层（生成时组装）
+    phif0/ phif2/    psi->phi f_J 的 7 条道（Eq.36-45）
+    rhopi/ b1pi/     例 3 的 10 条 rho'/b1 道（Eq.46-50，见 §11）
   kernels/
     omega.py         tf-pwa 无关的螺旋度级联运行时（CG/Wigner-D/Chung Eq.52）
     covariant.py     Chung 协变张量的 numpy 移植（A1）
@@ -76,8 +78,11 @@ f0 自旋为 0，S 只能来自 phi，故 `s ≡ 1`、`l` 取偶数，只有 2 �
 
 ```
 agent/tensor/chains/
-  phif0/  __init__.py  phif001.py  phif021.py
-  phif2/  __init__.py  phif201.py  phif221.py  phif222.py  phif223.py  phif243.py
+  phif0/   __init__.py  phif001.py  phif021.py
+  phif2/   __init__.py  phif201.py  phif221.py  phif222.py  phif223.py  phif243.py
+  rhopi/   __init__.py  u_rho_1.py  u_rho_2.py                  # 例 3 的 rho'
+  b1pi/    __init__.py  u_SS_{1,2}.py  u_SD_{1,2}.py            # 例 3 的 b1
+                        u_DS_{1,2}.py  u_DD_{1,2}.py
 ```
 
 每个文件导出与文件同名的函数：
@@ -87,8 +92,37 @@ def phif223(psi, phi, f2, Kp, Km, Pip, Pim) -> (N, 4)
 ```
 
 `chains.load_chain("phif2")` 在进程内动态装配；`chains.list_chains()` /
-`list_channels(chain)` 用于发现。若某个道在 `chains/` 里没有文件，`emitter`
-会退回 `kernels/covariant.py` 里的实现并在返回值里记下 `fallback`。
+`list_channels(chain)` 用于发现，`chains.find_channel(name)` 跨目录按道名找。
+若某个道在 `chains/` 里没有文件，`emitter` 会退回 `kernels/covariant.py` 里的
+实现并在返回值里记下 `fallback`。
+
+### 4.1 一份 spec 可以跨多个 chain 目录
+
+例 3 的 ρ′ 与 b₁ 是**两棵不同的树**（中间态分别是 `φ+π⁻` 与 `φ+π⁺`），一棵树
+只能描述一组配对。所以它们分成两个 chain 目录、两份 TOML，而不是硬塞进一份：
+
+```
+analyses/tensor_examples/specs/ex3_rhopi.toml   chain_name = "rhopi"
+analyses/tensor_examples/specs/ex3_b1pi.toml    chain_name = "b1pi"
+```
+
+`emitter` 先按 `[chain].chain_name` 指定的目录找道，找不到再跨目录按道名找
+（`chains.all_channels()`），并在返回值里给出 `from_chain: {道名: 链名}`。
+道名全局唯一，所以跨目录不会歧义。
+
+### 4.2 新增道只写在 `chains/` 里
+
+`kernels/covariant.py` 里那 7 条 `_phif*` 是 A1 移植的落点，属于历史；
+**之后新增的道（例 3、例 5）只写在 `chains/` 里**，由
+`kernels/covariant.channel_fn()` 惰性回退过去：
+
+```python
+COV.channel_fn("phif001")   # 命中 _CHANNELS（内核里的副本）
+COV.channel_fn("u_rho_1")   # 回退 chains/rhopi/u_rho_1.py
+COV.available_channels()    # 两边合起来
+```
+
+这样同一份公式不会存两处，避免日后改一处漏一处。
 
 ## 5. 四个表象
 
@@ -389,7 +423,66 @@ python -m agent.tensor run phif2.toml --momenta <npz> --out <dir>
 读 `<chain>_hel.npy`（已经是复数 W）时会把虚部悄悄丢掉 —— 现已保留 dtype，
 并用 `already_rotated=True` 区分"要不要再乘一次 `EPS_A`"。
 
-## 10. 已知边界（不在本次范围）
+## 10. 深度限制按表象分级（2026-10-19 修正）
+
+`spec.validate` 原本无条件拒绝级联深度 > 2 的树，理由是「runtime 只算
+`D0*D1*D2`」。但实测表明**这条限制只对 omega 内核成立**：
+
+```
+$ grep -c "chain\|nodes" agent/tensor/kernels/covariant.py
+0
+```
+
+协变张量的道函数是**按道名硬编码的公式**，完全不读树结构；只有
+`kernels/omega.py` 的 `chain_angles` / `D_lambda` 才逐节点读树。
+
+现在改为**按 `[[basis]]` 分级**：
+
+* 只要这份 spec 出了 `kernel = "omega"` 且深度 > 2 → **报错**（维持原行为）；
+* 只出 `cartesian` / `helicity` → **放行**（深度不限）。
+
+这与「`J<=4` / `l<=4` 是 omega 专属约束」是同一类问题：能力边界挂在**表象**上，
+不该挂在 spec 上。`spec["depth"]` 现在总是被记录，供调用方查询。
+
+判据（`agent/tensor/tests/test_ex3_channels.py::test_depth_grading`）：
+三层树 `ψ→ρ′π, ρ′→φπ, φ→K⁺K⁻` 在 cartesian/helicity 下读入成功，
+追加一个 `[[basis]] name="omega"` 后被拒。
+
+## 11. 例 3 的 ρ′/b₁ 道（`chains/rhopi` + `chains/b1pi`）
+
+文档 `analyses/kk_dis/document/ψ衰变到介子的分波分析协变张量形式.md` 374–416 行
+的 10 个振幅，逐式 numpy 移植自 `Tensor/FUNC.py::{_u_rho_*, _u_SS/SD/DS/DD_*}`。
+
+| 族 | 道 | 文档 | 完备标签 |
+|---|---|---|---|
+| ρ′ | `u_rho_1` `u_rho_2` | Eq.(46) | 只有一个独立振幅；`_1`/`_2` 是旁观者 π 的取法 |
+| b₁ | `u_SS_{1,2}` `u_SD_{1,2}` `u_DS_{1,2}` `u_DD_{1,2}` | Eq.(47)–(50) | 顶层波 × 内层波 = SS/SD/DS/DD，各两种旁观者 |
+
+三条容易踩的约定：
+
+1. **`_1`/`_2` 在两个族里含义相反**（照抄参考实现的命名）：
+   ρ′ 族 `_1` 的旁观者是粒子 3（π⁺），b₁ 族 `_1` 的旁观者是粒子 4（π⁻）。
+2. **`(l,s)` 不是 b₁ 族的完备标签**：8 条道只映射到 2 组 `(l,s)`，所以
+   `[chain].check_channels = false`，且**不能**用 omega 表象。
+3. **签名统一为 `(psi, phi, f2, Kp, Km, Pip, Pim)`**，即使 ρ′/b₁ 族忽略
+   `phi` / `f2` —— 这样道表可以混装两个族的道（见 `emitter.py::raw_tensors`）。
+
+验收（两条独立路径）：
+
+```bash
+# 与 jax 原版逐式对拍（24 个对象：7 原语 + 7 旧道 + 10 新道，rel < 1e-12）
+TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax.py
+
+# 纯 numpy 自洽性（8 项，永远能跑）：发现/导入/有限性/旁观者对调/独立性/深度分级/emit
+python agent/tensor/tests/test_ex3_channels.py
+
+# 端到端：合成四动量 -> 生成脚本 -> 产物 vs 内核 + W = EPS_A·T
+analyses/kk_dis/.venv/bin/python analyses/tensor_examples/check_ex3.py --n 500
+```
+
+分析目录见 [`analyses/tensor_examples/README.md`](../analyses/tensor_examples/README.md)。
+
+## 12. 已知边界（不在本次范围）
 
 * `pipegen/{bundle,emitter,slice_bundle_data}.py` 的既有缺陷未修：
   `emitter.py:905-906` 的 `TASK_ROOT` 差一级（`exit=127`）；

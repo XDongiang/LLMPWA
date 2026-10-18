@@ -92,10 +92,23 @@ def _normalise(raw, base):
             d["daughters"] = list(d["daughters"])
         particles[nm] = d
 
+    # [[channel]] 的扩展字段（全部可选）：
+    #   family   把若干道合成一个"族"，产出用同一个后缀（如 f0 族写 Omega0.npy）
+    #   note     写进产物注释的自由文本
     channels = []
     for c in (raw.get("channel") or []):
-        channels.append({"name": c["name"], "l": int(c["l"]), "s": int(c["s"]),
-                         "family": c.get("family", "")})
+        if "name" not in c:
+            raise SpecError("[[channel]] 缺 name")
+        for req in ("l", "s"):
+            if req not in c:
+                raise SpecError("[[channel]] %s 缺 %s" % (c["name"], req))
+        channels.append({
+            "name": c["name"],
+            "l": int(c["l"]),
+            "s": int(c["s"]),
+            "family": c.get("family", ""),
+            "note": c.get("note", ""),
+        })
 
     # [[basis]]：一份 TOML 要产出哪几种表象。省略 = 只出协变张量。
     bases = []
@@ -175,18 +188,34 @@ def validate(spec):
 
     walk(top)
 
-    # 级联深度：runtime 只算 `D0 * D1 * D2`（顶层 + 两个子节点各一层），
-    # 所以**只支持两级级联**。三层的树（如 psi2s -> X + Y, X -> A + B,
-    # A -> C + D）会静默漏掉最内层的角分布 —— 这里提前拒绝（审计 §2.3）。
+    # 级联深度：**按表象分级**（见 documentation/tensor_examples_feasibility.md §4）。
+    #
+    # `kernels/omega.py` 的 `chain_angles` / `D_lambda` 逐节点读树、只算
+    # `D0 * D1 * D2`，所以对 omega 表象来说深度 > 2 会**静默漏掉最内层的角分布**，
+    # 必须在这里拒绝。
+    #
+    # 但协变/螺度路线**完全不读树**：`chains/<chain>/<channel>.py` 是按道名硬编码
+    # 的公式（`grep -c "chain\|nodes" kernels/covariant.py` == 0）。所以只要这份
+    # spec 不出 omega 表象，三层树（如例 5 的 `psi -> K*_2 pi, K*_2 -> phi pi,
+    # phi -> K+K-`）是可以算的，不该被拒。
+    #
+    # 这与「`J<=4` / `l<=4` 是 omega 专属约束」是同一类问题：能力边界挂在表象上，
+    # 不该挂在 spec 上。
     def _depth(n):
         ds = _children(spec, n)
         return 0 if not ds else 1 + max(_depth(d) for d in ds)
 
     depth = _depth(top)
-    if depth > 2:
+    spec["depth"] = depth
+    _bases = spec["bases"] or [{"name": "omega", "kernel": "omega"}]
+    wants_omega = any((b.get("kernel") or b["name"]) == "omega" for b in _bases)
+    if depth > 2 and wants_omega:
         raise SpecError(
-            "链的级联深度是 %d，内核只支持 2 级（顶层 + 一层共振）；"
-            "runtime 只算 D0*D1*D2，更深的树会静默漏掉内层角分布" % depth)
+            "链的级联深度是 %d，但这份 spec 出了 omega 表象；omega 内核只算 "
+            "D0*D1*D2（顶层 + 一层共振），更深的树会静默漏掉内层角分布。\n"
+            "  要么把树压到 2 级，要么去掉 [[basis]] name=\"omega\" "
+            "（协变/螺度路线按道名硬编码公式，不读树，深度不限）。"
+            % depth)
 
     leaves = [n for n in order if not _children(spec, n)]
     keys = spec["input_keys"]

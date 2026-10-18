@@ -28,6 +28,8 @@ phif223/phif243` 一一对应）由 `channels()` 返回。
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 # R = 1 -> Q0
@@ -497,12 +499,82 @@ _CHANNELS = {
     "phif243": _phif243,
 }
 
+# 上面 7 条道在 `chains/` 里也有同名文件（emitter 从那里取源码组装产物）。
+# 它们在这里保留一份函数副本是历史原因（本内核是 A1 移植的落点）。
+#
+# 之后新增的道（例 3 的 rho'/b1、例 5 的 K*_0/K*_2）**只写在 `chains/` 里**，
+# 由 `channel_fn` 惰性回退过去 —— 避免同一份公式存两处、日后改一处漏一处。
+_LEGACY_CHAINS = {"phif001": "phif0", "phif021": "phif0",
+                  "phif201": "phif2", "phif221": "phif2",
+                  "phif222": "phif2", "phif223": "phif2", "phif243": "phif2"}
+
+
+def _chains_module():
+    """取 `agent.tensor.chains` —— 兼容三种导入方式。
+
+    1. `agent.tensor` 内部（正常路径）：`from .. import chains`；
+    2. 被当作**顶层模块**直接导入（`tests/test_covariant_vs_jax.py` 就把
+       `kernels/` 加进 sys.path 后 `import covariant`）；
+    3. 被 `emitter` 拷贝成产物目录里的 `covariant.py` 后导入。
+
+    后两种情况下相对导入无父包可依，于是**向上找**含
+    `agent/tensor/chains/__init__.py` 的目录。找不到就抛 ImportError ——
+    产物脚本本身不调用 `channel_fn`（道函数体已内联），所以这只是
+    "在产物目录里手搓调用"时的兜底。
+    """
+    try:
+        from .. import chains as m
+        return m
+    except ImportError:
+        pass
+    import sys
+    d = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(8):
+        root = os.path.dirname(d)
+        if root == d:
+            break
+        if os.path.isfile(os.path.join(root, "agent", "tensor", "chains",
+                                       "__init__.py")):
+            if root not in sys.path:
+                sys.path.insert(0, root)
+            from agent.tensor import chains as m
+            return m
+        d = root
+    raise ImportError(
+        "找不到 agent/tensor/chains/ —— 无法按道名装配新道函数。"
+        "产物脚本不依赖它（道函数体已内联），只有在产物目录里直接调用 "
+        "channel_fn() 时才需要。")
+
+
+def _chain_channel_map():
+    """惰性扫 `chains/`，返回 {道名: 链名}（不含上面 7 条 legacy 道）。"""
+    out = {}
+    for c in _chains_module().list_chains():
+        for nm in _chains_module().list_channels(c):
+            out.setdefault(nm, c)
+    return out
+
 
 def channel_fn(name):
-    """按道名取函数：fn(psi, phi, f2, Kp, Km, Pip, Pim) -> (N, 4)。"""
-    if name not in _CHANNELS:
-        raise KeyError("未知道 %r；可用：%s" % (name, sorted(_CHANNELS)))
-    return _CHANNELS[name]
+    """按道名取函数：fn(psi, phi, f2, Kp, Km, Pip, Pim) -> (N, 4)。
+
+    先在 `_CHANNELS`（本文件的 7 条 legacy 道）里找，找不到就回退到
+    `agent/tensor/chains/<chain>/<channel>.py`（新增道的唯一存放处）。
+    """
+    if name in _CHANNELS:
+        return _CHANNELS[name]
+    chainsmod = _chains_module()
+    for chain in chainsmod.list_chains():
+        if name in chainsmod.list_channels(chain):
+            return chainsmod.load_channel(chain, name)
+    raise KeyError("未知道 %r；可用：%s" % (name, sorted(available_channels())))
+
+
+def available_channels():
+    """本内核能算的全部道名（legacy 7 条 + `chains/` 里的全部）。"""
+    out = set(_CHANNELS)
+    out.update(_chain_channel_map())
+    return out
 
 
 def compute_event(name, momenta, psi=None):

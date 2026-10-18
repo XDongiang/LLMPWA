@@ -65,4 +65,27 @@ def load_chain(chain):
     return {c: load_channel(chain, c) for c in list_channels(chain)}
 
 
-__all__ = ["list_chains", "list_channels", "load_channel", "load_chain"]
+def find_channel(channel):
+    """跨链找一条道，返回链名；找不到返回 None。
+
+    一份 spec 可以跨多个 chain 目录取道（例 3 同时用 `rhopi` 的 rho' 与
+    `b1pi` 的 b1 —— 两条链的树不同，不能合成一个目录）。道名全局唯一，
+    所以按名扫描即可；若有重名，返回**第一个**（按链名排序）。
+    """
+    for c in list_chains():
+        if channel in list_channels(c):
+            return c
+    return None
+
+
+def all_channels():
+    """{道名: 链名}，跨全部链目录（重名时保留链名排序最靠前的那个）。"""
+    out = {}
+    for c in list_chains():
+        for nm in list_channels(c):
+            out.setdefault(nm, c)
+    return out
+
+
+__all__ = ["list_chains", "list_channels", "load_channel", "load_chain",
+           "find_channel", "all_channels"]

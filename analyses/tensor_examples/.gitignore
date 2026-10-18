@@ -1,0 +1,6 @@
+# 生成物与运行产物：由 `specs/*.toml` + `data/make_momenta.py` 完全可复现，
+# 不入库（仓库根的 .gitignore 已经挡掉 *.npz / *.npy，这里补齐目录与 pyc）。
+generated/
+out/
+__pycache__/
+*.pyc

@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+r"""Eq.(49) 第一项：$U^\mu_{b_1 DS}$ —— $\psi\to b_1\pi$ D 波、$b_1\to\phi\pi$ S 波。
+
+文档《ψ衰变到介子的分波分析协变张量形式》391–416 行。
+参考实现 `Tensor/FUNC.py::_u_DS_1`（jax），本文件是逐式 numpy 移植。
+
+粒子编号（与文档一致）：K+=1，K-=2，pi+=3，pi-=4
+
+本项：$b_1$ 由 $(1,2,3)=\phi\pi^+$ 重建（`b1 = Kp + Km + Pip`）。
+$\psi\to b_1\pi$ 的 D 波给出 $\tilde T^{(2)\mu\lambda}_{(b_1 4)}$，
+与 $\tilde g_{(123)\lambda\nu}$ 及 $\tilde t^{(1)\nu}_{(12)}$ 依次缩并。
+
+顶层 (l,s) = (0,1)
+"""
+from __future__ import annotations
+
+import numpy as np
+
+from ...kernels.covariant import Gt_cov, T1_cov, T2_cov, _metric_axis, _raise_last
+
+
+def u_DS_1(psi, phi, f2, Kp, Km, Pip, Pim):
+    b1 = Kp + Km + Pip
+    gt_cov = Gt_cov(b1)                     # \tilde g_{(123)\lambda\nu}
+    t2_cov = T2_cov(psi, b1, Pim)           # \tilde T^{(2)}_{(b_1 4)\mu\lambda}
+    t2_con = _raise_last(t2_cov, 2)
+    t1_cov = T1_cov(phi, Kp, Km)            # \tilde t^{(1)}_{(12)\nu}
+    t1_con = _metric_axis(t1_cov, 1)
+    return np.einsum("eij,ejk,ek->ei", t2_con, gt_cov, t1_con)

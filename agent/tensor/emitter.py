@@ -263,8 +263,16 @@ def emit(spec, out_dir=None, runtime_src=None):
     with open(os.path.join(out_dir, "README.md"), "w", encoding="utf-8") as fh:
         fh.write(readme)
 
+    # `fallback` = 在 `chains/` 里找不到、退回 `kernels/covariant.py` 的道名。
+    # 非空说明这份 spec 点到了内核里那 7 条 legacy 道（正常），但若点到的名字
+    # 两边都没有，`_extract_channel_body` 早就 FileNotFoundError 了。
+    fallback = sorted({nm for e in scripts for nm in e.get("fallback") or []})
+    from_chain = {}
+    for e in scripts:
+        from_chain.update(e.get("from_chain") or {})
     return {"out_dir": out_dir, "scripts": scripts, "runtime": rt_dst,
-            "channels": ch, "script": scripts[0]["script"]}
+            "channels": ch, "script": scripts[0]["script"],
+            "fallback": fallback, "from_chain": from_chain}
 
 
 # --------------------------------------------------------------- Omega 侧
@@ -339,7 +347,7 @@ if _HERE not in sys.path:
 
 import covariant as CV   # noqa: E402  同目录的协变张量内核副本
 from covariant import (  # noqa: E402,F401  道函数体直接调用这些原语
-    B1, B2, B3, B4, Gt_con, P2, P3, P4, Qabc, T1_cov, T2_cov, T3_cov,
+    B1, B2, B3, B4, Gt_con, Gt_cov, P2, P3, P4, Qabc, T1_cov, T2_cov, T3_cov,
     T4_cov, dot, invm, leci_four, metric,
     _einsum, _leci_con, _metric_axis, _raise_last, _s1_vector,
 )
@@ -373,8 +381,15 @@ def _psi(mom, n):
 
 
 def raw_tensors(mom):
-    """逐道算原始协变张量 T_i(e, mu)，返回 {{道名: (N, 4)}}。"""
-    Kp, Km, Pip, Pim = (mom[:, CHAIN["index"][k]] for k in INPUT_KEYS)
+    """逐道算原始协变张量 T_i(e, mu)，返回 {{道名: (N, 4)}}。
+
+    道函数的签名固定是 `(psi, phi, f2, Kp, Km, Pip, Pim)`（见
+    `agent/tensor/chains/README` 的约定）。`phi` / `f2` 只对
+    `<phi f_J|LS>` 那些道有意义，rho'/b1 族忽略它们 —— 但签名保持统一，
+    这样道表可以混装两个族的道。
+    """
+    Kp, Km = mom[:, CHAIN["index"]["Kp"]], mom[:, CHAIN["index"]["Km"]]
+    Pip, Pim = mom[:, CHAIN["index"]["Pip"]], mom[:, CHAIN["index"]["Pim"]]
     phi, f2 = Kp + Km, Pip + Pim
     psi = _psi(mom, Kp.shape[0])
     args = (psi, phi, f2, Kp, Km, Pip, Pim)
@@ -468,13 +483,21 @@ def _emit_covariant(spec, ch, chain, name, out_dir, suffix, basis):
     psi_mass = float(spec["raw"].get("chain", {}).get("psi_mass", 3.686))
 
     # 1) 取道函数体：优先 chain.<name>/chain.<channel>.py，退回 kernels.covariant
-    bodies, missing = [], []
+    #
+    # 一份 spec 可以跨多个 chain 目录取道（例 3 同时用 rhopi 的 rho' 与
+    # b1pi 的 b1 —— 两条链的树不同，不能合成一个目录）。所以先按
+    # `[chain].chain_name` 指定的目录找，找不到再跨目录按道名找。
+    bodies, missing, from_chain = [], [], {}
+    all_ch = chainsmod.all_channels()
     for (nm, _l, _s, _f) in ch:
         body = None
-        if chain_name in chainsmod.list_chains():
-            mods = chainsmod.list_channels(chain_name)
-            if nm in mods:
-                body = _extract_channel_body(chain_name, nm)
+        if chain_name in chainsmod.list_chains() and \
+                nm in chainsmod.list_channels(chain_name):
+            body = _extract_channel_body(chain_name, nm)
+            from_chain[nm] = chain_name
+        elif nm in all_ch:
+            body = _extract_channel_body(all_ch[nm], nm)
+            from_chain[nm] = all_ch[nm]
         if body is None:
             body = _extract_channel_body(None, nm)
             missing.append(nm)
@@ -528,7 +551,8 @@ def _emit_covariant(spec, ch, chain, name, out_dir, suffix, basis):
         fh.write(body)
     return {"basis": basis["name"], "kernel": kernel, "script": script_path,
             "suffix": suffix, "env": dict(basis.get("env") or {}),
-            "from_chain_dir": chain_name, "fallback": missing}
+            "from_chain_dir": chain_name, "from_chain": from_chain,
+            "fallback": missing}
 
 
 def _extract_channel_body(chain_name, channel):

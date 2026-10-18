@@ -87,10 +87,13 @@ documentation/  guides (pipeline state, visualization, dsh workbench, tutorial)
   framework-level tensor cache generation (`agent/tensor/`): one TOML → covariant +
   helicity tensors, the `chain.<name>/chain.<channel>.py` storage convention, and the
   numpy/jax CPU/GPU benchmark
+- [analyses/tensor_examples/README.md](analyses/tensor_examples/README.md) —
+  the regression analysis for the paper's decay examples: example 3's ρ′/b₁ channels
+  (Eq.46–50) are ported and cross-checked against the jax original
 - [documentation/tensor_examples_feasibility.md](documentation/tensor_examples_feasibility.md) —
   which decay examples from the Chung covariant-tensor paper can be turned into tests,
-  and what each one is missing (20 reference channel functions are already implemented
-  in `Tensor/FUNC.py` but not yet ported)
+  and what each one is missing (10 of the 20 unported reference channel functions in
+  `Tensor/FUNC.py` are now ported; the other 10 are example 5)
 - [documentation/README_CN.md](documentation/README_CN.md)
 - [documentation/Tutorial_CN.md](documentation/Tutorial_CN.md) /
   [documentation/Tutorial_EN.md](documentation/Tutorial_EN.md)

@@ -119,6 +119,20 @@ def _rel(a, b):
     return float(np.abs(a - b).max() / max(np.abs(b).max(), 1e-300))
 
 
+# ---------------------------------------------------------- 例 3：phi pi pi
+#
+# 例 3 的 rho'/b1 道需要的不是「psi -> phi f2」那种两体学，而是
+# psi -> phi + (pi pi) 的三体相空间（rho'/b1 由 phi+pi 重建，所以
+# `T1_cov(psi, b1, Pip)` 里 b1 的质量不固定）。
+#
+# **但 `_momenta()` 就已经够用**：它给的 psi -> phi f2 -> (K+K-)(pi+pi-)
+# 满足 phi = Kp+Km、f2 = Pip+Pim，于是
+#     b1 = Kp+Km+Pip = phi + Pip,   b1 + Pim = psi     （恰好）
+#     rho = Kp+Km+Pim = phi + Pim,  rho + Pip = psi    （恰好）
+# 所以每个 `Qabc(a, b, c)` 里的 `a -> b + c` 都是**真**的两体衰变，
+# q^2 恒正，B1/B2 不会 NaN。不需要另写相空间抽样。
+
+
 def check_base(jax, JBASE, verbose=True):
     """T1/T2/T3/T4/P2/P3/P4 逐式对拍。
 
@@ -191,6 +205,44 @@ def check_channels(jax, JFUNC, verbose=True):
     return bad
 
 
+EX3_NAMES = ["u_rho_1", "u_rho_2",
+             "u_SS_1", "u_SS_2", "u_SD_1", "u_SD_2",
+             "u_DS_1", "u_DS_2", "u_DD_1", "u_DD_2"]
+
+
+def check_ex3_channels(jax, JFUNC, verbose=True):
+    """例 3 的 10 条 rho'/b1 道逐道对拍。
+
+    参考实现的签名是 `(phi, Kp, Km, Pip, Pim)`（`phi = Kp + Km` 由调用方预算，
+    `psi` 存在 `self.psi2s` 里）；本移植版是
+    `(psi, phi, f2, Kp, Km, Pip, Pim)`。对拍时必须喂**同一个** psi 口径。
+
+    四动量直接复用 `_momenta()` —— 见上面的注释：rho'/b1 的两体学恰好成立。
+    """
+    mom = _momenta(seed=7, n=4)
+    psi = COV.PSI2S_DEFAULT
+    phi = mom["Kp"] + mom["Km"]
+    f2 = mom["Pip"] + mom["Pim"]
+    J = lambda a: jax.numpy.array(a)  # noqa: E731
+
+    fn = JFUNC.FUNCTION()
+    fn.Modifiers()
+    psi_b = np.broadcast_to(psi, (phi.shape[0], 4))
+    bad = []
+    for name in EX3_NAMES:
+        jv = np.asarray(getattr(fn, name)(
+            *[J(a) for a in (phi, mom["Kp"], mom["Km"], mom["Pip"], mom["Pim"])]))[0]
+        cv = np.asarray(COV.compute_event(name, mom, psi=psi_b))[0]
+        rel = _rel(cv, jv)
+        ok = rel < TOL
+        if verbose:
+            print("  %-8s %-24s rel = %.3e  %s"
+                  % (name, str(jv.shape), rel, "OK" if ok else "**MISMATCH**"))
+        if not ok:
+            bad.append(name)
+    return bad
+
+
 def main():
     tensor_root = os.environ.get("TENSOR_ROOT", "")
     loaded = _load_jax_original(tensor_root)
@@ -202,12 +254,14 @@ def main():
     bad = check_base(jax, JBASE)
     print("=== 七条道：numpy 移植 vs jax 原版 ===")
     bad += check_channels(jax, JFUNC)
+    print("=== 例 3 的 rho'/b1 十条道：numpy 移植 vs jax 原版 ===")
+    bad += check_ex3_channels(jax, JFUNC)
 
     if bad:
         print("\nFAIL：以下对象与原版不一致 -> %s" % ", ".join(bad))
         return 1
     print("\nPASS：全部 %d 个对象与原版一致（rel < %g）"
-          % (7 + len(COV.F0_NAMES + COV.F2_NAMES), TOL))
+          % (7 + len(COV.F0_NAMES + COV.F2_NAMES) + len(EX3_NAMES), TOL))
     return 0
 
 

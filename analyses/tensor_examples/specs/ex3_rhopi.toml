@@ -1,0 +1,96 @@
+# 例 3（rho' 部分）：psi(2S) -> rho' pi -> (phi pi) pi -> (K+K-)(pi+pi-)
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 374–387 行，Eq.(46)。
+#
+# 拓扑：psi(2S) -> rho'(1^{--}) + pi，rho' -> phi + pi，phi -> K+ K-
+#       —— **三层**，所以这份 spec 只出协变/螺度表象，不出 omega
+#       （omega 内核只算 D0*D1*D2，见 agent/tensor/spec.py 的深度分级检查）。
+#
+# 道表：2 条（u_rho_1 / u_rho_2），但自动枚举只给 1 组 (l,s)=(1,1)。
+#       两条道的区别是"哪一个 pi 是旁观者"，不是两个独立分波 —— 所以
+#       (l,s) 在这里**不是完备标签**，必须 check_channels = false。
+#
+# 参考实现：Tensor/FUNC.py::_u_rho_1 / _u_rho_2（已移植到
+#           agent/tensor/chains/rhopi/，逐式 numpy 复刻）。
+
+[chain]
+name = "ex3_rhopi"
+top = "psi2s"
+output = "../generated/ex3_rhopi"
+l_max = 4
+chain_name = "rhopi"
+suffix = "_rhopi"
+# (l,s) 不是完备标签（见上），关掉道表 vs 枚举的交叉检查
+check_channels = false
+
+# psi(2S) 四动量的质量口径（承重）：合成数据用 3.686 生成，
+# 所以这里与 `data/make_momenta.py::M_PSI` 一致。
+psi_mass = 3.686
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rhoprime", "Pip"]
+
+[particles.rhoprime]
+J = 1
+mass = 1.46              # 只是占位；协变张量道函数对任意四动量都成立
+parity = -1
+daughters = ["phi", "Pim"]
+
+[particles.phi]
+J = 1
+mass = 1.019
+parity = -1
+daughters = ["Kp", "Km"]
+l = 1
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+# 顶层 (l,s) 恒为 (1,1)：psi->rho'pi 与 rho'->phi pi 都限于 P 波。
+[[channel]]
+name = "u_rho_1"
+l = 1
+s = 1
+note = "rho' = phi + Pim = (1,2,4)，旁观者 = Pip = 粒子 3"
+
+[[channel]]
+name = "u_rho_2"
+l = 1
+s = 1
+note = "rho' = phi + Pip = (1,2,3)，旁观者 = Pim = 粒子 4"
+
+# ------------------------------------------------------------------ 表象
+# 一份 TOML 同时出协变张量与螺度两种 tensor。
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
