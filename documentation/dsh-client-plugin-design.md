@@ -249,7 +249,7 @@ pnpm exec dsh --profile web --port 3081
 ```
 
 验证点：左侧脚部出现 `LLMPWA 工作台` 按钮；点击后整页工作台打开；下拉可选
-`kk_dis` 等 analysis；选中后渲染出 8 个 stage 的 DAG 与状态；快照缺失时展示可读错误。
+`kk_dis` 等 analysis；选中后渲染出该 config 的全部 stage（`kk_dis` 目前 10 个）的 DAG 与状态；快照缺失时展示可读错误。
 
 ---
 

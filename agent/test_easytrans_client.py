@@ -163,10 +163,146 @@ def test_llm_client_chat_with_tools() -> None:
     print("OK test_llm_client_chat_with_tools")
 
 
+# --------------------------------------------------------------- 重试（§3.5）
+class _StatusBoom(Exception):
+    """带 HTTP 状态码的假异常，形状与 openai.APIStatusError 一致。"""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__("boom")
+        self.status_code = status_code
+
+
+@contextmanager
+def _retry_env(max_retries: int = 3, base: float = 0.0):
+    """把重试参数设成确定性、不真睡的取值。"""
+    keys = ("EASYTRANS_MAX_RETRIES", "EASYTRANS_RETRY_BASE", "EASYTRANS_RETRY_MAX")
+    saved = {k: os.environ.get(k) for k in keys}
+    os.environ["EASYTRANS_MAX_RETRIES"] = str(max_retries)
+    os.environ["EASYTRANS_RETRY_BASE"] = str(base)
+    os.environ["EASYTRANS_RETRY_MAX"] = "0"
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+
+def test_is_retryable_classification() -> None:
+    """429/5xx/网络错误重试；鉴权/参数错误立刻抛出。"""
+    from easytrans_client import is_retryable
+
+    for code in (408, 429, 500, 502, 503, 504):
+        assert is_retryable(_StatusBoom(code)), code
+    for code in (400, 401, 403, 404, 422):
+        assert not is_retryable(_StatusBoom(code)), code
+    # 网关业务码（审计 §3.5 实测撞到的那个）
+    assert is_retryable(Exception(
+        "Error code: 429 - {'code': 'concurrency_limit_exceeded'}"))
+    assert not is_retryable(Exception("invalid request payload"))
+
+    print("OK test_is_retryable_classification")
+
+
+def test_retry_then_success() -> None:
+    """429 连续两次后成功：应重试并返回结果。"""
+    client, _ = _make_client()
+    state = {"n": 0}
+
+    def flaky():
+        state["n"] += 1
+        if state["n"] < 3:
+            raise _StatusBoom(429)
+        return {"choices": [{"message": {"content": "hi"}}]}
+
+    with _retry_env(max_retries=3):
+        out = client._call_with_retry(flaky, "test")
+
+    assert out["choices"][0]["message"]["content"] == "hi"
+    assert state["n"] == 3, state
+    assert client.retry_count == 2, client.retry_count
+    print("OK test_retry_then_success")
+
+
+def test_non_retryable_raises_immediately() -> None:
+    """401 不该重试：只调用一次就抛出。"""
+    from easytrans_client import EasyTransError
+
+    client, _ = _make_client()
+    state = {"n": 0}
+
+    def unauthorized():
+        state["n"] += 1
+        raise _StatusBoom(401)
+
+    with _retry_env(max_retries=3):
+        try:
+            client._call_with_retry(unauthorized, "test")
+        except EasyTransError:
+            pass
+        else:
+            raise AssertionError("401 竟然没有抛出")
+
+    assert state["n"] == 1, state
+    assert client.retry_count == 0, client.retry_count
+    print("OK test_non_retryable_raises_immediately")
+
+
+def test_retries_exhausted() -> None:
+    """一直 503：共调用 1 + max_retries 次后抛出。"""
+    from easytrans_client import EasyTransError
+
+    client, _ = _make_client()
+    state = {"n": 0}
+
+    def always_down():
+        state["n"] += 1
+        raise _StatusBoom(503)
+
+    with _retry_env(max_retries=3):
+        try:
+            client._call_with_retry(always_down, "test")
+        except EasyTransError as e:
+            assert "重试 3 次" in str(e), str(e)
+        else:
+            raise AssertionError("耗尽重试后竟然没有抛出")
+
+    assert state["n"] == 4, state
+    assert client.retry_count == 3, client.retry_count
+    print("OK test_retries_exhausted")
+
+
+def test_chat_completion_retries_through_public_api() -> None:
+    """公共接口 chat_completion 也要走重试（不只是内部 helper）。"""
+    client, completions = _make_client(model="gpt-6-sol")
+    state = {"n": 0}
+    original = completions.create
+
+    def flaky_create(**kwargs):
+        state["n"] += 1
+        if state["n"] < 2:
+            raise _StatusBoom(429)
+        return original(**kwargs)
+
+    completions.create = flaky_create  # type: ignore[assignment]
+    with _retry_env(max_retries=3):
+        out = client.chat_completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert out["choices"][0]["message"]["content"] == "ok"
+    assert state["n"] == 2, state
+    print("OK test_chat_completion_retries_through_public_api")
+
+
 def main() -> None:
     test_resolve_reasoning_effort()
     test_chat_completion_forwards_reasoning_effort()
     test_llm_client_chat_with_tools()
+    test_is_retryable_classification()
+    test_retry_then_success()
+    test_non_retryable_raises_immediately()
+    test_retries_exhausted()
+    test_chat_completion_retries_through_public_api()
     print("\nAll easytrans_client tests passed.")
 
 

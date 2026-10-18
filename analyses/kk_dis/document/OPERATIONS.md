@@ -76,7 +76,7 @@ python3 -m venv .venv
 # 静态检查（不真正跑 LLM）
 ./analyses/kk_dis/run_pipeline.sh --check-only
 
-# 完整流水线（8 个 stage 全自动，无需人工审阅）
+# 完整流水线（10 个 stage 全自动，无需人工审阅）
 ./analyses/kk_dis/run_pipeline.sh
 
 # 只重跑某一 stage（例如改了 likeliood 提示词后）
@@ -89,7 +89,7 @@ python3 -m venv .venv
 2. `cd` 到仓库根（让引擎找到 `.env`）
 3. 用 `.venv/bin/python -m agent.cli --workdir analyses/kk_dis --config llm_config_fit.toml` 执行
 
-### 2.2 流水线 8 个 stage
+### 2.2 流水线 10 个 stage
 
 | # | stage | kind | 产物 |
 |---|-------|------|------|
@@ -101,6 +101,8 @@ python3 -m venv .venv
 | 6 | `classification` | llm | `gen/fragments/classification.json`（传播子分类） |
 | 7 | `generate_likelihood` | agent | **`run/likelihood_function.py`** + `run/likelihood_test_result.txt`（冒烟 PASS≈401.25） |
 | 8 | `generate_fit_script` | agent | **`run/fit_script.py`**（分布式主入口） |
+| 9 | `generate_draw_weight` | agent | `run/draw_weight_script.py`（画权重） |
+| 10 | `generate_draw_plot` | agent | `run/draw_plot_script.py`（画图） |
 
 当前模式：**全非交互**（`require_approval = false`，tools 无 `ask_user`）。公式来源 `document/combined_likelihood_math.md` 通过 `[ref].likelihood_math` 注入 prompt。
 

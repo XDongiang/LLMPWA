@@ -22,12 +22,18 @@ llm_config.toml 结构示例：
   [stages.classification.output]
   all = {type = "file", path = "gen/fragments/classification.json"}
 
+  # foreach 是 kind="llm" 的**修饰符**，不是一种 kind（审计 §4.1）。
+  # 写成 kind = "foreach" 会被 _validate_structure 拒绝。
   [stages.resonance_calculation]
-  kind = "foreach"
-  foreach_source = "stages.classification.all.propagator_classification"
+  kind = "llm"
+  foreach = {type = "ref", path = "stages.classification.all.propagator_classification"}
   prompt = {type = "file", path = "gen/prompts/calculate_function.txt"}
   [stages.resonance_calculation.output]
   all = {type = "file", path = "gen/fragments/resonance_<<key>>.py"}
+
+  # 也可以直接给一串值（不依赖上游 stage）：
+  #   foreach = {type = "list", values = ["a", "b"]}
+  # 旧写法 foreach_source = "stages.x.y" 仍兼容，但只建议在简单场景用。
 """
 
 from __future__ import annotations
@@ -172,10 +178,29 @@ class ConfigLoader:
             if not isinstance(stage, dict):
                 raise ConfigError(f"{path}: stage '{name}' must be a table, got {type(stage)}")
             kind = stage.get("kind", "")
+            if kind == "foreach":
+                # 审计 §4.1：docstring 曾把 foreach 写成一种 kind，照抄会立刻
+                # ConfigError。这里给一个**说清正确写法**的报错，而不是只说
+                # "invalid kind"。
+                raise ConfigError(
+                    f"{path}: stage '{name}' uses kind='foreach', which is not a "
+                    "kind. 'foreach' is a MODIFIER on kind='llm': write "
+                    'kind = "llm" plus '
+                    'foreach = {type = "ref", path = "stages.X.Y"} '
+                    '(or foreach = {type = "list", values = [...]}).'
+                )
             if kind not in ("python", "llm", "agent"):
                 raise ConfigError(
                     f"{path}: stage '{name}' has invalid kind={kind!r}. "
                     f"Expected one of: python, llm, agent"
+                )
+            # foreach 只对 llm 有意义：python/agent 的 stage_runner 不读它，
+            # 静默忽略会让人以为"配了 foreach 但没生效"。
+            if kind != "llm" and (stage.get("foreach") or stage.get("foreach_source")):
+                raise ConfigError(
+                    f"{path}: stage '{name}' (kind={kind!r}) has "
+                    "'foreach'/'foreach_source', but foreach only applies to "
+                    "kind='llm'. Remove it or change the kind."
                 )
             if kind == "python" and not stage.get("handler"):
                 raise ConfigError(f"{path}: stage '{name}' (python) missing 'handler'")
