@@ -1,0 +1,90 @@
+# psi(2S) -> phi f0 -> (K+K-)(pi+pi-)  —— f0 族
+#
+# f0 自旋为 0，S 只能来自 phi，所以 s 恒为 1、l 取偶数（与
+# method4_omega/basis.py::LS_F0 一致：phif001 (0,1) / phif021 (2,1)）。
+# 末轴（lambda_f）长度为 1，与 f2 族共用同一句 einsum("iab,enab->ien")。
+
+[chain]
+name = "phif0"
+top = "psi2s"
+output = "../generated/phif0"
+l_max = 4
+chain_name = "phif0"
+suffix = "0"           # f0 族：Omega0.npy / K0.npy / M0.npy / g0.npy
+# psi(2S) 四动量的质量口径（承重）：
+#   MC 交付样本   3.686         （与 Tensor/FUNC.py 的硬编码一致）
+#   **真实样本**  3.685782956   （psi_mass_residual.md §6b）
+# 用错会让协变张量与生产 cache 的相对差从 1.7e-15 掉到 4.2e-04。
+psi_mass = 3.686           # f0 族：Omega0.npy / K0.npy / M0.npy / g0.npy
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["phi", "f0"]
+
+[particles.phi]
+J = 1
+mass = 1.019
+parity = -1
+daughters = ["Kp", "Km"]
+l = 1
+
+[particles.f0]
+J = 0
+mass = 0.99
+parity = 1
+daughters = ["Pip", "Pim"]
+l = 0                   # f0 -> pi pi 是 S 波（B_0 == 1，无 q^0 因子）
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[[channel]]
+name = "phif001"
+l = 0
+s = 1
+
+[[channel]]
+name = "phif021"
+l = 2
+s = 1
+
+# ------------------------------------------------------------------ 表象选择
+# 一份 TOML 同时产出协变张量与螺度两种 tensor 的生成代码（用户要求）。
+# 省略 [[basis]] 时只出 Omega 一份（与旧 specgen 行为一致）。
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"           # Chung 协变张量 T_i(e,mu)
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"            # W_i = EPS_A . T_i
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+[[basis]]
+name   = "omega"
+kernel = "omega"               # Omega/K/M/g/norm
+env    = { TENSOR_BASIS = "omega", HELICITY_LAYER = "1" }

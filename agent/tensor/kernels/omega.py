@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""与 tf-pwa **无关**的螺旋度级联运行时（纯 numpy，自带 CG / Wigner-D）。
+
+这个文件是 `specgen` 代码生成器的**运行时**：它按一份链描述（`chain` dict）
+算三样东西
+
+    Omega(e, lam_A, lam_b, lam_c)   与 (l,s) 无关的角向对象
+    K_i(e)                          逐道节点标量（位垒因子 x q^l）
+    M_i                             常量 CG 矩阵
+
+生成器把**本文件的源码原样嵌进**产出的 `gen_tensor_*.py`，所以产出文件是
+自足的：只依赖 numpy + math，不 import tf-pwa，也不 import specgen。
+
+链描述（`chain`）约定
+---------------------
+    chain = {
+      "top": "psi2s",
+      "nodes": {
+        "psi2s": {"J": 1, "daughters": ["phi", "f2"],  "mass": 3.686},
+        "phi":   {"J": 1, "daughters": ["Kp", "Km"],   "mass": 1.019, "l": 1},
+        "f2":    {"J": 2, "daughters": ["Pip", "Pim"], "mass": 1.275, "l": 2},
+        "Kp":    {"J": 0, "mass": 0.493677},
+        ...
+      },
+      "finals": ["Kp", "Km", "Pip", "Pim"],   # 四动量轴顺序
+      "index":  {"Kp": 0, "Km": 1, "Pip": 2, "Pim": 3},
+    }
+
+`l` 是**该节点子衰变**的轨道角动量（顶层节点的 l 逐道不同，写在道表里）。
+四动量内部一律 (E, x, y, z)，度规 diag(1,-1,-1,-1)。
+"""
+import math
+
+import numpy as onp
+
+Q0 = 0.197321                       # BASE.py 的 Q0（R = 1）
+G_METRIC = onp.diag([1.0, -1.0, -1.0, -1.0])   # (E,x,y,z)
+LAM_SLOTS = {0: [0], 1: [-1, 0, 1], 2: [-2, -1, 0, 1, 2],
+             3: [-3, -2, -1, 0, 1, 2, 3], 4: [-4, -3, -2, -1, 0, 1, 2, 3, 4]}
+
+
+# ------------------------------------------------------------------ CG / D
+def _f(n):
+    """n! 的整数参数版本；负参数对应 Racah 求和的边界，返回 0。"""
+    if n < -1e-9:
+        return 0.0
+    return float(math.factorial(int(round(n))))
+
+
+def cg(j1, m1, j2, m2, j3, m3):
+    """<j1 m1; j2 m2 | j3 m3>，Condon-Shortley（与 sympy / tf-pwa 同约定）。"""
+    if abs(m1 + m2 - m3) > 1e-9:
+        return 0.0
+    if j3 < abs(j1 - j2) - 1e-9 or j3 > j1 + j2 + 1e-9:
+        return 0.0
+    for j, m in ((j1, m1), (j2, m2), (j3, m3)):
+        if abs(m) > j + 1e-9:
+            return 0.0
+    pre = math.sqrt((2 * j3 + 1) * _f(j1 + j2 - j3) * _f(j1 - j2 + j3)
+                    * _f(-j1 + j2 + j3) / _f(j1 + j2 + j3 + 1))
+    pre *= math.sqrt(_f(j1 + m1) * _f(j1 - m1) * _f(j2 + m2)
+                     * _f(j2 - m2) * _f(j3 + m3) * _f(j3 - m3))
+    s = 0.0
+    for k in range(0, int(round(j1 + j2 - j3)) + 1):
+        d = (_f(k) * _f(j1 + j2 - j3 - k) * _f(j1 - m1 - k)
+             * _f(j2 + m2 - k) * _f(j3 - j2 + m1 + k) * _f(j3 - j1 - m2 + k))
+        if d == 0.0:
+            continue
+        s += (-1.0) ** k / d
+    return pre * s
+
+
+def cg_matrix(ls_list, ja, jb, jc, lam_b, lam_c):
+    """tf-pwa `HelicityDecay._get_cg_matrix` 的等价式（Chung Eq.12）。
+
+        M_i[lam_A, lam_b, lam_c] =
+            sqrt((2l+1)/(2ja+1)) * <jb lam_b; jc -lam_c | s, lam_b-lam_c>
+                                 * <l 0; s lam_b-lam_c | ja, lam_b-lam_c>
+    """
+    m = len(ls_list)
+    ret = onp.zeros((m, len(lam_b), len(lam_c)))
+    for i, (l, s) in enumerate(ls_list):
+        for i1, lb in enumerate(lam_b):
+            for i2, lc in enumerate(lam_c):
+                ret[i, i1, i2] = (math.sqrt(2 * l + 1) / math.sqrt(2 * ja + 1)
+                                  * cg(jb, lb, jc, -lc, s, lb - lc)
+                                  * cg(l, 0, s, lb - lc, ja, lb - lc))
+    return ret
+
+
+def small_d_weight(j):
+    """tf-pwa `dfun.small_d_weight`；这里的 j 是 **2J**。"""
+    ret = onp.zeros((j + 1, j + 1, j + 1))
+
+    def f(x):
+        return math.factorial(x >> 1)
+
+    for m in range(-j, j + 1, 2):
+        for n in range(-j, j + 1, 2):
+            for k in range(max(0, n - m), min(j - m, j + n) + 1, 2):
+                l = (2 * k + (m - n)) // 2
+                sign = (-1) ** ((k + m - n) // 2)
+                tmp = sign * math.sqrt(1.0 * f(j + m) * f(j - m) * f(j + n) * f(j - n))
+                tmp /= f(j - m - k) * f(j + n - k) * f(k + m - n) * f(k)
+                ret[l][(m + j) // 2][(n + j) // 2] = tmp
+    return ret
+
+
+def small_d_matrix(theta, j):
+    a = onp.arange(0, j + 1)[None, :]
+    ht = 0.5 * theta
+    sc = onp.sin(ht)[:, None] ** a * onp.cos(ht)[:, None] ** (j - a)
+    w = small_d_weight(j).reshape(j + 1, (j + 1) * (j + 1))
+    return (sc @ w).reshape(-1, j + 1, j + 1)
+
+
+def D_conj(alpha, beta, gamma, J):
+    """D^{J*}_{m1,m2}(alpha,beta,gamma)，行 m1 = -J..J。"""
+    m = onp.arange(-J, J + 1)
+    d = small_d_matrix(beta, 2 * J)
+    ea = onp.exp(1j * m[None, :] * alpha[:, None])
+    eg = onp.exp(1j * m[None, :] * gamma[:, None])
+    return ea[:, :, None] * d * eg[:, None, :]
+
+
+def D_lambda(ang, J, la, lb, lc):
+    """取 D^{J*}_{la, lb-lc}；la/lb/lc 是螺旋度列表，|lb-lc|>J 的元素为 0。"""
+    dc = D_conj(ang[0], ang[1], ang[2], J)
+    out = onp.zeros((dc.shape[0], len(la), len(lb), len(lc)), dtype=onp.complex128)
+    for ia, va in enumerate(la):
+        for ib, vb in enumerate(lb):
+            for ic, vc in enumerate(lc):
+                delta = vb - vc
+                if abs(delta) <= J:
+                    out[:, ia, ib, ic] = dc[:, va + J, delta + J]
+    return out
+
+
+# ------------------------------------------------------------------ 运动学
+def _s(p):
+    return onp.einsum("...i,ij,...j->...", p, G_METRIC, p)
+
+
+def q2_relative(a, b, c):
+    """a -> b + c 的 breakup 动量平方（布局 (E,x,y,z)）。"""
+    sa = _s(a)
+    return (sa + _s(b) - _s(c)) ** 2 / (4.0 * sa) - _s(b)
+
+
+def mass(p):
+    return onp.sqrt(onp.maximum(_s(p), 0.0))
+
+
+def Bl(l, q):
+    """Blatt-Weisskopf B_l(q)（BASE.py::B1..B4，R = 1）。q 是 q^2。"""
+    x0 = Q0 ** 2
+    num = {0: 1.0, 1: 2.0, 2: 13.0, 3: 277.0, 4: 12746.0}.get(int(l))
+    if num is None:
+        raise NotImplementedError("Bl 只支持 l = 0..4，收到 %r" % (l,))
+    if l == 0:
+        den = onp.ones_like(q)
+    elif l == 1:
+        den = q + x0
+    elif l == 2:
+        den = q * q + 3 * q * x0 + 9 * x0 ** 2
+    elif l == 3:
+        den = q ** 3 + 6 * q ** 2 * x0 + 45 * q * x0 ** 2 + 225 * x0 ** 3
+    else:
+        den = (q ** 4 + 10 * q ** 3 * x0 + 135 * q ** 2 * x0 ** 2
+               + 1575 * q * x0 ** 3 + 11025 * x0 ** 4)
+    return onp.sqrt(num / den)
+
+
+def node_barrier(l, Q):
+    """q^l B_l(q^2) —— 一个节点对 K_i 的贡献。l = 0 时恒为 1。"""
+    if l == 0:
+        return onp.ones_like(Q)
+    return Q ** (l / 2.0) * Bl(l, Q)
+
+
+# ------------------------------------------------------- Chung Eq.52 协变项
+def _cov_a(j, m):
+    # Chung Eq.34: a^J(m) = (J+m)!(J-m)!/(2J)!  —— 注意分母是 (2J)! 不是 (2J+1)!
+    return _f(j + m) * _f(j - m) / _f(2 * j)
+
+
+def _cov_b(j, m, m0):
+    mp = (j + m - m0) // 2
+    mm = (j - m - m0) // 2
+    return _f(j) / (_f(mp) * _f(m0) * _f(mm))
+
+
+def covariant_hel_term(j, spins, gamma):
+    """f^J_{|m|}(gamma)（Chung Eq.52），返回 (N, len(spins))。"""
+    gamma = onp.asarray(gamma, dtype=onp.float64)
+    cols = []
+    for s in spins:
+        m = abs(int(s))
+        a = _cov_a(j, m)
+        acc = onp.zeros_like(gamma)
+        m0 = j - m
+        while m0 >= 0:
+            acc = acc + (a * _cov_b(j, m, m0) * 2 ** m0) * gamma ** m0
+            m0 -= 2
+        cols.append(acc)
+    return onp.stack(cols, axis=-1)
+
+
+# ------------------------------------------------------------------ 级联角
+def _unit(v):
+    return v / onp.linalg.norm(v, axis=-1, keepdims=True)
+
+
+def _cross_unit(a, b):
+    return _unit(onp.cross(a, b))
+
+
+def _angle_from(self, x, y):
+    return onp.arctan2((self * y).sum(-1), (self * x).sum(-1))
+
+
+def angle_zx_z_getx(z1, x1, z2):
+    """tf-pwa `EulerAngle.angle_zx_z_getx` 的逐行复刻。"""
+    u_z1 = _unit(z1)
+    u_z2 = _unit(z2)
+    u_y1 = _cross_unit(z1, x1)
+    u_x1 = _cross_unit(u_y1, z1)
+    u_yr = _cross_unit(z1, z2)
+    u_xr = _cross_unit(u_yr, z1)
+    alpha = _angle_from(u_xr, u_x1, u_y1)
+    beta = _angle_from(u_z2, u_z1, u_xr)
+    u_x2 = _cross_unit(u_yr, u_z2)
+    return alpha, beta, u_x2
+
+
+def _boost(other, b):
+    """把 other 按 3-vector b boost；other/约定 (T,X,Y,Z)。"""
+    b2 = (b * b).sum(-1)
+    g = 1.0 / onp.sqrt(1.0 - b2)
+    bp = (b * other[:, 1:]).sum(-1)
+    g2 = onp.where(b2 > 1e-12, (g - 1.0) / onp.where(b2 > 1e-12, b2, 1.0), 0.0)
+    T = g * (other[:, 0] + bp)
+    v = other[:, 1:] + (g2 * bp + g * other[:, 0])[:, None] * b
+    return onp.stack([T, v[:, 0], v[:, 1], v[:, 2]], axis=-1)
+
+
+def rest_vector(p_rest, p):
+    return _boost(p, -p_rest[:, 1:] / p_rest[:, 0:1])
+
+
+def _node_momentum(mom, chain, name):
+    """递归求和得到节点 name 的四动量。"""
+    node = chain["nodes"][name]
+    ds = node.get("daughters")
+    if not ds:
+        return mom[:, chain["index"][name]]
+    return _node_momentum(mom, chain, ds[0]) + _node_momentum(mom, chain, ds[1])
+
+
+def chain_angles(mom, chain):
+    """返回 {粒子名: (alpha,beta,gamma)}；只用每个节点的**第一个**子粒子角。"""
+    top = chain["top"]
+    nodes = chain["nodes"]
+    A = _node_momentum(mom, chain, top)
+    names = list(nodes.keys())
+    rpA = {n: rest_vector(A, _node_momentum(mom, chain, n)) for n in names}
+    rp = {}
+    for n in names:
+        for d in nodes[n].get("daughters", []):
+            rp[d] = rest_vector(rpA[n], rpA[d])
+
+    one = onp.ones((mom.shape[0], 3))
+    set_x = {top: one * onp.array([1.0, 0.0, 0.0])}
+    set_z = {top: one * onp.array([0.0, 0.0, 1.0])}
+    ang = {}
+
+    def do_node(core, outs):
+        # ⚠️ bias 是**每个节点**的局部量，从 -pi 重新开始（tf-pwa 的约定）。
+        bias = -onp.pi
+        for j, prest in outs:
+            z2 = prest[:, 1:4]
+            al, be, x2 = angle_zx_z_getx(set_z[core], set_x[core], z2)
+            set_x[j], set_z[j] = x2, z2
+            al = (al - bias) % (2 * onp.pi) + bias
+            ang[j] = (al, be, onp.zeros_like(al))
+            bias -= onp.pi
+
+    do_node(top, [(d, rpA[d]) for d in nodes[top]["daughters"]])
+    for n in names:
+        ds = nodes[n].get("daughters", [])
+        if ds and n != top:
+            do_node(n, [(d, rp[d]) for d in ds])
+    return ang
+
+
+# ------------------------------------------------------------------ Omega / K
+def _node_decay_d(ang, chain, node, n_events):
+    """`node -> 两体` 的衰变 D 矩阵贡献，返回 `(N, len(lam_node))`。
+
+    末态节点（没有 daughters）不衰变，因子恒为 **1** —— 这正好等于
+    `D^{0*}_{0,0}(...) == 1`，所以 `psi2s -> phi + pi`（`pi` 是末态）这类
+    合法的三体拓扑不需要在调用处特判。
+
+    以前这里无条件写 `nodes[node]["daughters"][0]`，于是那种拓扑会在
+    `check` 通过之后运行时 `KeyError: 'daughters'`（审计 §2.2）。
+    """
+    nodes = chain["nodes"]
+    ds = nodes[node].get("daughters")
+    if not ds:
+        return onp.ones((n_events, 1))
+    J = nodes[node]["J"]
+    return D_lambda(ang[ds[0]], J, LAM_SLOTS[J], [0], [0])[:, :, 0, 0]
+
+
+def omega_from_momenta(mom, chain, covariant=True):
+    """Omega[e, lam_A, lam_b, lam_c] —— 与 (l,s) 无关。
+
+    每个节点贡献一个 D 矩阵；每个**子粒子**贡献一个 f^{J_d}_{|lam_d|}(gamma_d)
+    （Chung Eq.52）。顶层节点的两个子粒子是共振态 phi/f2，故有非平凡的协变项；
+    子节点的末态粒子自旋为 0，f^0_0 == 1。
+    """
+    top = chain["top"]
+    nodes = chain["nodes"]
+    nb, nc = nodes[top]["daughters"]
+    Jb, Jc = nodes[nb]["J"], nodes[nc]["J"]
+    lam_b, lam_c = LAM_SLOTS[Jb], LAM_SLOTS[Jc]
+    JA = nodes[top]["J"]
+    lam_A = LAM_SLOTS[JA]
+    ang = chain_angles(mom, chain)
+
+    D0 = D_lambda(ang[nb], JA, lam_A, lam_b, lam_c)
+    D1 = _node_decay_d(ang, chain, nb, mom.shape[0])
+    D2 = _node_decay_d(ang, chain, nc, mom.shape[0])
+
+    if covariant:
+        pA = _node_momentum(mom, chain, top)
+        pb = _node_momentum(mom, chain, nb)
+        pc = _node_momentum(mom, chain, nc)
+        q2 = q2_relative(pA, pb, pc)
+        fb = covariant_hel_term(Jb, lam_b, onp.sqrt(1.0 + q2 / mass(pb) ** 2))
+        fc = covariant_hel_term(Jc, lam_c, onp.sqrt(1.0 + q2 / mass(pc) ** 2))
+        D0 = D0 * fb[:, None, :, None] * fc[:, None, None, :]
+
+    return (D0 * D1[:, None, :, None] * D2[:, None, None, :])
+
+
+def node_factors(mom, chain, ls_list):
+    """K_i(e) = prod_节点 q_node^{l_node} B_{l_node}(q_node)。-> (n_ch, N)
+
+    顶层节点的 l 逐道取自 `ls_list`；子节点的 l 由 `chain` 给定（宇称 + 角动量
+    唯一确定，见 specgen/physics.py::allowed_child_l）。
+
+    **末态节点不贡献 K**：它不衰变，`l = 0` 时 `q^0 B_0 == 1`。审计 §2.2 的
+    拓扑（`psi2s -> phi + pi`）在这里也曾因为无条件读 `nodes[n]["l"]` /
+    `["daughters"]` 而崩。
+    """
+    top = chain["top"]
+    nodes = chain["nodes"]
+    pA = _node_momentum(mom, chain, top)
+    nb, nc = nodes[top]["daughters"]
+    common = onp.ones_like(mass(pA))
+    for n in (nb, nc):
+        ds = nodes[n].get("daughters")
+        if not ds:
+            continue                     # 末态：q^0 B_0 == 1
+        l = int(nodes[n]["l"])
+        pn = _node_momentum(mom, chain, n)
+        d1, d2 = ds
+        Q = q2_relative(pn, _node_momentum(mom, chain, d1),
+                        _node_momentum(mom, chain, d2))
+        common = common * node_barrier(l, Q)
+    Qtop = q2_relative(pA, _node_momentum(mom, chain, nb),
+                       _node_momentum(mom, chain, nc))
+    out = onp.zeros((len(ls_list), mom.shape[0]))
+    for i, (l, _s) in enumerate(ls_list):
+        out[i] = node_barrier(l, Qtop) * common
+    return out
+
+
+def assemble(M, Om, g, K):
+    """W_i[e,lam_A] = g_i K_i(e) (M_i . Omega)。Om (N,nA,nb,nc) -> (n_ch,N,nA)"""
+    P = onp.einsum("iab,enab->ien", M, Om)
+    return g[:, None, None] * K[:, :, None] * P
+
+
+# ------------------------------------------------------------------ IO
+def momenta_from_npz(path, keys, start=0, n=None, order="x,y,z,E"):
+    """读 Momentum_kk.npz（默认布局 (x,y,z,E)），返回 (N, n_part, 4) 的 (E,x,y,z)。"""
+    d = onp.load(path)
+    sl = slice(start, None if n is None else start + n)
+    arrs = [onp.asarray(d[k][sl], dtype=onp.float64) for k in keys]
+    mom = onp.stack(arrs, axis=1)
+    perm = [order.split(",").index(c) for c in ("E", "x", "y", "z")]
+    return mom[..., perm]

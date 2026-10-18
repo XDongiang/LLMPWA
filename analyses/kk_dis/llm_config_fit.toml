@@ -1,7 +1,7 @@
 # llm代码生成，kk_fit，jax原生分布式版本
 
 [ref]
-code_template = ["gen/templates/fit.py","gen/templates/shared.py","gen/templates/physics_functions.py"]
+code_template = ["gen/templates/fit.py","gen/templates/shared.py","gen/templates/physics_functions.py","gen/templates/basis_layer.py"]
 resonances_config = {"type" = "file", "path" = "resonances_config.toml"}
 likelihood_math = {"type" = "file", "path" = "document/combined_likelihood_math.md"}
 
@@ -65,6 +65,7 @@ input = {"list"=[
          "ref.code_template.LOGGING_CONFIG",
          "ref.code_template.DPLEX_FUNCTIONS",
          "ref.code_template.PHYSICS_FUNCTIONS",
+         "ref.code_template.BASIS_LAYER",
          "stages.make_initial_args.all",
          "stages.save_results.all",
          "stages.inspect_data_shapes.load_data",

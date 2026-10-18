@@ -1,0 +1,104 @@
+# psi(2S) -> phi f2 -> (K+K-)(pi+pi-)  —— f2 族
+#
+# 由 specgen 编译成 method4_omega 的 Omega 预计算代码。
+# 道表**显式**给出（与 method4_omega/basis.py::LS_F2 一致）：
+#   phif201 (0,1) / phif221 (2,1) / phif222 (2,2) / phif223 (2,3) / phif243 (4,3)
+# 去掉 [[channel]] 段落，specgen 会按宇称 + 角动量三角自动枚举同一组 (l,s)。
+
+[chain]
+name = "phif2"
+top = "psi2s"
+output = "../generated/phif2"
+l_max = 4
+# 真实样本用 3.685782956；见 phif0.toml 的说明
+psi_mass = 3.686
+chain_name = "phif2"
+suffix = ""            # f2 族：Omega.npy / K.npy / M.npy / g.npy
+
+[input]
+# Momentum_kk.npz 的键；顺序 = 四动量轴顺序 = 末态顺序
+keys = ["Kp", "Km", "Pip", "Pim"]
+layout = "x,y,z,E"     # BASE.py / CacheTensor 的存储布局
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["phi", "f2"]
+
+[particles.phi]
+J = 1
+mass = 1.019
+parity = -1
+daughters = ["Kp", "Km"]
+l = 1                  # phi -> KK 是 P 波
+
+[particles.f2]
+J = 2
+mass = 1.275
+parity = 1
+daughters = ["Pip", "Pim"]
+l = 2                  # f2 -> pi pi 是 D 波
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[[channel]]
+name = "phif201"
+l = 0
+s = 1
+
+[[channel]]
+name = "phif221"
+l = 2
+s = 1
+
+[[channel]]
+name = "phif222"
+l = 2
+s = 2
+
+[[channel]]
+name = "phif223"
+l = 2
+s = 3
+
+[[channel]]
+name = "phif243"
+l = 4
+s = 3
+
+# ------------------------------------------------------------------ 表象选择
+# 一份 TOML 同时产出协变张量与螺度两种 tensor 的生成代码（用户要求）。
+# 省略 [[basis]] 时只出 Omega 一份（与旧 specgen 行为一致）。
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"           # Chung 协变张量 T_i(e,mu)
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"            # W_i = EPS_A . T_i
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+[[basis]]
+name   = "omega"
+kernel = "omega"               # Omega/K/M/g/norm
+env    = { TENSOR_BASIS = "omega", HELICITY_LAYER = "1" }

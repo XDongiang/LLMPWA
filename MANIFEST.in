@@ -6,4 +6,9 @@ include pyproject.toml
 recursive-include agent *.py
 recursive-include documentation *.md
 recursive-include analyses *.toml *.md
+# 生成器模板：`code_template` 指向的 .py 片段（含表象层 basis_layer.py）。
+# 少了这一行，sdist 里的 analyses 只有 toml/md，`assemble_help_functions`
+# 会因为找不到模板而失败。
+recursive-include analyses/gen/templates *.py
+recursive-include analyses/*/gen/templates *.py
 recursive-include docker *.md *.sh

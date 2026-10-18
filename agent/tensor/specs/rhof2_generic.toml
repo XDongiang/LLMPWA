@@ -1,0 +1,76 @@
+# 通用性测试：psi(2S) -> rho + f2 -> (pi+ pi-)(pi+ pi-) 的**假想**链
+#
+# 目的：验证 specgen 不写死 KK 道。这里
+#   * 顶层 daughters 自旋是 1 与 2（而非 1 与 0/2 的特例）
+#   * 道表**完全自动枚举**（没有 [[channel]] 段）
+#   * 末态是四个 pi，键名与 KK 道不同
+#
+# 只用来说明生成器可迁移；不是生产配置。
+
+[chain]
+name = "rhof2"
+top = "psi2s"
+output = "generated/rhof2"
+chain_name = "rhof2"
+l_max = 4
+suffix = ""
+
+[input]
+keys = ["Pip", "Pim", "Pip2", "Pim2"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rho", "f2"]
+
+[particles.rho]
+J = 1
+mass = 0.775
+parity = -1
+daughters = ["Pip", "Pim"]
+l = 1
+
+[particles.f2]
+J = 2
+mass = 1.275
+parity = 1
+daughters = ["Pip2", "Pim2"]
+l = 2
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pip2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+# 通用性验证用：一份 TOML 同时出协变张量与螺度两种 tensor。
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+[[basis]]
+name   = "omega"
+kernel = "omega"
+env    = { TENSOR_BASIS = "omega", HELICITY_LAYER = "1" }

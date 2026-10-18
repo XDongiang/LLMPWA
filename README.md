@@ -83,6 +83,10 @@ documentation/  guides (pipeline state, visualization, dsh workbench, tutorial)
 ## Documentation
 
 - [analyses/kk_dis/README.md](analyses/kk_dis/README.md) — the canonical generation flow
+- [documentation/tensor_cache_generation.md](documentation/tensor_cache_generation.md) —
+  framework-level tensor cache generation (`agent/tensor/`): one TOML → covariant +
+  helicity tensors, the `chain.<name>/chain.<channel>.py` storage convention, and the
+  numpy/jax CPU/GPU benchmark
 - [documentation/README_CN.md](documentation/README_CN.md)
 - [documentation/Tutorial_CN.md](documentation/Tutorial_CN.md) /
   [documentation/Tutorial_EN.md](documentation/Tutorial_EN.md)
