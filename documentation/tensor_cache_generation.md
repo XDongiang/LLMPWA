@@ -490,6 +490,12 @@ $ grep -c "chain\|nodes" agent/tensor/kernels/covariant.py
 三层树 `ψ→ρ′π, ρ′→φπ, φ→K⁺K⁻` 在 cartesian/helicity 下读入成功，
 追加一个 `[[basis]] name="omega"` 后被拒。
 
+> **omega 的完整能力边界（以及怎么推开它）见
+> [`helicity_amplitude_roadmap.md`](helicity_amplitude_roadmap.md)。**
+> 深度只是**两个**限制之一；更根本的是 omega 的 cache 格式
+> `Omega + K + M + g` 无处安放「逐节点 $(l,s)$」——
+> 判据是「所有非顶层节点恰好只有 1 个允许的 $(l,s)$」，b₁ 是第一个违反它的链。
+
 ## 11. 例 3 的 ρ′/b₁ 道（`chains/rhopi` + `chains/b1pi`）
 
 文档 `analyses/kk_dis/document/ψ衰变到介子的分波分析协变张量形式.md` 374–416 行
@@ -507,6 +513,9 @@ $ grep -c "chain\|nodes" agent/tensor/kernels/covariant.py
    ρ′ 族 `_1` 的旁观者是粒子 3（π⁺），b₁ 族 `_1` 的旁观者是粒子 4（π⁻）。
 2. **`(l,s)` 不是 b₁ 族的完备标签**：8 条道只映射到 2 组 `(l,s)`，所以
    `[chain].check_channels = false`，且**不能**用 omega 表象。
+   完备标签是**逐节点 $(l,s)$ 的组合**（顶层波 × 内层波），
+   计数律与推开边界的路线见
+   [`helicity_amplitude_roadmap.md`](helicity_amplitude_roadmap.md) §2.2 / §4。
 3. **签名统一为 `(psi, phi, f2, Kp, Km, Pip, Pim)`**，即使 ρ′/b₁ 族忽略
    `phi` / `f2` —— 这样道表可以混装两个族的道（见 `emitter.py::raw_tensors`）。
 

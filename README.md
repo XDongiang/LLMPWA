@@ -94,6 +94,12 @@ documentation/  guides (pipeline state, visualization, dsh workbench, tutorial)
   which decay examples from the Chung covariant-tensor paper can be turned into tests,
   and what each one is missing (10 of the 20 unported reference channel functions in
   `Tensor/FUNC.py` are now ported; the other 10 are example 5)
+- [documentation/helicity_amplitude_roadmap.md](documentation/helicity_amplitude_roadmap.md) —
+  the exact capability boundary of the current helicity basis (omega's cache format
+  cannot carry per-node `(l,s)`; condition: every non-top node has exactly one allowed
+  `(l,s)`, which b₁ is the first to violate), the counting law
+  `N = ∏_nodes N_node`, and how to widen the boundary using tf-pwa's per-node
+  helicity amplitude + chain-level einsum
 - [documentation/README_CN.md](documentation/README_CN.md)
 - [documentation/Tutorial_CN.md](documentation/Tutorial_CN.md) /
   [documentation/Tutorial_EN.md](documentation/Tutorial_EN.md)
