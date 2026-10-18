@@ -171,6 +171,23 @@ BASES = {
             "拟合  : W_i = g_i * K_i(e) * (M_i . Omega)，即 tf-pwa 的 H.D\n"
             "代价  : cache 大 3 倍；循环里多一次 45 维缩并（不是为速度）"),
     ),
+    "helicity_cascade": Basis(
+        name="helicity_cascade",
+        title="螺旋度级联：逐节点 H + 链级 einsum（任意深度、任意逐节点 (l,s)）",
+        cache_basis="helicity",      # 落盘形状与 helicity **逐位同格式**
+        rotate_at_fit=False,
+        helicity_layer=True,
+        n_components=3,
+        precompute=None,             # 不走 T -> EPS_A 这条路
+        amplitude=_identity,
+        intensity=_hel_intensity,
+        env=lambda: _env("helicity", True),
+        describe=lambda: (
+            "预计算: W_i(e,lambda) = A_chain[lam_A]，逐道直接算（不经过 EPS_A）\n"
+            "拟合  : I = sum_{lambda=+-1} |W_lambda|^2  —— 与 helicity 完全相同\n"
+            "能力  : 任意深度；每个节点可有多个 (l,s)（omega 的边界之外）\n"
+            "代价  : cache 不再与 (l,s) 无关，每道一份（与 helicity 现状一致）"),
+    ),
 }
 
 

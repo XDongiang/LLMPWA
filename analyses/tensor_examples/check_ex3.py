@@ -36,14 +36,21 @@ from agent.tensor import crosscheck as cc              # noqa: E402
 from agent.tensor.kernels import covariant as COV      # noqa: E402
 
 # 例 3 的两棵树各自的道表（顺序 = spec 里 [[channel]] 的顺序 = cache 行序）
+#
+# `cascade` 给出螺旋度级联表象的产物文件名（**与 helicity 逐位同格式**）；
+# `a1` 决定要不要跑判据 A1（级联 vs 协变逐道对拍）。rho' 的协变道
+# **不是**逐节点级联 —— 它的 Eq.(46) 是两个 epsilon 张起来的、没有中间态
+# 投影算符，所以 A1 对它不成立（见 README「已知边界」）。
 TREES = {
     "ex3_rhopi": {"chain": "rhopi",
                   "names": ["u_rho_1", "u_rho_2"],
-                  "out": "rhopi_kk.npy", "hel": "rhopi_hel.npy"},
+                  "out": "rhopi_kk.npy", "hel": "rhopi_hel.npy",
+                  "cascade": "rhopi_casc.npy", "a1": False},
     "ex3_b1pi": {"chain": "b1pi",
                  "names": ["u_SS_1", "u_SS_2", "u_SD_1", "u_SD_2",
                            "u_DS_1", "u_DS_2", "u_DD_1", "u_DD_2"],
-                 "out": "b1pi_kk.npy", "hel": "b1pi_hel.npy"},
+                 "out": "b1pi_kk.npy", "hel": "b1pi_hel.npy",
+                 "cascade": "b1pi_casc.npy", "a1": True},
 }
 PSI_MASS = 3.686
 
@@ -91,17 +98,18 @@ def check_tree(tree, npz, n, start, gen_root, out_root, keep):
                                                info["chain"]))
 
     # 1) 生成（幂等：每次重跑，产物目录自足）
-    for kern in ("covariant", "helicity"):
-        script = os.path.join(gdir, "gen_tensor_%s_%s.py" % (tree, kern))
+    scripts = ["gen_tensor_%s_%s.py" % (tree, k)
+               for k in ("covariant", "helicity", "helicity_cascade")]
+    if not all(os.path.exists(os.path.join(gdir, s)) for s in scripts):
+        r = subprocess.run([sys.executable, "-m", "agent.tensor", "emit", spec],
+                           cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stdout, r.stderr, file=sys.stderr)
+            raise SystemExit("emit 失败：%s" % spec)
+    for s in scripts:
+        script = os.path.join(gdir, s)
         if not os.path.exists(script):
-            r = subprocess.run([sys.executable, "-m", "agent.tensor", "emit", spec],
-                               cwd=ROOT, capture_output=True, text=True)
-            if r.returncode != 0:
-                print(r.stdout, r.stderr, file=sys.stderr)
-                raise SystemExit("emit 失败：%s" % spec)
-            break
-    for kern in ("covariant", "helicity"):
-        script = os.path.join(gdir, "gen_tensor_%s_%s.py" % (tree, kern))
+            continue
         print("  跑 %s" % os.path.relpath(script, ROOT))
         run_script(script, npz, odir, n, start)
 
@@ -135,6 +143,48 @@ def check_tree(tree, npz, n, start, gen_root, out_root, keep):
     print("  helicity vs EPS_A . cartesian rel = %.3e  %s"
           % (r2, "OK" if good2 else "**FAIL**"))
     ok &= good2
+
+    # 5) 判据 A7：螺旋度级联的 cache 形状/dtype 与 helicity **精确**一致。
+    #    §4.5 的承诺就是"拟合侧零改动"，所以这一条必须是精确相等而不是近似。
+    casc_path = os.path.join(odir, info["cascade"])
+    if os.path.exists(casc_path) and info["cascade"] != info["hel"]:
+        casc = np.load(casc_path)
+        same = (casc.shape == hel.shape and casc.dtype == hel.dtype)
+        print("  A7 级联 cache 形状/dtype 与 helicity 一致：%s vs %s  %s"
+              % (casc.shape, hel.shape, "OK" if same else "**FAIL**"))
+        ok &= bool(same)
+        finite_c = bool(np.isfinite(casc).all())
+        print("  A7 级联有限性 max|W| = %.6g  %s"
+              % (float(np.abs(casc).max()), "OK" if finite_c else "**有 NaN/Inf**"))
+        ok &= finite_c and float(np.abs(casc).max()) > 0
+
+    # 6) 判据 A1：级联 vs 协变逐道对拍（经 EPS_A）。
+    #    这是**最强**的一条：covariant.py 是手写公式、与 omega/级联完全独立。
+    if info.get("a1"):
+        print("  A1 级联 vs 协变逐道对拍（经 EPS_A）：")
+        casc = np.load(os.path.join(odir, info["cascade"]))
+        worst = 0.0
+        for i, nm in enumerate(info["names"]):
+            s = np.vdot(hel[i], casc[i]) / np.vdot(casc[i], casc[i])
+            r = float(np.abs(hel[i] - s * casc[i]).max()
+                      / max(np.abs(hel[i]).max(), 1e-300))
+            worst = max(worst, r)
+            print("    %-8s rel = %.3e  %s" % (nm, r, "OK" if r < 1e-12 else "**FAIL**"))
+        ok &= worst < 1e-12
+
+        # 7) 判据 A3：b1 的 8 条道两两不重合（omega 时代 12/28 对逐位重合）
+        print("  A3 b1 8 条道两两不重合：")
+        n = len(info["names"])
+        pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
+        rs = []
+        for i, j in pairs:
+            a, b = casc[i], casc[j]
+            s = np.vdot(b, a) / np.vdot(a, a)
+            rs.append(float(np.abs(b - s * a).max() / max(np.abs(b).max(), 1e-300)))
+        mn = min(rs)
+        print("    min over %d pairs = %.4e  %s"
+              % (len(pairs), mn, "OK" if mn > 1e-6 else "**FAIL**"))
+        ok &= mn > 1e-6
 
     if keep:
         print("  产物留在 %s" % os.path.relpath(odir, ROOT))

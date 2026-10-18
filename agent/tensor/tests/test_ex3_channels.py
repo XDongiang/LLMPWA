@@ -208,15 +208,25 @@ def test_specs_load_and_emit():
         assert [c[0] for c in specmod.resolve_channels(s)] == names
         with tempfile.TemporaryDirectory() as td:
             res = emitter.emit(s, out_dir=td)
-            assert len(res["scripts"]) == 2
+            # 三份表象：cartesian / helicity / helicity_cascade
+            assert len(res["scripts"]) == 3, [e["kernel"] for e in res["scripts"]]
             assert res["fallback"] == [], res["fallback"]
             for e in res["scripts"]:
                 assert os.path.exists(e["script"])
                 src = open(e["script"], encoding="utf-8").read()
-                for nm in names:
-                    assert "def %s(" % nm in src, (tree, nm)
                 # 产物自足：不 import agent.tensor
                 assert "import agent" not in src
+                if e["kernel"] == "helicity_cascade":
+                    # 级联**不内联手写道函数** —— 它把内核副本拷进产物目录，
+                    # 道由逐节点 (l,s) 描述（§5-P0-3）。
+                    for nm in names:
+                        assert nm in src, (tree, nm)
+                    for k in ("helicity_cascade.py", "runtime.py",
+                              "_backend.py"):
+                        assert os.path.exists(os.path.join(td, k)), k
+                else:
+                    for nm in names:
+                        assert "def %s(" % nm in src, (tree, nm)
 
 
 def main():

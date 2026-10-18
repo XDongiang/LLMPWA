@@ -65,6 +65,53 @@ def load_spec(path):
     return spec
 
 
+def _as_ls_pair(v, where):
+    """把 `[l, s]` / `(l, s)` 规整成 `(int, int)`。"""
+    if not isinstance(v, (list, tuple)) or len(v) != 2:
+        raise SpecError("%s 要写成 [l, s]，收到 %r" % (where, v))
+    return (int(v[0]), int(v[1]))
+
+
+def _normalise_ls_map(d):
+    """`{节点名 = [[l,s], ...]}` -> `{节点名: [(l,s), ...]}`。
+
+    TOML 里写成
+
+        [[channel]]
+        name = "u_DD_1"
+        ls = { psi2s = [[2,1]], b1 = [[2,1]], phi = [[1,0]] }
+
+    `ls` 缺省为 `{}` —— 这时 helicity_cascade 表象会退回"顶层用道表的
+    (l,s)、非顶层用宇称唯一值"的自动口径（等价于 omega 的可用条件）。
+    """
+    if not d:
+        return {}
+    if not isinstance(d, dict):
+        raise SpecError("[[channel]].ls 必须是表 {节点名 = [[l,s], ...]}，收到 %r" % (d,))
+    out = {}
+    for node, lst in d.items():
+        if isinstance(lst, (list, tuple)) and len(lst) == 2 \
+                and not isinstance(lst[0], (list, tuple)):
+            lst = [lst]                       # 允许简写 b1 = [2, 1]
+        out[node] = [_as_ls_pair(x, "[[channel]].ls[%s]" % node) for x in lst]
+    return out
+
+
+def _normalise_tree(d):
+    """`{节点名 = ["d1", "d2"]}` -> `{节点名: [d1, d2]}`（镜像树覆盖）。"""
+    if not d:
+        return {}
+    if not isinstance(d, dict):
+        raise SpecError("[[channel]].tree 必须是表 {节点名 = [d1, d2]}，收到 %r" % (d,))
+    out = {}
+    for node, ds in d.items():
+        if not isinstance(ds, (list, tuple)) or len(ds) != 2:
+            raise SpecError("[[channel]].tree[%s] 必须是恰好两个 daughter，收到 %r"
+                            % (node, ds))
+        out[node] = [str(x) for x in ds]
+    return out
+
+
 def _normalise(raw, base):
     ch = raw.get("chain") or {}
     if not ch.get("top"):
@@ -95,6 +142,9 @@ def _normalise(raw, base):
     # [[channel]] 的扩展字段（全部可选）：
     #   family   把若干道合成一个"族"，产出用同一个后缀（如 f0 族写 Omega0.npy）
     #   note     写进产物注释的自由文本
+    #   ls       逐节点 (l,s) 组合 `{节点名 = [[l,s], ...]}`（**只给
+    #            helicity_cascade 表象用**；omega 侧仍只看顶层 l/s）
+    #   tree     逐节点 daughters 覆盖 `{节点名 = ["d1","d2"]}`（镜像树）
     channels = []
     for c in (raw.get("channel") or []):
         if "name" not in c:
@@ -108,6 +158,8 @@ def _normalise(raw, base):
             "s": int(c["s"]),
             "family": c.get("family", ""),
             "note": c.get("note", ""),
+            "ls": _normalise_ls_map(c.get("ls")),
+            "tree": _normalise_tree(c.get("tree")),
         })
 
     # [[basis]]：一份 TOML 要产出哪几种表象。省略 = 只出协变张量。
@@ -281,7 +333,85 @@ def validate(spec):
                        "缺 %s；" % missing if missing else "",
                        "多 %s；" % extra if extra else "",
                        "（注意：多出来的 (l,s) 可能被宇称/三角禁止）" if extra else ""))
+    _validate_cascade_fields(spec)
     return spec
+
+
+def _validate_cascade_fields(spec):
+    """校验 `[[channel]].ls` / `.tree`（螺旋度级联表象用）。
+
+    这两项是 §5-P0-1 新增的：`ls` 给逐节点 (l,s)，`tree` 给镜像树。它们只被
+    `helicity_cascade` 表象读，但**必须在读 TOML 时报错**而不是运行时 KeyError。
+    """
+    parts = spec["particles"]
+    decaying = set(decaying_nodes(spec))
+    leaves = set(spec["leaves"])
+    for c in spec["channels"]:
+        for node, lst in (c.get("ls") or {}).items():
+            if node not in parts:
+                raise SpecError("[[channel]] %s 的 ls 里有未知节点 %r" % (c["name"], node))
+            if node not in decaying:
+                raise SpecError("[[channel]] %s 的 ls 给节点 %s 指定了 (l,s)，"
+                                "但它没有 daughter（末态节点没有逐节点振幅）"
+                                % (c["name"], node))
+            if not lst:
+                raise SpecError("[[channel]] %s 的 ls[%s] 是空列表" % (c["name"], node))
+            # 宇称 + 三角必须允许（parity 齐全时才能查）
+            try:
+                ok = set(allowed_ls(spec, node))
+            except SpecError:
+                ok = None
+            if ok is not None:
+                bad = [x for x in lst if x not in ok]
+                if bad:
+                    raise SpecError(
+                        "[[channel]] %s 给节点 %s 指定了宇称/三角不允许的 (l,s)=%s；"
+                        "该节点允许的是 %s" % (c["name"], node, bad, sorted(ok)))
+        for node, ds in (c.get("tree") or {}).items():
+            if node not in decaying:
+                raise SpecError("[[channel]] %s 的 tree 里有非衰变节点 %r"
+                                % (c["name"], node))
+            for d in ds:
+                if d not in parts:
+                    raise SpecError("[[channel]] %s 的 tree[%s] 里有未知粒子 %r"
+                                    % (c["name"], node, d))
+        if c.get("tree"):
+            _check_mirror_tree(spec, c)
+
+
+def _check_mirror_tree(spec, c):
+    """镜像树必须**只是换配对**：整棵树的末态集合逐项不变、无环、两体。
+
+    注意不能只比"某个节点的 daughter 集合" —— 顶层
+    `psi -> [b1, Pim]` 换成 `psi -> [b1, Pip]` 时顶层 daughter 集合**确实变了**
+    （Pim -> Pip），但 `b1` 那边同时从 `[phi, Pip]` 换成 `[phi, Pim]`，
+    整棵树的末态集合 {Kp, Km, Pip, Pim} 不变。这才是正确的不变量。
+    """
+    overrides = c["tree"]
+    base = {n: list(_children(spec, n)) for n in spec["particles"]}
+    seen, leaves = set(), []
+
+    def walk(n):
+        if n in seen:
+            raise SpecError("[[channel]] %s 的 tree 覆盖后有环：%s 出现两次"
+                            % (c["name"], n))
+        seen.add(n)
+        ds = overrides.get(n, base.get(n, []))
+        if len(ds) == 0:
+            leaves.append(n)
+            return
+        if len(ds) != 2:
+            raise SpecError("[[channel]] %s 的 tree 里节点 %s 有 %d 个 daughter，"
+                            "只支持两体衰变" % (c["name"], n, len(ds)))
+        for d in ds:
+            walk(d)
+
+    walk(spec["top"])
+    if sorted(leaves) != sorted(spec["leaves"]):
+        raise SpecError(
+            "[[channel]] %s 的 tree 覆盖后末态集合是 %s，与 [input].keys %s 不一致；"
+            "镜像树只能交换配对，不能改变末态粒子集合"
+            % (c["name"], sorted(leaves), sorted(spec["leaves"])))
 
 
 def _parity(spec, name):
@@ -341,6 +471,92 @@ def resolve_channels(spec):
     if len(set(names)) != len(names):
         raise SpecError("道名重复：%s" % names)
     return ch
+
+
+# ------------------------------------------------- 螺旋度级联：逐节点 (l,s)
+def cascade_channels(spec):
+    """返回螺旋度级联内核要的逐道描述：
+
+        [{"name":..., "ls": {节点: [(l,s), ...]}, "tree": {节点: [d1,d2]},
+          "l":..., "s":..., "family":..., "note":...}, ...]
+
+    逐节点 (l,s) 的取法（**优先级从高到低**）：
+
+    1. `[[channel]].ls` 里显式写出的节点；
+    2. 顶层节点：用该道的 `(l, s)`（即 `[[channel]]` / 自动枚举给出的那组）；
+    3. 其余衰变节点：`allowed_ls(spec, node)` —— 宇称 + 三角允许的**全部**值。
+
+    第 3 条是"新能力"的落点：b₁ 的 `b1 -> phi pi` 同时允许 `(0,1)` 与 `(2,1)`，
+    所以一份 TOML 不再需要为每种"顶层波 × 内层波"组合手写一条道 —— 但**道表
+    仍然决定 cache 的行序**，所以这里**不做**笛卡尔积扩张：一条 TOML 道 = 一条
+    cache 行，内层多分波由 `g` 参数在拟合侧展开（与 tf-pwa `split_ls.py` 一致）。
+
+    需要"每个组合一条道"时，在 TOML 里用 `[[channel]].ls` 显式列出，
+    或在 `cascade_product_channels()` 里取笛卡尔积。
+    """
+    out = []
+    chans = spec["channels"] or [
+        {"name": n, "l": l, "s": s, "family": f, "note": "", "ls": {}, "tree": {}}
+        for (n, l, s, f) in resolve_channels(spec)]
+    for c in chans:
+        ls = {}
+        for node in decaying_nodes(spec):
+            if node in c["ls"]:
+                ls[node] = list(c["ls"][node])
+            elif node == spec["top"]:
+                ls[node] = [(c["l"], c["s"])]
+            else:
+                ls[node] = allowed_ls(spec, node)
+        # 显式列出的节点即使不是衰变节点也保留（校验会在 validate 里报错）
+        for node, v in c["ls"].items():
+            ls.setdefault(node, list(v))
+        out.append({"name": c["name"], "ls": ls, "tree": dict(c["tree"]),
+                    "l": c["l"], "s": c["s"], "family": c["family"],
+                    "note": c["note"]})
+    return out
+
+
+def decaying_nodes(spec):
+    """树里所有有 daughter 的节点，深度优先（与 chain 的 tree_order 同序）。"""
+    out = []
+
+    def walk(n):
+        ds = _children(spec, n)
+        if not ds:
+            return
+        out.append(n)
+        for d in ds:
+            walk(d)
+
+    walk(spec["top"])
+    return out
+
+
+def cascade_product_channels(spec, nodes=None):
+    """逐节点 (l,s) 的**笛卡尔积**，每个组合一条道。
+
+    这是 §2.2 计数律 `∏_n N_n` 的直接实现：b₁ 给 2×2 = 4 条（每棵树），
+    φf₂ 给 5×1 = 5 条。返回与 `cascade_channels` 同形的列表，`name` 形如
+    `u_DD_1__psi2s_l2s1__b1_l2s1`。
+
+    `nodes` 可给出要展开的节点子集（默认：全部非顶层衰变节点 + 顶层）。
+    """
+    base = cascade_channels(spec)
+    out = []
+    for c in base:
+        ns = list(nodes or [n for n in c["ls"] if len(c["ls"][n]) > 0])
+        ns = [n for n in ns if len(c["ls"][n]) > 1]
+        if not ns:
+            out.append(c)
+            continue
+        import itertools
+        for combo in itertools.product(*[c["ls"][n] for n in ns]):
+            ls = {k: list(v) for k, v in c["ls"].items()}
+            for n, v in zip(ns, combo):
+                ls[n] = [v]
+            tag = "__".join("%s_l%ds%d" % (n, v[0], v[1]) for n, v in zip(ns, combo))
+            out.append(dict(c, name="%s__%s" % (c["name"], tag), ls=ls))
+    return out
 
 
 # --------------------------------------------------------------------- 导出

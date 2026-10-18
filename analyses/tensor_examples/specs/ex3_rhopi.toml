@@ -76,12 +76,19 @@ name = "u_rho_1"
 l = 1
 s = 1
 note = "rho' = phi + Pim = (1,2,4)，旁观者 = Pip = 粒子 3"
+# 螺旋度级联表象（逐节点 (l,s)）：两个节点都限于 P 波。
+ls = { psi2s = [[1,1]], rhoprime = [[1,1]], phi = [[1,0]] }
+# 镜像树：`_1` 族的旁观者是 Pip。
+tree = { psi2s = ["rhoprime", "Pip"], rhoprime = ["phi", "Pim"] }
 
 [[channel]]
 name = "u_rho_2"
 l = 1
 s = 1
 note = "rho' = phi + Pip = (1,2,3)，旁观者 = Pim = 粒子 4"
+ls = { psi2s = [[1,1]], rhoprime = [[1,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pim。
+tree = { psi2s = ["rhoprime", "Pim"], rhoprime = ["phi", "Pip"] }
 
 # ------------------------------------------------------------------ 表象
 # 一份 TOML 同时出协变张量与螺度两种 tensor。
@@ -93,4 +100,16 @@ env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
 [[basis]]
 name   = "helicity"
 kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 螺旋度级联（§5-P0）。**注意**：这条链上它**不**等于协变路线 ——
+# Eq.(46) 的 ρ′ 是两个 ε 张量张起来的（内层 ε 缩并的是 p_ψ 而不是 p_ρ′），
+# 没有中间态投影算符，所以**不是**逐节点级联；b₁ 的 Eq.(47)–(50) 有
+# `\tilde g(p_{b1})` / `\tilde t^{(2)}(p_{b1})`，才是真正的级联。
+# 这份 basis 在这里的作用是：给出正确的逐节点级联，供 README「已知边界」
+# 一节与后续 ρ′ 形式的研究使用；验收判据 A1 对它**不适用**。
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+files  = ["rhopi_casc.npy"]
 env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

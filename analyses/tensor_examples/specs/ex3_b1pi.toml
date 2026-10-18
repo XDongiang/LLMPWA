@@ -83,48 +83,96 @@ parity = -1
 name = "u_SS_1"
 l = 0
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=0 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=0。
+ls = { psi2s = [[0,1]], b1 = [[0,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pim"], b1 = ["phi", "Pip"] }
 note = "psi->b1pi S 波 x b1->phi pi S 波；b1 = phi + Pip，旁观者 = Pim"
 
 [[channel]]
 name = "u_SS_2"
 l = 0
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=0 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=0。
+ls = { psi2s = [[0,1]], b1 = [[0,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pip"], b1 = ["phi", "Pim"] }
 note = "同 SS，b1 = phi + Pim，旁观者 = Pip"
 
 [[channel]]
 name = "u_SD_1"
-l = 2
+l = 0
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=0 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=2。
+ls = { psi2s = [[0,1]], b1 = [[2,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pim"], b1 = ["phi", "Pip"] }
 note = "psi->b1pi S 波 x b1->phi pi D 波；b1 = phi + Pip"
 
 [[channel]]
 name = "u_SD_2"
-l = 2
+l = 0
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=0 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=2。
+ls = { psi2s = [[0,1]], b1 = [[2,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pip"], b1 = ["phi", "Pim"] }
 note = "同 SD，b1 = phi + Pim"
 
 [[channel]]
 name = "u_DS_1"
-l = 0
+l = 2
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=2 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=0。
+ls = { psi2s = [[2,1]], b1 = [[0,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pim"], b1 = ["phi", "Pip"] }
 note = "psi->b1pi D 波 x b1->phi pi S 波；b1 = phi + Pip"
 
 [[channel]]
 name = "u_DS_2"
-l = 0
+l = 2
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=2 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=0。
+ls = { psi2s = [[2,1]], b1 = [[0,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pip"], b1 = ["phi", "Pim"] }
 note = "同 DS，b1 = phi + Pim"
 
 [[channel]]
 name = "u_DD_1"
 l = 2
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=2 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=2。
+ls = { psi2s = [[2,1]], b1 = [[2,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pim"], b1 = ["phi", "Pip"] }
 note = "psi->b1pi D 波 x b1->phi pi D 波；b1 = phi + Pip"
 
 [[channel]]
 name = "u_DD_2"
 l = 2
 s = 1
+# 螺旋度级联表象（逐节点 (l,s)）：顶层 (l,s) 单独**不足以**给道名，
+# 内层波也是道的身份的一部分（SS/SD/DS/DD）—— 必须显式写出。
+# ⚠️ 这里的 l=2 是**顶层** `psi->b1 pi` 的波，`b1 -> phi pi` 的波是 l=2。
+ls = { psi2s = [[2,1]], b1 = [[2,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip，`_1` 族是 Pim。
+tree = { psi2s = ["b1", "Pip"], b1 = ["phi", "Pim"] }
 note = "同 DD，b1 = phi + Pim"
 
 # ------------------------------------------------------------------ 表象
@@ -136,4 +184,16 @@ env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
 [[basis]]
 name   = "helicity"
 kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 螺旋度级联：任意深度 + 任意逐节点 (l,s)。落盘形状与 helicity **逐位同格式**
+# （(n_ch, N, 3) complex128），拟合侧 `_load_cached_tensor` 零改动 ——
+# 但这条链的 4 个独立振幅 omega / helicity 都表达不了（§1.1 / §2.3）。
+#
+# ⚠️ 生产里这一份**顶替** `b1pi_hel.npy`（`files` 留空即默认同名）。
+# 这份 spec 为了验收对拍同时出了 helicity，所以显式改名以免互相覆盖。
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+files  = ["b1pi_casc.npy"]
 env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

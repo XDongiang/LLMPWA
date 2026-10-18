@@ -290,12 +290,16 @@ def emit(spec, out_dir=None, runtime_src=None):
         if kern == "omega":
             scripts.append(_emit_omega(spec, ch, chain, name, out_dir,
                                        suffix, b))
+        elif kern == "helicity_cascade":
+            scripts.append(_emit_helicity_cascade(spec, ch, chain, name,
+                                                  out_dir, suffix, b))
         elif kern in ("covariant", "helicity"):
             scripts.append(_emit_covariant(spec, ch, chain, name, out_dir,
                                            suffix, b))
         else:
-            raise ValueError("未知 kernel %r（可用：omega / covariant / helicity）"
-                             % kern)
+            raise ValueError(
+                "未知 kernel %r（可用：omega / covariant / helicity / "
+                "helicity_cascade）" % kern)
 
     readme = _readme(spec, ch, scripts, suffix)
     with open(os.path.join(out_dir, "README.md"), "w", encoding="utf-8") as fh:
@@ -602,6 +606,194 @@ def _emit_covariant(spec, ch, chain, name, out_dir, suffix, basis):
             "suffix": suffix, "env": dict(basis.get("env") or {}),
             "from_chain_dir": chain_name, "from_chain": from_chain,
             "fallback": missing}
+
+
+_CASCADE_HEADER = '''#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""{title}
+
+**本文件由 agent.tensor 从 TOML 自动生成，不要手改**；改参数请改
+`{spec_name}` 后重跑 `python -m agent.tensor emit {spec_name}`。
+
+链：{chain_one_line}
+道（{n_ch} 条，逐节点 (l,s) 已冻结）：
+{channel_lines}
+
+产物（写进 --out）：
+
+    {out_name}   {out_shape}
+
+口径（`documentation/helicity_amplitude_roadmap.md` §4）：
+
+    A^(n)[lam_a, lam_b, lam_c] = D^{{J_a*}}_{{lam_a, lam_b-lam_c}}(alpha_n,beta_n,0)
+        f^{{J_b}}_{{|lam_b|}}(gamma_b) f^{{J_c}}_{{|lam_c|}}(gamma_c)
+        sum_{{(l,s)}} g_ls H^(n)_{{(ls)}}[lam_b,lam_c] q_n^l B_l(q_n)
+
+    A_chain[lam_top] = sum_{{内线 lam}} prod_n A^(n)[lam_n, lam_d1, lam_d2]
+
+末轴行序与 cache 的 `EPS_A` 行序 `(lam=+1, 0, -1)` **逐位一致**
+（`LAM_SLOTS[J]` 是 `-J..J`，`D_lambda` 第 i 行配 `lam_a[i]`，合起来正好对上），
+所以落盘**不需要翻轴**。
+
+**与 `kernel="helicity"` 逐位同格式** —— 拟合侧 `_load_cached_tensor` 零改动。
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+
+import numpy as onp
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+import _backend as _B          # noqa: E402  后端选择（jax 优先，回退 numpy）
+import runtime as RT           # noqa: E402  同目录的 omega 运行时副本
+import helicity_cascade as HC  # noqa: E402  同目录的级联内核副本
+
+xp = _B.xp
+jit = _B.jit
+to_numpy = _B.to_numpy
+
+CHAIN = {chain!r}
+# 逐道：(名字, [(l,s), ...] 只给顶层), 逐节点 (l,s) 表, 镜像树覆盖
+CASCADE_CHANNELS = {cascade_channels!r}
+NAMES = [_c["name"] for _c in CASCADE_CHANNELS]
+OUT_NAME = {out_name!r}
+
+INPUT_KEYS = {keys!r}
+INPUT_LAYOUT = {layout!r}
+
+
+def _momenta_from_npz(path, keys, start=0, n=None, order="x,y,z,E"):
+    """读 npz 并转成 omega/级联内核的 (E,x,y,z) 布局。
+
+    **级联内核走 `kernels/omega.py` 的约定**（`(E,x,y,z)`、度规
+    `diag(1,-1,-1,-1)`），与协变内核的 `(x,y,z,E)` 相反 —— 这正是
+    `_emit_covariant` 里那条"不做置换"注释的镜像。这里必须置换。
+    """
+    d = onp.load(path)
+    sl = slice(start, None if n is None else start + n)
+    arrs = [onp.asarray(d[k][sl], dtype=onp.float64) for k in keys]
+    mom = onp.stack(arrs, axis=1)                       # (N, n_part, 4)
+    declared = order.replace(" ", "").split(",")
+    perm = [declared.index(c) for c in ("E", "x", "y", "z")]
+    return _B.to_device(mom[..., perm])
+
+
+def cascades(mom):
+    """逐道算 `W_i(e, lam_A)`，返回 `{{道名: (N, 2J+1) complex}}`。"""
+    out = {{}}
+    for _c in CASCADE_CHANNELS:
+        _ch = HC.with_tree(CHAIN, _c["tree"] or {{}})
+        _ang = HC.node_angles(mom, _ch)
+        # 内核末轴的行序**已经**是 cache 的 `EPS_A` 行序（`lam=+1, 0, -1`）：
+        # `LAM_SLOTS[J]` 是 `-J..J`，而 `D_lambda(ang, J, lam_a, ...)` 的第 i 行
+        # 配 `lam_a[i]`，两者合起来正好给出 EPS_A 的行序 —— **不要翻轴**。
+        # 实测 13 条道（phif2 5 条 + b1 8 条）逐行 rel < 1e-13。
+        out[_c["name"]] = HC.chain_amplitude(mom, _ch, _c["ls"], ang=_ang)
+    return out
+
+
+_CASCADES = jit(cascades)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="自动生成的螺旋度级联预计算（{name}）")
+    ap.add_argument("--momenta", "--npz", dest="momenta", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--n", type=int, default=0, help="0 = 全部")
+    ap.add_argument("--start", type=int, default=0)
+    ap.add_argument("--batch", type=int, default=128)
+    args = ap.parse_args()
+
+    t0 = time.time()
+    mom = _momenta_from_npz(args.momenta, INPUT_KEYS, args.start,
+                            args.n or None, order=INPUT_LAYOUT)
+    n = mom.shape[0]
+    print("[{name}] %d events from %s  backend=%s"
+          % (n, args.momenta, _B.backend_name()))
+
+    out = None
+    for beg in range(0, n, args.batch):
+        end = min(beg + args.batch, n)
+        blk = _B.tree_to_numpy(_CASCADES(mom[beg:end]))
+        arr = onp.stack([blk[nm] for nm in NAMES], axis=0)
+        if out is None:
+            out = onp.zeros(arr.shape[:1] + (n,) + arr.shape[2:],
+                            dtype=arr.dtype)
+        out[:, beg:end] = arr
+        if beg % (args.batch * 20) == 0 or end == n:
+            print("  %7d/%d  %.1f ev/s  elapsed %.1fs"
+                  % (end, n, end / max(time.time() - t0, 1e-9),
+                     time.time() - t0), flush=True)
+
+    os.makedirs(args.out, exist_ok=True)
+    dest = os.path.join(args.out, OUT_NAME)
+    onp.save(dest, out)
+    print("  saved %-22s %s %s" % (OUT_NAME, out.shape, out.dtype))
+    print("done in %.1fs" % (time.time() - t0))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _emit_helicity_cascade(spec, ch, chain, name, out_dir, suffix, basis):
+    """编译成螺旋度级联预计算脚本（`kernel = "helicity_cascade"`）。
+
+    与 `_emit_covariant` 的差别：**不内联手写道函数**，而是把
+    `kernels/helicity_cascade.py` 原样拷进产物目录，逐节点 (l,s) 从
+    `spec.cascade_channels` 冻结进脚本。产物自足（只依赖 `_backend` /
+    `runtime` / `helicity_cascade` 三份同目录副本）。
+    """
+    kdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kernels")
+    for src, dst in (("helicity_cascade.py", "helicity_cascade.py"),
+                     ("omega.py", "runtime.py"),
+                     ("_backend.py", "_backend.py")):
+        shutil.copyfile(os.path.join(kdir, src), os.path.join(out_dir, dst))
+
+    cascade_channels = specmod.cascade_channels(spec)
+    # 逐道 (l,s) 的顶层那一组，用于产物头部/README 的道表
+    ch_tbl = [(c["name"], c["l"], c["s"], c["family"]) for c in cascade_channels]
+
+    chain_name_out = spec["raw"].get("chain", {}).get("chain_name") or name
+    # 默认落 `_hel.npy` —— 这就是 §4.5 的承诺：**与 helicity cache 逐位同格式**，
+    # 生产里直接顶替它，拟合侧 `_load_cached_tensor` 零改动。一份 spec 同时出
+    # helicity 与 helicity_cascade 时（只为了验收对拍）会撞名，用
+    # `[[basis]] files = ["<名字>.npy"]` 显式区分。
+    files = list(basis.get("files") or [])
+    out_name = files[0] if files else "%s_hel.npy" % chain_name_out
+
+    top = chain["nodes"][chain["top"]]
+    chain_one_line = "%s (J=%d) -> %s + %s" % (
+        chain["top"], top["J"], top["daughters"][0], top["daughters"][1])
+    channel_lines = "\n".join(
+        "    %-18s (l,s)=(%d,%d)  逐节点 %s" % (
+            c["name"], c["l"], c["s"],
+            " ".join("%s%s" % (k, v) for k, v in c["ls"].items()))
+        for c in cascade_channels)
+
+    body = _CASCADE_HEADER.format(
+        title="%s —— 自动生成的螺旋度级联预计算" % name,
+        spec_name="chain_spec.toml", chain_one_line=chain_one_line,
+        channel_lines=channel_lines, n_ch=len(cascade_channels),
+        out_name=out_name, out_shape="(n_ch, N, 3) complex128",
+        chain=chain, cascade_channels=cascade_channels,
+        keys=spec["input_keys"], layout=spec["input_layout"], name=name)
+
+    script_name = "gen_tensor_%s_helicity_cascade.py" % name
+    script_path = os.path.join(out_dir, script_name)
+    with open(script_path, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    return {"basis": basis["name"], "kernel": "helicity_cascade",
+            "script": script_path, "suffix": suffix,
+            "env": dict(basis.get("env") or {}), "from_chain_dir": None,
+            "from_chain": {}, "fallback": []}
 
 
 def _extract_channel_body(chain_name, channel):

@@ -31,7 +31,8 @@ analyses/tensor_examples/
 │   └── ex3_b1pi.toml       ← 例 3 的 b₁ 树（8 条道）
 ├── data/
 │   └── make_momenta.py     ← 合成 ψ→φπ⁺π⁻→(K⁺K⁻)(π⁺π⁻) 四动量（自带守恒自检）
-├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检
+├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检 + A1/A3/A7
+├── probes/                 ← 一次性诊断脚本（复现 roadmap §7 与边界实测）
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
 
@@ -63,20 +64,91 @@ analyses/kk_dis/.venv/bin/python \
 analyses/kk_dis/.venv/bin/python analyses/tensor_examples/check_ex3.py --n 500
 ```
 
-`check_ex3.py` 做三层验证：
+`check_ex3.py` 做三层验证 + 三条判据：
 
 1. **生成物 vs 框架内核**：产物脚本内联的道函数体算出的 cache，必须与直接调
    `agent.tensor.kernels.covariant.compute_event` 逐位一致（抓 emitter 组装 bug）；
 2. **cartesian vs helicity**：`W = EPS_A · T`（抓 store 体写错）；
-3. **有限性**：没有 NaN/Inf。
+3. **有限性**：没有 NaN/Inf；
+4. **A1**（新）：`helicity_cascade` 逐道对拍协变路线（经 `EPS_A`），rel < 1e-12；
+5. **A3**（新）：b₁ 的 8 条道两两不重合（min pairwise rel > 1e-6）；
+6. **A7**（新）：级联 cache 的形状/dtype 与 helicity **精确**一致。
 
 框架侧的对应测试（不需要本目录的数据）：
 
 ```bash
-python agent/tensor/tests/test_ex3_channels.py     # 8 项，纯 numpy，永远能跑
+python agent/tensor/tests/test_ex3_channels.py      # 8 项，纯 numpy，永远能跑
+python agent/tensor/tests/test_helicity_cascade.py  # 9 项：A1/A2/A3/A4 + 边界
 TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax.py
-                                                    # 与 jax 原版逐式对拍（24 个对象）
+                                                     # 与 jax 原版逐式对拍（24 个对象）
 ```
+
+## 螺旋度级联表象（`kernel = "helicity_cascade"`）
+
+`documentation/helicity_amplitude_roadmap.md` 的实现落点。它按 tf-pwa 的
+`HelicityDecay` + `DecayChain.get_amp` 逐节点构造振幅、再链级 `einsum` 缩并内线
+螺旋度，所以**对链的深度没有任何假设**，也**每个节点都可以有多个 (l,s)** ——
+这正是 omega 的两条能力边界（§1.1 / §1.2）。
+
+| | omega / helicity | helicity_cascade |
+|---|---|---|
+| 逐节点 (l,s) | ❌ 非顶层节点只以标量 $K_i$ 出现 | ✅ 每节点一个列表 |
+| 深度 | ❌ 只算 `D0*D1*D2` | ✅ 任意深度 |
+| 逐节点螺旋度参考系 | ❌ 全部从顶层静止系直接 boost | ✅ 每层在**母节点**系里量 |
+| cache 形状 | `(n_ch, N, 3)` complex | **逐位相同** |
+| 拟合侧 | — | **零改动**（`_load_cached_tensor` 不变） |
+
+TOML 侧新增两个 `[[channel]]` 字段：
+
+```toml
+[[channel]]
+name = "u_SD_1"
+l = 0
+s = 1
+# 逐节点 (l,s)：顶层波 × 内层波才是完备标签（SS/SD/DS/DD）
+ls   = { psi2s = [[0,1]], b1 = [[2,1]], phi = [[1,0]] }
+# 镜像树：`_2` 族的旁观者是 Pip
+tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
+```
+
+`ls` 缺省时，顶层用道表的 `(l,s)`、其余衰变节点用 `allowed_ls`（宇称 + 三角
+的**全部**允许值）；`tree` 缺省时沿用 `[particles.*].daughters`。两者都只在
+`helicity_cascade` 表象里被读，但**在读 TOML 时**就校验（未知节点、宇称禁止的
+`(l,s)`、改变末态集合的"镜像树"都会报错，而不是运行时 KeyError）。
+
+### 已知边界：ρ′ 的 Eq.(46) **不是**逐节点级联
+
+判据 A1 对 b₁ 的 8 条道全部通过（rel 6e-15 … 2.5e-14），但对 ρ′ 的
+`u_rho_1`/`u_rho_2` **不通过**（rel 0.24 / 0.28）。这不是内核的 bug ——
+把协变振幅按顶层节点分解出"中间态螺旋度内容" $v$，再和级联预测
+$v_{\text{casc}}$ 比：
+
+| 道 | $\lvert R/R_0-1\rvert_{\max}$ | 判定 |
+|---|---|---|
+| b₁ `u_DD_1`（控制） | **1.5e-14** | $R$ 是常数 → **是**级联 |
+| ρ′ `u_rho_1` | **3.8e+00** | $R$ 随事例变 → **不是**级联 |
+
+差别在公式结构：
+
+* b₁ 的 Eq.(47)–(50) 含**中间态的投影算符**
+  $\tilde g_{\mu\nu}(p_{b_1})$ / $\tilde t^{(2)}_{\mu\nu}(p_{b_1})$ —— 这就是
+  "逐节点级联"的协变写法，所以与 `helicity_cascade` 逐位一致。
+* ρ′ 的 Eq.(46) 是 $\epsilon^\mu{}_{\alpha\beta\gamma}p_\psi^\alpha
+  [\ldots \epsilon^{\gamma\delta\sigma\lambda}p_{\psi\delta}\ldots]$ ——
+  两个 $\epsilon$ 张起来、**内层 $\epsilon$ 缩并的是 $p_\psi$ 而不是 $p_{\rho'}$**，
+  中间没有投影算符。这是"$\psi\to$ 三介子"的嵌套 $\epsilon$ 形式，不是
+  $\psi\to\rho'\pi$、$\rho'\to\phi\pi$ 的两级级联。
+
+实测过的替代假设（都不成立）：内层 $\epsilon$ 换成 $p_{\rho'}$（rel 0.22）；
+内层 $(l,s)$ 加到 (3,1)（残差不变）；关掉 Eq.52 协变项；两棵树 × 两种参考系
+× 四组内层 $(l,s)$ 的穷举（最好 2.1e-01）。**最小二乘可表示性**给出同样的结论：
+协变 `u_rho_1` 在 ρ′ 级联基底（含 (3,1)）里的残差是 1.6e-01，而 b₁ 的
+`u_DD_1` 在对应基底里是 4e-15。
+
+**结论**：ρ′ 的协变道与螺旋度级联是**两种不同的振幅**，不是同一个东西的两种
+写法。这条链要进螺旋度路线，得先把 Eq.(46) 重写成带 $\rho'$ 投影算符的级联
+形式（物理上等价与否需要另做研究）—— 在那之前，ρ′ 只能走协变/`helicity` 表象。
+`check_ex3.py` 因此对 ρ′ 设 `"a1": False`（只验 A7 形状与有限性）。
 
 ## 例 3 的物理要点（读道函数前先看这段）
 
@@ -91,9 +163,10 @@ TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax
   ρ′ 族 `_1` 的旁观者是粒子 3，b₁ 族 `_1` 的旁观者是粒子 4。
 * ⚠️ 顶层 `(l,s)` **不是** b₁ 族的完备标签（8 条道只映射到 2 组 `(l,s)`），
   所以两份 spec 都设 `check_channels = false`。
-* ⚠️ 三层树（`ψ→X π`，`X→φπ`，`φ→K⁺K⁻`）**只能出协变/螺度表象**，
-  不能出 omega —— omega 内核逐节点读树、只算 `D0*D1*D2`。这条限制现在由
+* ⚠️ 三层树（`ψ→X π`，`X→φπ`，`φ→K⁺K⁻`）**不能出 omega 表象** ——
+  omega 内核逐节点读树、只算 `D0*D1*D2`。这条限制由
   `agent/tensor/spec.py` 按 `[[basis]]` 分级执行。
+  现在可以改出 `helicity_cascade`：它对深度没有假设。
 
 ## 数据为什么是合成的
 
