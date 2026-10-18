@@ -275,6 +275,71 @@ def test_covariant_term_is_required():
         assert spread > 1e-3, "%s 关掉协变项后比值仍是常数（%.3e）" % (name, spread)
 
 
+def test_inner_lambda_slots_are_not_collapsed():
+    """内层共振的**全部** 2J+1 个 lambda 槽都必须真的参与（§1.2）。
+
+    omega 的 `_node_decay_d` 把子粒子螺旋度写死成 `[0],[0]`。对 φf₂ 的内层
+    `f2 -> pi pi`（末态自旋 0）看起来无害，但 `f2` 的 5 个 lambda 槽经
+    `D^{J*}` 接到顶层节点 —— 丢掉它们就等于丢掉内层角分布。这条断言把
+    "5 个槽都是非零"钉住。
+    """
+    momd, mom = _mom()
+    sp = S.load_spec(PHIF2)
+    chain = S.to_chain(sp)
+    ang = HC.node_angles(mom, chain)
+    A = HC.node_amplitude(mom, chain, "f2", [(2, 0)], ang=ang)
+    assert A.shape[1] == 5, A.shape
+    for i, lf in enumerate(HC.lambda_order(2)):
+        col = A[:, i, 0, 0]
+        assert onp.abs(col).max() > 1e-12, \
+            "lam_f2=%+d 被压成 0（omega 的 bug 又回来了）" % lf
+
+
+def test_row_order_for_all_phif2_channels():
+    """J > 1 也要同序 —— φf₂ 的 5 条道覆盖 (L,S)=(0,1),(2,1),(2,2),(2,3),(4,3)。
+
+    J=1 时 `LAM_SLOTS[1]` 与 `EPS_A` 都是 3 行，同序有可能是巧合；φf₂ 的
+    内层 `f2` 有 5 个槽、`phif243` 的顶层是 $(4,3)$，所以这条能排除"只在
+    J=1 上碰巧对上"。
+    """
+    momd, mom = _mom()
+    sp = S.load_spec(PHIF2)
+    chain = S.to_chain(sp)
+    ang = HC.node_angles(mom, chain)
+    for nm, ls in (("phif201", [(0, 1)]), ("phif221", [(2, 1)]),
+                   ("phif222", [(2, 2)]), ("phif223", [(2, 3)]),
+                   ("phif243", [(4, 3)])):
+        A = HC.chain_amplitude(
+            mom, chain, {"psi2s": ls, "phi": [(1, 0)], "f2": [(2, 0)]}, ang=ang)
+        W = _wcov(nm, momd)
+        assert _rel(A, W) < 1e-12, "%s 同序 rel = %.3e" % (nm, _rel(A, W))
+        assert _rel(A[:, ::-1], W) > 0.1, "%s 翻轴反而对上了？" % nm
+
+
+def test_phi_f0_channels_unregressed():
+    """φf₀ 的 2 条道不能退化（内层 f0 自旋 0，是最简单的情形）。"""
+    momd, mom = _mom()
+    sp = S.load_spec(os.path.join(ROOT, "agent", "tensor", "specs",
+                                  "phif0.toml"))
+    chain = S.to_chain(sp)
+    ang = HC.node_angles(mom, chain)
+    for nm, ls in (("phif001", [(0, 1)]), ("phif021", [(2, 1)])):
+        A = HC.chain_amplitude(
+            mom, chain, {"psi2s": ls, "phi": [(1, 0)], "f0": [(0, 0)]}, ang=ang)
+        W = _wcov(nm, momd)
+        assert _rel(A, W) < 1e-12, "%s rel = %.3e" % (nm, _rel(A, W))
+
+
+def test_lambda_order_is_lam_slots():
+    """`lambda_order(J)` 必须就是 `LAM_SLOTS[J]`（不是翻过来的 `+J..-J`）。"""
+    for J in range(0, 5):
+        assert HC.lambda_order(J) == list(RT.LAM_SLOTS[J])
+    assert HC.lambda_order(1) == [-1, 0, 1]
+    # 而且**不**提供 flip_lambda_axis —— 翻了轴会把 A1 从 1e-13 变成 O(1)
+    assert not hasattr(HC, "flip_lambda_axis"), \
+        "flip_lambda_axis 又回来了 —— 见 lambda_order 的说明"
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     bad = 0
