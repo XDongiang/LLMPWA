@@ -7,13 +7,16 @@
 它不是生产分析：没有拟合、没有 `llm_config_*.toml`、没有 `data/` 真实样本。
 目的只有一个 —— 给「框架新加一条道」这件事一个**独立于 kk_dis** 的验收面。
 
+目前覆盖**例 3**（`ψ→φπ⁺π⁻`，ρ′ + b₁ 共 10 条道）与**例 5**
+（`ψ→K⁺π⁻K⁻π⁺`，K*₀ + K*₂ 共 10 条道），合计 **20 条道**。
+
 ## 现状
 
 | 例子 | 文档行 | 状态 | 道 |
 |---|---|---|---|
 | 例 3 `ψ→φπ⁺π⁻` 的 ρ′ 道 | 374–387 | ✅ 已实现 | `u_rho_1` `u_rho_2`（Eq.46） |
 | 例 3 `ψ→φπ⁺π⁻` 的 b₁ 道 | 391–416 | ✅ 已实现 | `u_{SS,SD,DS,DD}_{1,2}`（Eq.47–50） |
-| 例 5 `ψ→K⁺π⁻K⁻π⁺` 的 K*₀/K*₂ 道 | 431–623 | ⬜ 待做 | 10 条（`u_kst0_*` + `u_PP/PF/FP/FF_*`） |
+| 例 5 `ψ→K⁺π⁻K⁻π⁺` 的 K*₀/K*₂ 道 | 431–623 | ✅ 已实现（2026-10-19） | 10 条（`u_kst0_*` + `u_PP/PF/FP/FF_*`） |
 | 例 1/2 三体（置换求和模型） | 200–304 | ⬜ 待定模型 | — |
 | 例 7–11 辐射衰变 | 845–1383 | ⬜ 需新基建 | 秩 2 振幅 + 横向投影 |
 | 例 4/6/12 | — | ❌ 不做 | 三体 / 深度 3 的 omega / 文档为空 |
@@ -44,8 +47,11 @@ analyses/tensor_examples/
 │   └── ex5_kst0.toml       ← 例 5 的 K*₀ 树（2 条道）
 ├── data/
 │   └── make_momenta.py     ← 合成 ψ→φπ⁺π⁻→(K⁺K⁻)(π⁺π⁻) 四动量（自带守恒自检）
-├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检 + A1/A3/A7
+├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检 + A1/A3/A7（**仅例 3**）
 ├── probes/                 ← 一次性诊断脚本（复现 roadmap §7 与边界实测）
+│   ├── verify_ex5_port.py  ← 例 5 的 10 条道 vs jax 逐式对拍（10/10，1e-15）
+│   ├── probe_ex5_identify.py ← 例 5 级联可表示性穷举 + 阳性对照（b₁ 8/8）
+│   └── …                   ← ρ′/b₁ 的边界探针、行序探针、A1 错误注入等
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
 
@@ -62,9 +68,20 @@ python analyses/tensor_examples/chains/gen_chain_docs.py --check   # 只检查
 python agent/tensor/tests/test_chain_docs.py                       # 已挂进测试
 ```
 
-**为什么两份 spec 而不是一份**：ρ′ 与 b₁ 的**树不同**（中间态分别是
-`phi+π⁻` 与 `phi+π⁺`），一棵树只能描述一组配对。分成两份 TOML 最简明 ——
-这也是用户指定的结构（`chain.name/chain.channel.py` 存储、生成时组装）。
+**为什么是四份 spec 而不是两份**：两个**不同**的理由，别混。
+
+| spec 对 | 为什么要拆 |
+|---|---|
+| `ex3_rhopi` / `ex3_b1pi` | **树不同**（中间态分别是 `phi+π⁻` 与 `phi+π⁺`），一棵树只能描述一组配对 |
+| `ex5_kst2` / `ex5_kst0` | **自旋相同不了**（K*₂ 是 $J=2$、K*₀ 是 $J=0$），而一个 `[particles.*]` 条目只能有一个 `J` |
+
+前者是拓扑冲突，后者是量子数冲突。分拆是最简明的解法 —— 这也是用户指定的
+结构（`chain.name/chain.channel.py` 存储、生成时组装）。
+
+⚠️ 每份 spec 内部仍然有"两棵树塞在一起"的问题：`b1pi` 与 `ex5_kst2` 的
+`_1`/`_2` 是**旁观者 π 对调**，靠逐道 `tree` 覆盖共存。协变道函数不读树
+（`grep -c "chain\|nodes" agent/tensor/kernels/covariant.py` == 0），所以能工作；
+但真实拟合里"两棵树是否共享传播子/参数"仍未处理。
 
 ## 跑
 
@@ -104,10 +121,26 @@ analyses/kk_dis/.venv/bin/python analyses/tensor_examples/check_ex3.py --n 500
 
 ```bash
 python agent/tensor/tests/test_ex3_channels.py      # 8 项，纯 numpy，永远能跑
-python agent/tensor/tests/test_helicity_cascade.py  # 9 项：A1/A2/A3/A4 + 边界
-TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax.py
-                                                     # 与 jax 原版逐式对拍（24 个对象）
+python agent/tensor/tests/test_ex5_channels.py      # 6 项，纯 numpy（例 5 的 10 条道）
+python agent/tensor/tests/test_helicity_cascade.py  # 13 项：A1/A2/A3/A4 + 三条边界
+python agent/tensor/tests/test_chain_docs.py        # 5 项：链文档与 spec 同步
+
+# 与 jax 原版逐式对拍（需要 jax + Tensor/ 源码，缺了就跳过）
+TENSOR_ROOT=<...>/tensor_example \
+    python agent/tensor/tests/test_covariant_vs_jax.py   # phif0/phif2 的 7 条 + 例 3 的 10 条
+analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
+                                                         # 例 5 的 10 条
 ```
+
+⚠️ 跑 jax 对拍**必须**在导入 `FUNC` 之前开 x64：
+
+```python
+import jax
+jax.config.update("jax_enable_x64", True)
+```
+
+否则 jax 全程 float32（$\varepsilon\approx1.2\times10^{-7}$），对拍只能到 1e-7，
+看起来像"移植错了"。这个坑第一次就踩了 —— 见下面例 5 那节。
 
 ## 螺旋度级联表象（`kernel = "helicity_cascade"`）
 
@@ -143,6 +176,14 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 `(l,s)`、改变末态集合的"镜像树"都会报错，而不是运行时 KeyError）。
 
 ### 已知边界：ρ′ 的 Eq.(46) 不是"逐节点核 + 常数复系数"的级联
+
+> **三条边界一览**（细节各见其下）：
+>
+> | # | 边界 | 判据 | 状态 |
+> |---|---|---|---|
+> | 1 | omega 的**逐节点 $(l,s)$ 容量** | 非顶层节点在 cache 里只有标量 $K_i$ | 已由级联内核推开 |
+> | 2 | omega 的**深度**（只算 `D0*D1*D2`） | 深度 ≥ 3 时最内层角分布被丢 | 已由级联内核推开 |
+> | 3 | 某些**协变公式不是级联** | 落在级联子空间之外（ρ′ Eq.46；例 5 的 `u_PP_*`/`u_FP_*`） | **未解决** |
 
 判据 A1 对 b₁ 的 8 条道全部通过（rel 6e-15 … 2.5e-14），但对 ρ′ 的
 `u_rho_1`/`u_rho_2` **不通过**（rel 0.24 … 0.32，随样本变 —— 这本身就是
@@ -203,6 +244,70 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
   omega 内核逐节点读树、只算 `D0*D1*D2`。这条限制由
   `agent/tensor/spec.py` 按 `[[basis]]` 分级执行。
   现在可以改出 `helicity_cascade`：它对深度没有假设。
+
+## 例 5（`ψ→K⁺π⁻K⁻π⁺`）的落地（2026-10-19）
+
+10 条道已从参考实现 `Tensor/FUNC.py` 逐式移植到
+[`agent/tensor/chains/kstpi/`](../../agent/tensor/chains/kstpi/)
+（`u_kst0_{l,r}` + `u_{PP,PF,FP,FF}_{1,2}`）。
+
+### 拓扑：深度 3，与 b₁ 同构
+
+$\psi\to K^*\pi \to (\phi\pi)\pi \to (K^+K^-)(\pi\pi)$ —— 把 b₁ 换成 K*，
+**其余结构与例 3 的 b₁ 完全一样**。所以 omega 同样不可用、级联同样可用。
+
+### 为什么拆成 K*₂ / K*₀ 两份
+
+K*₂ 是 $J=2$、K*₀ 是 $J=0$，一个 `[particles.*]` 条目只能有一个 `J`。
+协变道函数本身不读 `J`（公式硬编码），所以"能不能算"不受影响，但拓扑校验
+需要一个确定的 $J$，只能拆。
+
+| spec | 道数 | 顶层 $(l,s)$ | 内层 $(l,s)$ |
+|---|---|---|---|
+| [`ex5_kst2.toml`](specs/ex5_kst2.toml) | 8 | $(1,2)$ / $(3,2)$ | $(1,1)$ / $(3,1)$ |
+| [`ex5_kst0.toml`](specs/ex5_kst0.toml) | 2 | $(1,0)$ | $(1,1)$ |
+
+### 验收：移植 10/10，级联 4/8 + 2/2
+
+```bash
+# 移植正确性（需要 jax + Tensor/，注意上面那个 x64 坑）
+analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
+
+# 纯 numpy 回归
+python agent/tensor/tests/test_ex5_channels.py
+
+# 级联可表示性 + 阳性对照
+python analyses/tensor_examples/probes/probe_ex5_identify.py
+python analyses/tensor_examples/probes/probe_ex5_identify.py --control
+```
+
+* **移植**：10/10 到 `rel ≈ 1e-15`。`check` / `emit` / 端到端跑产物，
+  三种表象全部通过。
+* **级联可表示性**：`ex5_kst2` **4/8**（`u_PF_*`、`u_FF_*` 命中），
+  `ex5_kst0` **2/2**。合起来 **6/10** —— ⚠️ 探针输出的是这个合计数，
+  **引用单链时用 4/8**，两个口径别混。
+* **阳性对照**：同一探针跑 b₁ 得 **8/8**。所以 4/8 不是探针坏了。
+
+`u_PP_*` / `u_FP_*` 落在级联子空间之外（rel ≈ 6e-3 / 2e-1），四条都含
+$P^{(2)}_{\psi}$ 横向投影且内层是 P 波。但 K*₀ 的内层**也是** P 波却命中，
+所以不是"P 波一律不行"，而是 $(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合。
+**原因未查清**。
+
+### 两个坑（都踩过）
+
+1. **jax 默认 float32** —— 见上文"框架侧的对应测试"。移植对拍第一次
+   10/10 全"失败"（rel 1e-6…1e-8），打开 x64 后立刻 10/10 到 1e-15。
+   同一个坑还**污染了级联探针**，伪造出一个"`_1` 族全败、`_2` 族全中"的
+   假不对称；改用本仓库的协变内核（float64）后消失。
+2. **K*₀ 的宇称** —— $J=0$ + 宇称守恒 + 三角只允许 $l=s=1$，对应 $0^-$；
+   而常见的 $K^*_0(1430)$ 是 $0^+$。所以这条道描述的**不是** $K^*_0(1430)$。
+   **疑点未解决**。
+
+### 例 5 还没有端到端脚本
+
+`check_ex3.py` 只覆盖例 3（读 `data/` 的 `phi f2` 动量、验 A1/A3/A7）。
+例 5 目前只由 `test_ex5_channels.py`（纯 numpy）+ `emit` 产物跑通来保证，
+**没有**等价的 `check_ex5.py`。真实样本、拟合侧端到端也都没做。
 
 ## 数据为什么是合成的
 
