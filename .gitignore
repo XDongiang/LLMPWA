@@ -153,3 +153,9 @@ task/
 literature/
 analyses/tensor_examples/_work/
 
+
+# 张量生成器的产物目录（由 agent/tensor/specs/*.toml 的 output 相对路径决定，
+# 例如 `output = "../generated/phif0"` 会落到 agent/tensor/generated/）。
+# 完全可复现，不入库。
+agent/tensor/generated/
+agent/tensor/specs/generated/

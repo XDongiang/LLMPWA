@@ -26,6 +26,13 @@
 ```text
 analyses/tensor_examples/
 ├── README.md               ← 本文件
+├── chains/                 ← **每条链一份文档**（做了什么 / 还有什么问题）
+│   ├── README.md           ← 链文档索引 + 三条边界
+│   ├── phif0.md            ← ψ→φf₀   （深度 2，三表象）
+│   ├── phif2.md            ← ψ→φf₂   （深度 2，三表象）
+│   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）
+│   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）
+│   └── rhof2_generic.md    ← ψ→ρf₂   （假想链，只能 check 不能 emit）
 ├── specs/
 │   ├── ex3_rhopi.toml      ← 例 3 的 ρ′ 树（2 条道）
 │   └── ex3_b1pi.toml       ← 例 3 的 b₁ 树（8 条道）
@@ -35,6 +42,10 @@ analyses/tensor_examples/
 ├── probes/                 ← 一次性诊断脚本（复现 roadmap §7 与边界实测）
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
+
+**每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖五条链
+（`phif0` / `phif2` / `b1pi` / `rhopi` / `rhof2_generic`）各自的拓扑、
+分波、表象可用性、验收数据与遗留问题。
 
 **为什么两份 spec 而不是一份**：ρ′ 与 b₁ 的**树不同**（中间态分别是
 `phi+π⁻` 与 `phi+π⁺`），一棵树只能描述一组配对。分成两份 TOML 最简明 ——
