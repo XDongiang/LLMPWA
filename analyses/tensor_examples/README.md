@@ -28,11 +28,13 @@ analyses/tensor_examples/
 ├── README.md               ← 本文件
 ├── chains/                 ← **每条链一份文档**（做了什么 / 还有什么问题）
 │   ├── README.md           ← 链文档索引 + 三条边界
-│   ├── phif0.md            ← ψ→φf₀   （深度 2，三表象）
-│   ├── phif2.md            ← ψ→φf₂   （深度 2，三表象）
-│   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）
-│   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）
-│   └── rhof2_generic.md    ← ψ→ρf₂   （假想链，只能 check 不能 emit）
+│   ├── gen_chain_docs.py   ← 从 spec 自动导出"事实"部分（见下）
+│   ├── notes/              ← 手工"叙述"部分（每链一份 .notes.md）
+│   ├── phif0.md            ← ψ→φf₀   （深度 2，三表象）  ← 生成物
+│   ├── phif2.md            ← ψ→φf₂   （深度 2，三表象）  ← 生成物
+│   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）← 生成物
+│   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）    ← 生成物
+│   └── rhof2_generic.md    ← ψ→ρf₂   （假想链）          ← 生成物
 ├── specs/
 │   ├── ex3_rhopi.toml      ← 例 3 的 ρ′ 树（2 条道）
 │   └── ex3_b1pi.toml       ← 例 3 的 b₁ 树（8 条道）
@@ -46,6 +48,15 @@ analyses/tensor_examples/
 **每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖五条链
 （`phif0` / `phif2` / `b1pi` / `rhopi` / `rhof2_generic`）各自的拓扑、
 分波、表象可用性、验收数据与遗留问题。
+
+这些文档是**生成物**：拓扑/道表/计数律/表象可用性从 TOML 自动导出，
+"做了什么、还有什么问题"手写在 `chains/notes/`。改了 spec 要重跑：
+
+```bash
+python analyses/tensor_examples/chains/gen_chain_docs.py           # 重生成
+python analyses/tensor_examples/chains/gen_chain_docs.py --check   # 只检查
+python agent/tensor/tests/test_chain_docs.py                       # 已挂进测试
+```
 
 **为什么两份 spec 而不是一份**：ρ′ 与 b₁ 的**树不同**（中间态分别是
 `phi+π⁻` 与 `phi+π⁺`），一棵树只能描述一组配对。分成两份 TOML 最简明 ——

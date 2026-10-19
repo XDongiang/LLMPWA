@@ -5,6 +5,50 @@
 
 本文档写于 2026-10-19，对应提交 `7af73ee`（分支 `agentic_pwa`）。
 
+## 这些文档是怎么来的
+
+**每份链文档都是生成物**，分两半：
+
+| 部分 | 来源 | 例子 |
+|---|---|---|
+| **事实**（会自动过期） | 由 [`gen_chain_docs.py`](gen_chain_docs.py) 从 TOML **自动导出** | 拓扑、粒子表、道表、逐节点 $(l,s)$、计数律、表象可用性、`emit` 实测 |
+| **叙述**（只有人知道） | 手写在 [`notes/<chain>.notes.md`](notes/) | 为什么重要、踩过的坑、遗留问题、复现命令 |
+
+所以**不要直接编辑 `chains/*.md`** —— 改 spec 或 `notes/*.notes.md`，然后：
+
+```bash
+# 重新生成全部 5 份
+python analyses/tensor_examples/chains/gen_chain_docs.py
+
+# 只检查是否同步（CI 用，不同步时非零退出）
+python analyses/tensor_examples/chains/gen_chain_docs.py --check
+
+# 打印某一份到 stdout（不写盘）
+python analyses/tensor_examples/chains/gen_chain_docs.py --stdout b1pi
+```
+
+同步检查已挂进测试套件：
+
+```bash
+python agent/tensor/tests/test_chain_docs.py    # 4 项
+```
+
+它包含一条**反向验证**（故意弄脏文档，`--check` 必须报错），
+防止"检查器永远返回 OK"的假绿。
+
+### 自动导出的 6 个小节
+
+| 小节 | 内容 |
+|---|---|
+| 1. 拓扑 | 树的文字图 + 深度 |
+| 2. 粒子表 | $J$ / 宇称 / 质量 / 角色 / 允许的 $l$ |
+| 3. 道表与逐节点 $(l,s)$ | 显式还是枚举；每条的逐节点 $(l,s)$ |
+| 4. 计数律 | $\prod_n N_n$；非顶层是否多分波（⇒ omega 容量够不够）|
+| 5. 表象与 `emit` 可行性 | **逐表象实测** `emitter.emit`，不靠文件存在推断 |
+| 6. 叙述 | 手工笔记原文嵌入 |
+
+`emit` 那一步写到**临时目录**，所以生成文档不会在仓库里留产物。
+
 ---
 
 ## 一张表看全
@@ -106,6 +150,8 @@ omega 的 `chain_angles` 把每个粒子都从**顶层**静止系直接 boost。
 | omega 内核 | [`agent/tensor/kernels/omega.py`](../../../agent/tensor/kernels/omega.py) |
 | spec 解析 | [`agent/tensor/spec.py`](../../../agent/tensor/spec.py) |
 | emitter | [`agent/tensor/emitter.py`](../../../agent/tensor/emitter.py) |
+| **链文档生成器** | [`gen_chain_docs.py`](gen_chain_docs.py) |
+| **链文档手工笔记** | [`notes/`](notes/) |
 | 端到端回归 | [`check_ex3.py`](../check_ex3.py) |
 | 诊断探针 | [`probes/`](../probes/) |
 | 独立复算 | `analyses/kk_dis/task/20261019_螺旋度级联内核_审阅/material/verify.py` |
