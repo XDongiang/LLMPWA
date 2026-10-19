@@ -60,5 +60,5 @@ python -m agent.tensor emit  analyses/tensor_examples/specs/ex5_kst0.toml
 
 ### 相关
 
-* [链 `ex5_kst2`](ex5_kst2.md) —— 同一移植的 $J=2$ 部分（含 6/10 级联判定）
+* [链 `ex5_kst2`](ex5_kst2.md) —— 同一移植的 $J=2$ 部分（含 4/8 级联判定）
 * [链索引](README.md)

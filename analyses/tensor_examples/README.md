@@ -35,7 +35,7 @@ analyses/tensor_examples/
 │   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）← 生成物
 │   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）    ← 生成物
 │   ├── rhof2_generic.md    ← ψ→ρf₂   （假想链）          ← 生成物
-│   ├── ex5_kst2.md         ← ψ→K*₂π  （例 5，6/8 是级联）← 生成物
+│   ├── ex5_kst2.md         ← ψ→K*₂π  （例 5，4/8 是级联）← 生成物
 │   └── ex5_kst0.md         ← ψ→K*₀π  （例 5，2/2 是级联）← 生成物
 ├── specs/
 │   ├── ex3_rhopi.toml      ← 例 3 的 ρ′ 树（2 条道）

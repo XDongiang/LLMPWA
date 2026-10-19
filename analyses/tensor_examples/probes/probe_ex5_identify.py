@@ -170,6 +170,7 @@ def main():
                                    "判据二（子空间）"))
     print("-" * 100)
     nhit = 0
+    tally = {}          # 按链分组统计 —— 单链数与全局数**不是**一回事
     for ch, side in EX5:
         try:
             W4 = COV.compute_event(ch, d)
@@ -218,6 +219,10 @@ def main():
                 sub_best = (res, key, Bm.shape[1])
         exact = sub_best[0] < 1e-12
         nhit += exact
+        which = "ex5_kst0" if ch.startswith("u_kst0") else "ex5_kst2"
+        tally.setdefault(which, [0, 0])
+        tally[which][0] += bool(exact)
+        tally[which][1] += 1
         print("%-10s %-3s 单组合 %-12s %-10s %.2e   |  子空间 %d 维 %s  %.2e  %s   |W|max=%.3e"
               % (ch, side, str(best[1]), str(best[3]), best[0],
                  sub_best[2], sub_best[1], sub_best[0],
@@ -225,6 +230,13 @@ def main():
     print("-" * 72)
     print("命中 %d / %d（判据：W 落在该 K* 自旋的全部 (l,s) 组合张成的子空间里）"
           % (nhit, len(EX5)))
+    print()
+    print("按链拆分（**引用单链的数字时用这一行**）：")
+    for k in sorted(tally):
+        a, b = tally[k]
+        print("  %-10s %d / %d" % (k, a, b))
+    print("  %-10s %d / %d   <-- 全部例 5 道（跨两份 spec）"
+          % ("合计", nhit, len(EX5)))
     return 0
 
 
