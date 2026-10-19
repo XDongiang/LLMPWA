@@ -41,14 +41,29 @@ def test_docs_in_sync_with_specs():
 
 
 def test_every_chain_has_notes():
-    """每条链都要有手工笔记（否则生成物里只有一句占位注释）。"""
+    """生成器登记**每一条**链都要有手工笔记。
+
+    链名从 `gen_chain_docs.CHAINS` 读，不硬编码 —— 否则新增链时这个测试
+    会静默漏检（它本来就是为了防"文档缺叙述"）。
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gen_chain_docs", GEN)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
     notes = os.path.join(_ROOT, "analyses", "tensor_examples", "chains",
                          "notes")
-    names = [f[:-len(".notes.md")] for f in os.listdir(notes)
-             if f.endswith(".notes.md")]
-    assert len(names) >= 5, names
-    for n in ("phif0", "phif2", "b1pi", "rhopi", "rhof2_generic"):
-        assert n in names, "缺 notes/%s.notes.md" % n
+    have = {f[:-len(".notes.md")] for f in os.listdir(notes)
+            if f.endswith(".notes.md")}
+    want = {name for name, _sp, _hd in mod.CHAINS}
+    missing = sorted(want - have)
+    assert not missing, "缺 notes/<chain>.notes.md：%s" % ", ".join(missing)
+    # 生成物也要在盘上
+    for name in want:
+        assert os.path.exists(os.path.join(
+            _ROOT, "analyses", "tensor_examples", "chains",
+            "%s.md" % name)), "缺 chains/%s.md（跑 gen_chain_docs.py）" % name
 
 
 def test_no_broken_links():

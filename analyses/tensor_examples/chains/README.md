@@ -3,7 +3,7 @@
 `analyses/tensor_examples/chains/` —— 每条**链**一份文档，写清
 "目前做了什么、还有什么问题"。
 
-本文档写于 2026-10-19，对应提交 `7af73ee`（分支 `agentic_pwa`）。
+本文档写于 2026-10-19。例 5 的两份（`ex5_kst0` / `ex5_kst2`）随后补入。
 
 ## 这些文档是怎么来的
 
@@ -17,7 +17,7 @@
 所以**不要直接编辑 `chains/*.md`** —— 改 spec 或 `notes/*.notes.md`，然后：
 
 ```bash
-# 重新生成全部 5 份
+# 重新生成全部 7 份
 python analyses/tensor_examples/chains/gen_chain_docs.py
 
 # 只检查是否同步（CI 用，不同步时非零退出）
@@ -60,14 +60,28 @@ python agent/tensor/tests/test_chain_docs.py    # 4 项
 | [`b1pi`](b1pi.md) | ψ→b₁π→(φπ)π→(KK)(ππ) | **3** | 8 | cart / hel / **cascade** | ✅ | ✅ 6e-15 | **验收主力** |
 | [`rhopi`](rhopi.md) | ψ→ρ′π→(φπ)π→(KK)(ππ) | **3** | 2 | cart / hel / **cascade** | ✅ | ❌ 0.32 | **边界** |
 | [`rhof2_generic`](rhof2_generic.md) | ψ→ρf₂→(ππ)(ππ) | 2 | 5 | cart / hel / omega | ❌ | — | **假想链** |
+| [`ex5_kst2`](ex5_kst2.md) | ψ→K*₂π→(φπ)π→(KK)(ππ) | **3** | 8 | cart / hel / **cascade** | ✅ | ⚠️ 6/8 | **例 5** |
+| [`ex5_kst0`](ex5_kst0.md) | ψ→K*₀π→(φπ)π→(KK)(ππ) | **3** | 2 | cart / hel / **cascade** | ✅ | ✅ 2/2 | **例 5** |
 
 "表象"列加粗的是该链**特有**的那个：
 
 * `phif0`/`phif2` 特有 **omega**（深度 2，omega 可用）；
-* `b1pi`/`rhopi` 特有 **cascade**（深度 3，omega 被禁止）；
+* `b1pi`/`rhopi`/`ex5_*` 特有 **cascade**（深度 3，omega 被禁止）；
 * `rhof2_generic` 三个表象都列了但**只有 omega 能出**。
 
 "A1" = 级联 vs 协变逐道对拍（经 `EPS_A`）。✅ 表示到机器精度。
+
+`ex5_kst2` 的 "6/8" 是**级联可表示性**：8 条道里 6 条逐位命中
+（`u_PF_*`、`u_FF_*`），`u_PP_*`/`u_FP_*` 落在级联子空间之外
+（rel ≈ 6e-3 / 2e-1）。见 [ex5_kst2.md](ex5_kst2.md) 的"级联判定"。
+`ex5_kst0` 的 2 条**都是**纯级联。
+
+⚠️ 例 5 的 10 条道**已移植且与 jax 对拍通过（1e-15）** —— 所以"能不能算"
+是 ✅；有争议的只是"级联表象能否表示"。
+
+⚠️ 例 5 的移植对拍**必须**在导入 `FUNC` 前开 jax x64，否则全程 float32、
+只能到 1e-7，会被误判成移植失败。这个坑第一次就踩了（见
+[ex5_kst2.md](ex5_kst2.md)）。
 
 ## 三条边界
 

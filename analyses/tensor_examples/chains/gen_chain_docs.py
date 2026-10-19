@@ -61,6 +61,10 @@ CHAINS = [
     ("rhopi", "analyses/tensor_examples/specs/ex3_rhopi.toml",
      "agent/tensor/chains/rhopi"),
     ("rhof2_generic", "agent/tensor/specs/rhof2_generic.toml", None),
+    ("ex5_kst2", "analyses/tensor_examples/specs/ex5_kst2.toml",
+     "agent/tensor/chains/kstpi"),
+    ("ex5_kst0", "analyses/tensor_examples/specs/ex5_kst0.toml",
+     "agent/tensor/chains/kstpi"),
 ]
 
 

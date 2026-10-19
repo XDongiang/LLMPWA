@@ -34,10 +34,14 @@ analyses/tensor_examples/
 │   ├── phif2.md            ← ψ→φf₂   （深度 2，三表象）  ← 生成物
 │   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）← 生成物
 │   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）    ← 生成物
-│   └── rhof2_generic.md    ← ψ→ρf₂   （假想链）          ← 生成物
+│   ├── rhof2_generic.md    ← ψ→ρf₂   （假想链）          ← 生成物
+│   ├── ex5_kst2.md         ← ψ→K*₂π  （例 5，6/8 是级联）← 生成物
+│   └── ex5_kst0.md         ← ψ→K*₀π  （例 5，2/2 是级联）← 生成物
 ├── specs/
 │   ├── ex3_rhopi.toml      ← 例 3 的 ρ′ 树（2 条道）
-│   └── ex3_b1pi.toml       ← 例 3 的 b₁ 树（8 条道）
+│   ├── ex3_b1pi.toml       ← 例 3 的 b₁ 树（8 条道）
+│   ├── ex5_kst2.toml       ← 例 5 的 K*₂ 树（8 条道）
+│   └── ex5_kst0.toml       ← 例 5 的 K*₀ 树（2 条道）
 ├── data/
 │   └── make_momenta.py     ← 合成 ψ→φπ⁺π⁻→(K⁺K⁻)(π⁺π⁻) 四动量（自带守恒自检）
 ├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检 + A1/A3/A7
@@ -45,9 +49,9 @@ analyses/tensor_examples/
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
 
-**每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖五条链
-（`phif0` / `phif2` / `b1pi` / `rhopi` / `rhof2_generic`）各自的拓扑、
-分波、表象可用性、验收数据与遗留问题。
+**每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖七条链
+（`phif0` / `phif2` / `b1pi` / `rhopi` / `rhof2_generic` / `ex5_kst2` /
+`ex5_kst0`）各自的拓扑、分波、表象可用性、验收数据与遗留问题。
 
 这些文档是**生成物**：拓扑/道表/计数律/表象可用性从 TOML 自动导出，
 "做了什么、还有什么问题"手写在 `chains/notes/`。改了 spec 要重跑：
