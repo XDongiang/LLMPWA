@@ -31,7 +31,7 @@ analyses/tensor_examples/
 ├── README.md               ← 本文件
 ├── chains/                 ← **每条链一份文档**（做了什么 / 还有什么问题）
 │   ├── README.md           ← 链文档索引 + 三条边界
-│   ├── gen_chain_docs.py   ← 从 spec 自动导出"事实"部分（见下）
+│   ├── gen_chain_docs.py   ← 从 spec 自动导出"事实"部分
 │   ├── notes/              ← 手工"叙述"部分（每链一份 .notes.md）
 │   ├── phif0.md            ← ψ→φf₀   （深度 2，三表象）  ← 生成物
 │   ├── phif2.md            ← ψ→φf₂   （深度 2，三表象）  ← 生成物
@@ -47,11 +47,12 @@ analyses/tensor_examples/
 │   └── ex5_kst0.toml       ← 例 5 的 K*₀ 树（2 条道）
 ├── data/
 │   └── make_momenta.py     ← 合成 ψ→φπ⁺π⁻→(K⁺K⁻)(π⁺π⁻) 四动量（自带守恒自检）
-├── check_ex3.py            ← 端到端回归：生成 → 跑 → 三层自检 + A1/A3/A7（**仅例 3**）
-├── probes/                 ← 一次性诊断脚本（复现 roadmap §7 与边界实测）
+├── check_ex3.py            ← 端到端回归（**仅例 3**）：L1/L2/L3 + A1/A3/A7
+├── probes/                 ← 诊断脚本（复现 roadmap §7 与边界实测）
 │   ├── verify_ex5_port.py  ← 例 5 的 10 条道 vs jax 逐式对拍（10/10，1e-15）
 │   ├── probe_ex5_identify.py ← 例 5 级联可表示性穷举 + 阳性对照（b₁ 8/8）
-│   └── …                   ← ρ′/b₁ 的边界探针、行序探针、A1 错误注入等
+│   ├── probe_a1_sensitivity.py ← **判据 A1 自身的有效性**（错误注入）
+│   └── …                   ← ρ′/b₁ 的边界探针、行序探针等
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
 
@@ -83,78 +84,118 @@ python agent/tensor/tests/test_chain_docs.py                       # 已挂进�
 （`grep -c "chain\|nodes" agent/tensor/kernels/covariant.py` == 0），所以能工作；
 但真实拟合里"两棵树是否共享传播子/参数"仍未处理。
 
-## 跑
+---
 
-```bash
-cd <LLMPWA>
+# 如何验证：三层验证 + 三条判据
 
-# 1) 合成四动量（自带守恒 / 在壳 / 阈值自检）
-analyses/kk_dis/.venv/bin/python analyses/tensor_examples/data/make_momenta.py \
-    --out analyses/tensor_examples/data/ex3_phipipi.npz --n 2000 --seed 7
+这是本目录的**核心方法**，值得单独讲清楚。生成器出错的地方有很多种，
+如果只用一个"总对拍"来判，失败了不知道错在哪。所以判据按**能回答什么问题**
+分层 —— 每层只在一种可能性上失败，失败即可定位。
 
-# 2) 看链 / 道表 / 表象
-python -m agent.tensor show  analyses/tensor_examples/specs/ex3_rhopi.toml
-python -m agent.tensor check analyses/tensor_examples/specs/ex3_b1pi.toml
+## 三层验证：管"生成流程本身没写错"
 
-# 3) 生成 + 直接跑（emit 出的脚本是自足的，不依赖 agent.tensor）
-python -m agent.tensor emit analyses/tensor_examples/specs/ex3_rhopi.toml
-analyses/kk_dis/.venv/bin/python \
-    analyses/tensor_examples/generated/ex3_rhopi/gen_tensor_ex3_rhopi_covariant.py \
-    --momenta analyses/tensor_examples/data/ex3_phipipi.npz \
-    --out analyses/tensor_examples/out/ex3_rhopi --n 500
+| 层 | 比什么 | 阈值 | 抓什么 bug |
+|---|---|---|---|
+| **L1** 生成物 vs 框架内核 | `emit` 出的产物脚本算出的 cache vs 直接调 `kernels/covariant.py` | rel < 1e-12 | emitter 组装：拼错道函数体、漏 import、内联顺序错、动错动量分量 |
+| **L2** cartesian vs helicity | $W = \mathrm{EPS\_A}\cdot T$ | rel < 1e-12 | 表象变换：store 体写错、旋转约定、`EPS_A` 行序 |
+| **L3** 有限性 | `max|T|` 有限且 > 0 | 无 NaN/Inf、非恒零 | `Qabc<0`、除零、未定义分支、**整条道被静默算成 0** |
 
-# 4) 一条命令跑完全部自检（推荐）
-analyses/kk_dis/.venv/bin/python analyses/tensor_examples/check_ex3.py --n 500
-```
+三层是**递进**的，不能跳：
 
-`check_ex3.py` 做三层验证 + 三条判据：
+* L1 过而 L2 失败 ⇒ 产物组装没问题，错在表象变换；
+* L1 失败 ⇒ 不必看 L2，先修 emitter；
+* L3 恒零是个**特别容易漏**的情形 —— rel 类判据在两边都恒零时会给出
+  `0/0` 或假 OK，所以它必须单独查 `max|T| > 0`。
 
-1. **生成物 vs 框架内核**：产物脚本内联的道函数体算出的 cache，必须与直接调
-   `agent.tensor.kernels.covariant.compute_event` 逐位一致（抓 emitter 组装 bug）；
-2. **cartesian vs helicity**：`W = EPS_A · T`（抓 store 体写错）；
-3. **有限性**：没有 NaN/Inf；
-4. **A1**（新）：`helicity_cascade` 逐道对拍协变路线（经 `EPS_A`），rel < 1e-12；
-5. **A3**（新）：b₁ 的 8 条道两两不重合（min pairwise rel > 1e-6）；
-6. **A7**（新）：级联 cache 的形状/dtype 与 helicity **精确**一致。
+## 三条判据：管"新能力真的推开了吗"
 
-框架侧的对应测试（不需要本目录的数据）：
+这三条针对的是 `helicity_cascade` 表象（见下一节），答案是"是/否"而不是
+"数值够小"。
 
-```bash
-python agent/tensor/tests/test_ex3_channels.py      # 8 项，纯 numpy，永远能跑
-python agent/tensor/tests/test_ex5_channels.py      # 6 项，纯 numpy（例 5 的 10 条道）
-python agent/tensor/tests/test_helicity_cascade.py  # 13 项：A1/A2/A3/A4 + 三条边界
-python agent/tensor/tests/test_chain_docs.py        # 5 项：链文档与 spec 同步
+| 判据 | 问的问题 | 阈值 | 在哪 |
+|---|---|---|---|
+| **A1** | 级联 == 协变，逐道逐事例？ | rel < 1e-12 | `check_ex3.py`、`test_helicity_cascade.py` |
+| **A3** | 8 条道真的两两不同，还是退化了？ | min pairwise rel > 1e-6 | 同上 |
+| **A7** | cache 形状/dtype 与 `helicity` **精确**一致？ | 精确相等 | `check_ex3.py` |
 
-# 与 jax 原版逐式对拍（需要 jax + Tensor/ 源码，缺了就跳过）
-TENSOR_ROOT=<...>/tensor_example \
-    python agent/tensor/tests/test_covariant_vs_jax.py   # phif0/phif2 的 7 条 + 例 3 的 10 条
-analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
-                                                         # 例 5 的 10 条
-```
+* **A1 是最强的一条**：`kernels/covariant.py` 是**手写公式**，不经过 CG 系数、
+  不经过欧拉角、不经过逐节点缩并 —— 与级联路线的实现**完全不共享代码**。
+  所以它能同时抓住 CG 约定错、螺旋度槽错、缩并顺序错、参考系错。
+* **A3 防的是"能力假象"**：omega 时代 b₁ 的 8 条道只映射到 2 组 $(l,s)$，
+  28 对里有 **12 对逐位重合**。级联让 8 条全部线性独立，A3 就是钉这个的。
+* **A7 防的是"能力推开但拟合侧崩了"**：`helicity_cascade` 的卖点之一是
+  拟合侧**零改动**，所以这条必须是**精确**相等，不接受 `1e-12`。
 
-⚠️ 跑 jax 对拍**必须**在导入 `FUNC` 之前开 x64：
+## A1 的独立性是有限的（必须知道）
 
-```python
-import jax
-jax.config.update("jax_enable_x64", True)
-```
+A1 是必要条件，**不是充分条件**。两条路线**共享**的东西，A1 抓不到：
 
-否则 jax 全程 float32（$\varepsilon\approx1.2\times10^{-7}$），对拍只能到 1e-7，
-看起来像"移植错了"。这个坑第一次就踩了 —— 见下面例 5 那节。
+* 同一份四动量、同一个 `EPS_A` 行序、同一个位垒 $B_l$ 与 $Q_0$；
+* 同一套物理定义（"哪条道算 SS"、"$b_1$ 的 $J^P$"）；
+* 同一个 $(l,s)\leftrightarrow$ 道名的对应关系（标错了两边一起错）。
 
-## 螺旋度级联表象（`kernel = "helicity_cascade"`）
+**所以 A1 本身也需要被验证。** 做法是**错误注入**
+（[`probes/probe_a1_sensitivity.py`](probes/probe_a1_sensitivity.py)）：
+往级联侧故意注入已知错误，看 A1 是否报警。
+
+| 注入的错误 | A1 的 rel | 抓住了 |
+|---|---|---|
+| 关掉 Chung Eq.52 协变项 | 2.012e-01 | ✅ |
+| 用旧参考系（`chain_angles`） | 1.722e-01 | ✅ |
+| 顶层 $(L,S)$ 写错 | 9.784e-01 | ✅ |
+| 内层 $(l,s)$ 写错 | 1.039e+00 | ✅ |
+| 把子粒子螺旋度压成 0 | 1.010e+00 | ✅ |
+
+（探针共 7 组注入；另 2 组是"宇称禁止"的退化组合，振幅恒零、rel 为 `nan`
+—— 那不构成对 A1 的检验，所以不进表。）
+
+五类错全部报警 ⇒ A1 在这个灵敏度上是有效的。这是"判据的判据"。
+
+## 单看一个 rel 是不够的
+
+A1 的 `rel` 是**逐事例**比值。若要判断"是不是同一个振幅"，一个数字不够 ——
+ρ′ 就是靠三个**互相独立**的量定的（见下面"已知边界"）：
+
+| 量 | 它排除了什么 |
+|---|---|
+| 自由复系数最小二乘残差 | 排除"差一个常数因子"（正常情形会被 rel 掩盖） |
+| 逐事例标量 $c(e)$ 的离散度 | 排除"差一个**事件依赖**的因子"（常数因子 vs 事件依赖因子的分水岭） |
+| 两个子空间的主角 | 排除"维数不同"这种平凡解释 —— 同维不同向才是真的不同 |
+
+## 完整的判据清单（roadmap 的 A1–A7）
+
+| 判据 | 内容 | 阈值 | 状态 |
+|---|---|---|---|
+| **A1** | 新内核 vs `covariant.py` 逐道对拍（经 `EPS_A`） | rel < 1e-12 | ✅ b₁/φf₀/φf₂/例 5 的 6 条；❌ ρ′、例 5 的 `u_PP_*`/`u_FP_*`（**这是发现，不是 bug**） |
+| **A2** | 逐节点组合的秩 $=\prod_n N_n$ | 整数精确 | ✅ `test_helicity_cascade.py` |
+| **A3** | 8 条道两两不重合 | 全部 rel > 1e-6 | ✅ |
+| **A4** | 深度 3 链对**最内层**角分布敏感 | 转动后 rel > 0.1 | ✅ `test_helicity_cascade.py` |
+| **A5** | 与 jax 原版 `FUNC.py` 对拍 | rel < 1e-12 | ✅ 例 3（`test_covariant_vs_jax.py`）+ 例 5（`verify_ex5_port.py`） |
+| **A6** | 现有 13 份 spec 全部 `check` 通过 | 无异常 | ⚠️ 部分（未做 13 份的逐位回归） |
+| **A7** | cache 形状与拟合侧 `_load_cached_tensor` 兼容 | 形状/dtype 精确 | ✅ |
+
+⚠️ A5 有两处必须注意的坑：
+
+1. **jax 默认 float32**。必须在**导入 `FUNC` 之前**
+   `jax.config.update("jax_enable_x64", True)`，否则 $\varepsilon\approx1.2\times10^{-7}$，
+   对拍只能到 1e-7，看起来像"移植错了"。
+2. 参考实现的**公开名**与内部名不同（`_u_PP_l` → `u_PP_1`），见 `FUNC.py::Modifiers`。
+
+---
+
+# 螺旋度级联表象（`kernel = "helicity_cascade"`）
 
 `documentation/helicity_amplitude_roadmap.md` 的实现落点。它按 tf-pwa 的
 `HelicityDecay` + `DecayChain.get_amp` 逐节点构造振幅、再链级 `einsum` 缩并内线
 螺旋度，所以**对链的深度没有任何假设**，也**每个节点都可以有多个 (l,s)** ——
-这正是 omega 的两条能力边界（§1.1 / §1.2）。
+这正是 omega 的两条能力边界。
 
 | | omega / helicity | helicity_cascade |
 |---|---|---|
 | 逐节点 (l,s) | ❌ 非顶层节点只以标量 $K_i$ 出现 | ✅ 每节点一个列表 |
 | 深度 | ❌ 只算 `D0*D1*D2` | ✅ 任意深度 |
 | 逐节点螺旋度参考系 | ❌ 全部从顶层静止系直接 boost | ✅ 每层在**母节点**系里量 |
-| cache 形状 | `(n_ch, N, 3)` complex | **逐位相同** |
+| cache 形状 | `(n_ch, N, 3)` complex | **逐位相同**（A7） |
 | 拟合侧 | — | **零改动**（`_load_cached_tensor` 不变） |
 
 TOML 侧新增两个 `[[channel]]` 字段：
@@ -175,19 +216,32 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 `helicity_cascade` 表象里被读，但**在读 TOML 时**就校验（未知节点、宇称禁止的
 `(l,s)`、改变末态集合的"镜像树"都会报错，而不是运行时 KeyError）。
 
-### 已知边界：ρ′ 的 Eq.(46) 不是"逐节点核 + 常数复系数"的级联
+## 已知边界
 
 > **三条边界一览**（细节各见其下）：
 >
 > | # | 边界 | 判据 | 状态 |
 > |---|---|---|---|
-> | 1 | omega 的**逐节点 $(l,s)$ 容量** | 非顶层节点在 cache 里只有标量 $K_i$ | 已由级联内核推开 |
-> | 2 | omega 的**深度**（只算 `D0*D1*D2`） | 深度 ≥ 3 时最内层角分布被丢 | 已由级联内核推开 |
-> | 3 | 某些**协变公式不是级联** | 落在级联子空间之外（ρ′ Eq.46；例 5 的 `u_PP_*`/`u_FP_*`） | **未解决** |
+> | 1 | omega 的**逐节点 $(l,s)$ 容量** | 非顶层节点在 cache 里只有标量 $K_i$ | ✅ 已由级联内核推开 |
+> | 2 | omega 的**深度**（只算 `D0*D1*D2`） | 深度 ≥ 3 时最内层角分布被丢 | ✅ 已由级联内核推开 |
+> | 3 | 某些**协变公式不是级联** | 落在级联子空间之外 | ❌ **未解决** |
+
+### 边界 1/2：omega 的两条限制
+
+| 坑 | 现象 | 现在 |
+|---|---|---|
+| 非顶层分波被压成标量 | $\Omega+K+M+g$：非顶层节点的 $(l,s)$ 只在顶层 $M$ 里，内层只有 $K_i$ | 级联每节点一个列表 |
+| 只算 `D0*D1*D2` | 深度 ≥ 3 时最内层（$\phi\to KK$）的角分布被**静默丢弃** | 级联对深度无假设；`spec.py` 的深度分级**直接拒绝** omega（不是静默出错） |
+| 逐节点参考系从顶层 boost | 差别只在深度 ≥ 3 时出现（落在**最内层**的子粒子上） | 每层在母节点系里量角 |
+
+第三条最隐蔽：深度 2 的 φf₀/φf₂ 上两种参考系构造**逐位相同**（no-op），
+所以这个 bug 直到 b₁ 才暴露。
+
+### 边界 3：ρ′ 的 Eq.(46) 不是"逐节点核 + 常数复系数"的级联
 
 判据 A1 对 b₁ 的 8 条道全部通过（rel 6e-15 … 2.5e-14），但对 ρ′ 的
 `u_rho_1`/`u_rho_2` **不通过**（rel 0.24 … 0.32，随样本变 —— 这本身就是
-"逐事例失配"的征兆）。三条独立证据（都不依赖反演、不依赖秩）：
+"逐事例失配"的征兆）。三条独立证据：
 
 | 证据 | b₁（控制） | ρ′ |
 |---|---|---|
@@ -211,7 +265,7 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 排除过的替代（见 `probes/probe_rho_qfactor.py`、`probe_rho_rank.py`）：
 
 * 内层 $\epsilon$ 换成 $p_{\rho'}$（rel 0.29 → 0.36，没改善）；
-* 内层 $(l,s)$ 加项 —— ρ′ 内层由宇称 + 三角**只有** $(1,1)$ 一项，没有别的可选；
+* 内层 $(l,s)$ 加项 —— ρ′ 内层由宇称 + 三角**只有** $(1,1)$ 一项；
 * 各种事件依赖标量因子（$q_{\text{内}}$、$B_1$、$q_{\text{外}}$、$m^2_{\rho'}$、
   $\gamma_\phi$、$\gamma_\pi$、以及全部一起）—— 残差全部**不降反升**；
 * 两棵树 × 两种参考系 × 四组内层 $(l,s)$ 穷举 —— 最好 2.1e-01。
@@ -227,7 +281,14 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 独立复算脚本见
 `analyses/kk_dis/task/20261019_螺旋度级联内核_审阅/material/verify.py`。
 
-## 例 3 的物理要点（读道函数前先看这段）
+同类现象在例 5 里也出现了（`u_PP_*`/`u_FP_*` 共 4 条落在级联子空间之外），
+详见 [`chains/ex5_kst2.md`](chains/ex5_kst2.md)。
+
+---
+
+# 物理要点
+
+## 例 3（`ψ→φπ⁺π⁻`）
 
 粒子编号与文档一致：`K⁺=1`、`K⁻=2`、`π⁺=3`、`π⁻=4`。
 
@@ -245,69 +306,32 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
   `agent/tensor/spec.py` 按 `[[basis]]` 分级执行。
   现在可以改出 `helicity_cascade`：它对深度没有假设。
 
-## 例 5（`ψ→K⁺π⁻K⁻π⁺`）的落地（2026-10-19）
+## 例 5（`ψ→K⁺π⁻K⁻π⁺`）
 
-10 条道已从参考实现 `Tensor/FUNC.py` 逐式移植到
-[`agent/tensor/chains/kstpi/`](../../agent/tensor/chains/kstpi/)
-（`u_kst0_{l,r}` + `u_{PP,PF,FP,FF}_{1,2}`）。
-
-### 拓扑：深度 3，与 b₁ 同构
-
-$\psi\to K^*\pi \to (\phi\pi)\pi \to (K^+K^-)(\pi\pi)$ —— 把 b₁ 换成 K*，
-**其余结构与例 3 的 b₁ 完全一样**。所以 omega 同样不可用、级联同样可用。
-
-### 为什么拆成 K*₂ / K*₀ 两份
-
-K*₂ 是 $J=2$、K*₀ 是 $J=0$，一个 `[particles.*]` 条目只能有一个 `J`。
-协变道函数本身不读 `J`（公式硬编码），所以"能不能算"不受影响，但拓扑校验
-需要一个确定的 $J$，只能拆。
+拓扑 $\psi\to K^*\pi \to (\phi\pi)\pi \to (K^+K^-)(\pi\pi)$ —— 把 b₁ 换成 K*，
+**深度同样是 3**，其余结构与例 3 的 b₁ 完全一样。所以 omega 同样不可用、
+级联同样可用。10 条道在
+[`agent/tensor/chains/kstpi/`](../../agent/tensor/chains/kstpi/)。
 
 | spec | 道数 | 顶层 $(l,s)$ | 内层 $(l,s)$ |
 |---|---|---|---|
 | [`ex5_kst2.toml`](specs/ex5_kst2.toml) | 8 | $(1,2)$ / $(3,2)$ | $(1,1)$ / $(3,1)$ |
 | [`ex5_kst0.toml`](specs/ex5_kst0.toml) | 2 | $(1,0)$ | $(1,1)$ |
 
-### 验收：移植 10/10，级联 4/8 + 2/2
+**结果**（验证细节见 [`chains/ex5_kst2.md`](chains/ex5_kst2.md) 与
+[`chains/ex5_kst0.md`](chains/ex5_kst0.md)）：
 
-```bash
-# 移植正确性（需要 jax + Tensor/，注意上面那个 x64 坑）
-analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
-
-# 纯 numpy 回归
-python agent/tensor/tests/test_ex5_channels.py
-
-# 级联可表示性 + 阳性对照
-python analyses/tensor_examples/probes/probe_ex5_identify.py
-python analyses/tensor_examples/probes/probe_ex5_identify.py --control
-```
-
-* **移植**：10/10 到 `rel ≈ 1e-15`。`check` / `emit` / 端到端跑产物，
-  三种表象全部通过。
+* **移植** A5：10/10 到 `rel ≈ 1e-15`；`emit` 三种表象全部通过。
 * **级联可表示性**：`ex5_kst2` **4/8**（`u_PF_*`、`u_FF_*` 命中），
-  `ex5_kst0` **2/2**。合起来 **6/10** —— ⚠️ 探针输出的是这个合计数，
-  **引用单链时用 4/8**，两个口径别混。
-* **阳性对照**：同一探针跑 b₁ 得 **8/8**。所以 4/8 不是探针坏了。
+  `ex5_kst0` **2/2**。⚠️ 探针输出的是**合计 6/10**，引用单链时用 4/8。
+* **阳性对照**：同一探针跑 b₁ 得 **8/8**，所以 4/8 不是探针坏了。
 
-`u_PP_*` / `u_FP_*` 落在级联子空间之外（rel ≈ 6e-3 / 2e-1），四条都含
-$P^{(2)}_{\psi}$ 横向投影且内层是 P 波。但 K*₀ 的内层**也是** P 波却命中，
-所以不是"P 波一律不行"，而是 $(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合。
-**原因未查清**。
+`u_PP_*`/`u_FP_*` 四条都含 $P^{(2)}_{\psi}$ 横向投影且内层是 P 波；但 K*₀ 的
+内层**也是** P 波却命中，所以不是"P 波一律不行"，而是
+$(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合。**原因未查清**（同边界 3）。
 
-### 两个坑（都踩过）
-
-1. **jax 默认 float32** —— 见上文"框架侧的对应测试"。移植对拍第一次
-   10/10 全"失败"（rel 1e-6…1e-8），打开 x64 后立刻 10/10 到 1e-15。
-   同一个坑还**污染了级联探针**，伪造出一个"`_1` 族全败、`_2` 族全中"的
-   假不对称；改用本仓库的协变内核（float64）后消失。
-2. **K*₀ 的宇称** —— $J=0$ + 宇称守恒 + 三角只允许 $l=s=1$，对应 $0^-$；
-   而常见的 $K^*_0(1430)$ 是 $0^+$。所以这条道描述的**不是** $K^*_0(1430)$。
-   **疑点未解决**。
-
-### 例 5 还没有端到端脚本
-
-`check_ex3.py` 只覆盖例 3（读 `data/` 的 `phi f2` 动量、验 A1/A3/A7）。
-例 5 目前只由 `test_ex5_channels.py`（纯 numpy）+ `emit` 产物跑通来保证，
-**没有**等价的 `check_ex5.py`。真实样本、拟合侧端到端也都没做。
+⚠️ **例 5 还没有端到端脚本** —— `check_ex3.py` 只覆盖例 3，所以例 5 目前
+**缺 L1/L2/L3 那三层**，只由 `test_ex5_channels.py` + `emit` 跑通来保证。
 
 ## 数据为什么是合成的
 
@@ -318,3 +342,88 @@ $P^{(2)}_{\psi}$ 横向投影且内层是 P 波。但 K*₀ 的内层**也是** 
 `B1/B2` 出 NaN —— **jax 原版与 numpy 移植版都会 NaN**，那不是移植错误）。
 
 `m(π⁺π⁻)` 在 `[2m_π, m_ψ-m_φ]` 上均匀抽样，使 ρ′/b₁ 的不变质量自然扫过宽区间。
+
+---
+
+# 如何运行
+
+## 一键跑完全部自检（推荐）
+
+```bash
+cd <LLMPWA>
+
+# 例 3 的端到端回归：生成 → 跑 → L1/L2/L3 + A1/A3/A7
+python analyses/tensor_examples/check_ex3.py --n 500
+
+# 只跑某一条树
+python analyses/tensor_examples/check_ex3.py --n 500 --tree ex3_rhopi
+```
+
+它做三层验证 + 三条判据（定义见上文"如何验证"）：
+
+1. **L1**：产物脚本内联的道函数体算出的 cache，必须与直接调
+   `agent.tensor.kernels.covariant.compute_event` 逐位一致；
+2. **L2**：`W = EPS_A · T`；
+3. **L3**：没有 NaN/Inf，且不恒零；
+4. **A1**：`helicity_cascade` 逐道对拍协变路线（经 `EPS_A`），rel < 1e-12；
+5. **A3**：b₁ 的 8 条道两两不重合（min pairwise rel > 1e-6）；
+6. **A7**：级联 cache 的形状/dtype 与 helicity **精确**一致。
+
+## 分步跑
+
+```bash
+cd <LLMPWA>
+
+# 1) 合成四动量（自带守恒 / 在壳 / 阈值自检）
+python analyses/tensor_examples/data/make_momenta.py \
+    --out analyses/tensor_examples/data/ex3_phipipi.npz --n 2000 --seed 7
+
+# 2) 看链 / 道表 / 表象
+python -m agent.tensor show  analyses/tensor_examples/specs/ex3_rhopi.toml
+python -m agent.tensor check analyses/tensor_examples/specs/ex3_b1pi.toml
+
+# 3) 生成 + 直接跑（emit 出的脚本是自足的，不依赖 agent.tensor）
+python -m agent.tensor emit analyses/tensor_examples/specs/ex3_rhopi.toml
+python analyses/tensor_examples/generated/ex3_rhopi/gen_tensor_ex3_rhopi_covariant.py \
+    --npz analyses/tensor_examples/data/ex3_phipipi.npz \
+    --out analyses/tensor_examples/out/ex3_rhopi --n 500
+```
+
+## 框架侧测试（不需要本目录的数据）
+
+```bash
+# 纯 numpy，永远能跑
+python agent/tensor/tests/test_ex3_channels.py      # 8 项
+python agent/tensor/tests/test_ex5_channels.py      # 6 项（例 5 的 10 条道）
+python agent/tensor/tests/test_helicity_cascade.py  # 13 项：A1/A2/A3/A4 + 三条边界
+python agent/tensor/tests/test_chain_docs.py        # 5 项：链文档与 spec 同步
+```
+
+## 与 jax 原版对拍（A5，需要额外环境）
+
+```bash
+# 例 3 + phif0/phif2（需要 jax + Tensor/ 源码，缺了就跳过）
+TENSOR_ROOT=<...>/1_运行代码/tensor_example \
+    python agent/tensor/tests/test_covariant_vs_jax.py
+
+# 例 5（同理）
+analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
+```
+
+⚠️ 两个坑（见上文 A5 一节）：必须在导入 `FUNC` **之前**开
+`jax_enable_x64`；参考实现的公开名与内部名不同（`_u_PP_l` → `u_PP_1`）。
+
+## 诊断探针（一次性，用于复现结论）
+
+```bash
+# 例 5 的级联可表示性 + 阳性对照（不需要 jax）
+python analyses/tensor_examples/probes/probe_ex5_identify.py
+python analyses/tensor_examples/probes/probe_ex5_identify.py --control
+
+# A1 判据自身的有效性（错误注入）
+python analyses/tensor_examples/probes/probe_a1_sensitivity.py
+
+# ρ′ 为何不是级联（三条证据）
+python analyses/tensor_examples/probes/probe_rho_rank.py
+python analyses/tensor_examples/probes/probe_rho_qfactor.py
+```

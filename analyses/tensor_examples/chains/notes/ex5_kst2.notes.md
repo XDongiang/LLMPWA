@@ -35,6 +35,20 @@ $K^*_0$ 的 $J=0$ 与 $K^*_2$ 的 $J=2$ **冲突**：一个 `[particles.Kstar]`
 本文件是 $K^*_2$ 的 8 条；$K^*_0$ 的 2 条在
 [`ex5_kst0`](ex5_kst0.md)。
 
+### 验收：移植 10/10
+
+```bash
+# 移植正确性（需要 jax + Tensor/，注意下面那个 x64 坑）
+analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
+
+# 纯 numpy 回归（永远能跑，不需要 jax）
+python agent/tensor/tests/test_ex5_channels.py
+```
+
+* **移植**：10/10 到 `rel ≈ 1e-15`（`verify_ex5_port.py`）。
+* **生成**：`check` / `emit` / 端到端跑产物，**三种表象**
+  （`cartesian` / `helicity` / `helicity_cascade`）全部通过。
+
 ### 与 `b1pi` 同样的设计瑕疵
 
 8 条道是**两棵树**（旁观者 $\pi$ 不同），靠逐道 `tree` 覆盖塞进一份 TOML。
@@ -86,6 +100,14 @@ $K^*_0$ 那 2 条见 [`ex5_kst0`](ex5_kst0.md)。
 不对称消失。
 
 ⚠️ **教训**：跨库对拍时，精度设置是承重约定。
+
+### 还没有端到端脚本
+
+`check_ex3.py` **只覆盖例 3**（读 `data/` 的 `phi f2` 动量、验 L1/L2/L3 + A1/A3/A7）。
+例 5 目前只由 `test_ex5_channels.py`（纯 numpy 回归）+ `emit` 产物跑通来保证，
+**没有**等价的 `check_ex5.py` —— 也就是说例 5 缺 L1/L2/L3 那三层。
+
+真实样本、拟合侧端到端也都没做（与例 3 相同）。
 
 ### 还有什么问题
 
