@@ -88,6 +88,37 @@ python agent/tensor/tests/test_chain_docs.py    # 5 项
 只能到 1e-7，会被误判成移植失败。这个坑第一次就踩了（见
 [ex5_kst2.md](ex5_kst2.md)）。
 
+### A5 的现状（2026-10-20 实测）
+
+| 覆盖 | 命令 | 结果 |
+|---|---|---|
+| 例 3 的 10 条 + 7 条生产道 + 7 个 BASE 原语 | `TENSOR_ROOT=... python agent/tensor/tests/test_covariant_vs_jax.py` | ✅ 24/24，rel ≤ 1e-15 |
+| 例 5 的 10 条 | `analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py` | ✅ 10/10，rel ≤ 5e-15 |
+
+两者都需要 `Tensor/` 源码（不在 git 里）；没有 jax 或没有源码时**跳过**而不是失败。
+例 3 的对拍**不依赖例 5 移植**（它自己合成四动量），所以"需要例 5 移植"是错的。
+
+### A5′ 的现状（与上游 tf-pwa 对拍，2026-10-20 实测）
+
+A5 比的是项目自己的 jax 参考实现；A5′ 比的是社区标准实现 tf-pwa
+（`HelicityDecay` + `DecayGroup.get_amp3`）。用冻结 fixture，
+**本地没有 TF / tf-pwa / jax 也能跑**：
+
+| 层 | 比什么 | 结果 |
+|---|---|---|
+| 1 | CG 矩阵 vs `get_cg_matrix()` | 逐元素 0（精确相等） |
+| 2 | 逐节点 `(alpha, beta)` vs `cal_angle_from_momentum` | ≤ 5e-15 |
+| 3 | 链振幅 vs `get_amp3`（**除掉位垒后**） | 8/8 道 ≤ 3e-15 |
+
+```bash
+python agent/tensor/tests/test_helicity_vs_tfpwa.py    # 4 项
+```
+
+⚠️ 第 3 层必须除掉位垒：tf-pwa 用 $d=3$ 的 Blatt-Weisskopf 参数化，本仓库
+用 $Q_0=0.197321$，**两者是不同的约定**（连 $q^2$ 形状都不同，不是差常数）。
+fixture 存的是 tf-pwa `has_barrier_factor=False` 的振幅。详见
+[../README.md](../README.md) 的 A5′ 一节。
+
 ## 三条边界
 
 ### 1. 深度 ≥ 3 ⇒ omega 不可用
@@ -147,7 +178,6 @@ omega 的 `chain_angles` 把每个粒子都从**顶层**静止系直接 boost。
 
 | 缺口 | 影响哪些链 |
 |---|---|
-| **A5：与 jax 原版 `FUNC.py` 对拍** | `b1pi`/`rhopi`（例 5 未移植，最大的缺口）|
 | 真实样本回归 | 全部 |
 | 拟合侧端到端（`_load_cached_tensor` / toy likelihood）| 全部 |
 | barrier 的 $q_0$ 依赖 | 全部（roadmap §8 风险 1）|

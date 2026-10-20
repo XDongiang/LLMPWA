@@ -247,9 +247,15 @@ A1 的 `rel` 是**逐事例**比值。若要判断"是不是同一个振幅"，�
 | **A2** | 逐节点组合的秩 $=\prod_n N_n$ | 整数精确 | ✅ `test_helicity_cascade.py` |
 | **A3** | 8 条道两两不重合 | 全部 rel > 1e-6 | ✅ |
 | **A4** | 深度 3 链对**最内层**角分布敏感 | 转动后 rel > 0.1 | ✅ `test_helicity_cascade.py` |
-| **A5** | 与 jax 原版 `FUNC.py` 对拍 | rel < 1e-12 | ✅ 例 3（`test_covariant_vs_jax.py`）+ 例 5（`verify_ex5_port.py`） |
-| **A6** | 现有 13 份 spec 全部 `check` 通过 | 无异常 | ⚠️ 部分（未做 13 份的逐位回归） |
+| **A5** | 与 jax 原版 `FUNC.py` 对拍 | rel < 1e-12 | ✅ 例 3（`test_covariant_vs_jax.py`，24 个对象）+ 例 5（`verify_ex5_port.py`，10/10） |
+| **A5′** | 与**上游 tf-pwa** 对拍 | rel < 1e-12 | ✅ 例 3 b1pi 8/8（`test_helicity_vs_tfpwa.py`，三层判据，2026-10-20 实测） |
+| **A6** | 现有 11 份 spec 全部 `check` 通过 | 无异常 | ✅ 11/11（2026-10-20 实测，含例 1/2 的四份）；⚠️ "旧/新 cache 逐位回归"是**另一件事**，见下 |
 | **A7** | cache 形状与拟合侧 `_load_cached_tensor` 兼容 | 形状/dtype 精确 | ✅ |
+
+⚠️ A6 的两个口径别混：**`check` 通过**（11/11，已实测）≠ **旧/新 cache 逐位回归**
+（只实测了 3 份深度 2 的生产 spec 是 no-op，没有做全部 11 份的逐位对照）。
+`probes/probe_a4_a6.py` 里的 A6 glob 的是 `agent/tensor/specs/*.toml` +
+`analyses/*/specs/*.toml`（实测命中 11 份，与上面一致）。
 
 ⚠️ A5 有两处必须注意的坑：
 
@@ -257,6 +263,43 @@ A1 的 `rel` 是**逐事例**比值。若要判断"是不是同一个振幅"，�
    `jax.config.update("jax_enable_x64", True)`，否则 $\varepsilon\approx1.2\times10^{-7}$，
    对拍只能到 1e-7，看起来像"移植错了"。
 2. 参考实现的**公开名**与内部名不同（`_u_PP_l` → `u_PP_1`），见 `FUNC.py::Modifiers`。
+
+### A5′：与上游 tf-pwa 对拍
+
+A5 比的是**项目自己的 jax 参考实现**，A5′ 比的是**社区标准实现 tf-pwa**
+（`tf_pwa.amp.core.HelicityDecay` + `DecayGroup.get_amp3`）。两者都过，
+说明我们的螺度约定既忠实于原推导、也不是自成一派的方言。
+
+测试在 `agent/tensor/tests/test_helicity_vs_tfpwa.py`，用**冻结的 fixture**
+（`tfpwa_b1pi_golden.json`），所以本地没有 TF / tf-pwa 也能跑。分三层：
+
+| 层 | 比什么 | 实测 |
+|---|---|---|
+| 1 | CG 矩阵 `cg_matrix` vs `get_cg_matrix()` | 逐元素 0（精确相等） |
+| 2 | 逐节点 `(alpha, beta)` vs `cal_angle_from_momentum` | ≤ 5e-15 |
+| 3 | 链振幅 `chain_amplitude` vs `get_amp3` | 8/8 道 ≤ 3e-15 |
+
+⚠️ **第 3 层必须把位垒因子除掉**，这是 A5′ 最容易踩的坑：tf-pwa 的
+Blatt-Weisskopf 用 $d=3\ \mathrm{GeV}^{-1}$
+
+$$B'_l(q^2)=\sqrt{P_l(q_0^2 d^2)/P_l(q^2 d^2)}$$
+
+而本仓库（和 `Tensor/BASE.py`）用 $Q_0=0.197321$ 的 $q^lB_l(q^2)$ ——
+**两者是不同的约定，连 $q^2$ 的形状都不同**（实测把 $d$ 调成 $1/Q_0$ 也
+对不上，比值随事例变 2.6 倍）。所以 fixture 存的是 tf-pwa
+`has_barrier_factor=False` 的振幅，测试端乘上本仓库的位垒乘子再比。
+`test_barrier_convention_is_documented` 守住这个前提。
+
+另外 tf-pwa 在 `add_covariant_term=True` 时还会往位垒里塞一个逐事例的
+`mass` 因子，这是关掉位垒的第二个理由。协变项本身要**打开** —— 它对应
+本仓库 `chain_amplitude(..., covariant=True)` 的 Chung Eq.52 项。
+
+比法用**一个全局复常数**（$W_{\text{ours}}\approx c\,W_{\text{tfpwa}}$，
+最小二乘拟合 $c$ 后要求残差 < 1e-12），**不逐事例、不逐道**各拟合一个 ——
+那样会把"只对得上形状"的错也放过。整体常数来自 tf-pwa `g_ls` 的归一约定。
+
+fixture 的重新生成见 `agent/tensor/tests/make_tfpwa_golden.py` 的 docstring
+（需要 tf-pwa 环境，本机没有）。
 
 ---
 
@@ -473,7 +516,20 @@ python analyses/tensor_examples/generated/ex3_rhopi/gen_tensor_ex3_rhopi_covaria
 python agent/tensor/tests/test_ex3_channels.py      # 8 项
 python agent/tensor/tests/test_ex5_channels.py      # 6 项（例 5 的 10 条道）
 python agent/tensor/tests/test_helicity_cascade.py  # 13 项：A1/A2/A3/A4 + 三条边界
+python agent/tensor/tests/test_helicity_vs_tfpwa.py # 4 项：A5′（与 tf-pwa 对拍）
+python agent/tensor/tests/test_ex12_permutation.py  # 7 项：例 1/2 的置换求和 + emit + omega 护栏
 python agent/tensor/tests/test_chain_docs.py        # 5 项：链文档与 spec 同步
+```
+
+`test_helicity_vs_tfpwa.py` 用冻结 fixture，**不需要** TF / tf-pwa / jax。
+fixture 的重新生成见 `agent/tensor/tests/make_tfpwa_golden.py`。
+
+`test_ex12_permutation.py` 在文件内自己合成三体相空间，不依赖
+`data/*.npz`（那些是生成物，不入库）。要手工造：
+
+```bash
+python analyses/tensor_examples/data/make_threebody.py ex1 --n 64
+python analyses/tensor_examples/data/make_threebody.py ex2 --n 64
 ```
 
 ## 与 jax 原版对拍（A5，需要额外环境）
