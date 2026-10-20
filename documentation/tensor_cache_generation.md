@@ -471,9 +471,15 @@ python -m agent.tensor run phif2.toml --momenta <npz> --out <dir>
 `D0*D1*D2`」。但实测表明**这条限制只对 omega 内核成立**：
 
 ```
-$ grep -c "chain\|nodes" agent/tensor/kernels/covariant.py
+$ grep -c "tree\|nodes" agent/tensor/chains/b1pi/u_*.py
 0
 ```
+
+⚠️ 这里**不要**去 grep `kernels/covariant.py` —— 该文件里有 21 处
+`chain`/`nodes`（`_chains_module()` / `_chain_channel_map()` 等"按道名装配新道
+函数"的代码），所以 `grep -c "chain\|nodes" .../covariant.py` 返回 **21 而不是 0**。
+正确的判据是看**道函数体**：`agent/tensor/chains/` 下的 `u_*.py` 只吃
+`(psi, phi, f2, Kp, Km, Pip, Pim)` 七个四动量，完全不引用 `tree`/`nodes`。
 
 协变张量的道函数是**按道名硬编码的公式**，完全不读树结构；只有
 `kernels/omega.py` 的 `chain_angles` / `D_lambda` 才逐节点读树。
