@@ -5,7 +5,6 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.join(ROOT,"agent","tensor","tests"))
-sys.path.insert(0, os.path.join(ROOT,"analyses/tensor_examples/_work/scratch"))
 import test_ex3_channels as T
 from agent.tensor import spec as S
 from agent.tensor.kernels import covariant as COV

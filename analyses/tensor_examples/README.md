@@ -556,7 +556,13 @@ python analyses/tensor_examples/probes/probe_ex5_identify.py --control
 # A1 判据自身的有效性（错误注入）
 python analyses/tensor_examples/probes/probe_a1_sensitivity.py
 
-# ρ′ 为何不是级联（三条证据）
-python analyses/tensor_examples/probes/probe_rho_rank.py
-python analyses/tensor_examples/probes/probe_rho_qfactor.py
+# ρ′ 为何不是级联（四条证据）
+python analyses/tensor_examples/probes/probe_rho_rank.py          # 子空间维数 / 主角
+python analyses/tensor_examples/probes/probe_rho_qfactor.py       # 事件依赖标量因子
+python analyses/tensor_examples/probes/probe_rho_decomposition.py # 逐节点分解（R 检验）
+python analyses/tensor_examples/probes/probe_rho_structure.py     # 顶层张量 / omega 对照
 ```
+
+⚠️ `probe_rho_structure.py` 曾长期跑不起来（`import harness`，而那个模块
+**从未入库**、目录已删）。2026-10-20 已按现行内核 API
+（`HC.node_angles` / `HC.chain_amplitude` / `RT.assemble`）重写。
