@@ -1,0 +1,87 @@
+# 例 1（ρ 家族）：psi(2S) -> rho(1^-) pi0 -> (pi+ pi-)(pi0)
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 200–273 行。
+#
+# 「置换求和」：ρ 可以来自 (12)/(13)/(23) 任意一对，三条道相加才是一个
+# 物理振幅（文档 Eq.206–219 的三项）。三条道共用同一个 BW 传播子
+# f^(ρ) —— 框架把 f 放在道外（拟合参数），所以三条道自然共用。
+#
+# 三体末态，所以只有 helicity_cascade 能 emit：
+#   cartesian / helicity 需要 chains/<chain>/<channel>.py 里的**手写**道函数
+#   （emitter 按 `def <name>` 取函数体内联），三体置换道没有。
+#
+# 文档另外还给了 rho_3(3^-) 与 rho_5(5^-)；前者见 ex1_pipipi0_rho3.toml，
+# 后者超出内核上限（J=5 与 l=5 都越界），见 README。
+
+[chain]
+name = "ex1_pipipi0_rho"
+top = "psi2s"
+output = "../generated/ex1_pipipi0_rho"
+l_max = 4
+chain_name = "ex1_pipipi0_rho"
+suffix = "_pipipi0"
+# (l,s) 不是完备标签（三条道是同一个 (l,s) 的不同配对），关掉交叉检查
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Pip1", "Pim2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rho", "Pi0"]
+
+[particles.rho]
+J = 1
+mass = 0.775
+parity = -1
+daughters = ["Pip1", "Pim2"]
+
+[particles.Pip1]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+# 三项：(12) 对 / (13) 对 / (23) 对
+#
+# ⚠️ `tree` 里子节点的顺序会整体翻号（见 README）。
+#    下面三条统一把「π⁰ 或 Pim2 放在第 2 位」，保证三条道同号。
+[[channel]]
+name = "u_rho_12"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], rho = [[1, 0]] }
+tree = { psi2s = ["rho", "Pi0"], rho = ["Pip1", "Pim2"] }
+
+[[channel]]
+name = "u_rho_13"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], rho = [[1, 0]] }
+tree = { psi2s = ["rho", "Pim2"], rho = ["Pi0", "Pip1"] }
+
+[[channel]]
+name = "u_rho_23"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], rho = [[1, 0]] }
+tree = { psi2s = ["rho", "Pip1"], rho = ["Pi0", "Pim2"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

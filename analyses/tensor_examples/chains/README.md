@@ -3,7 +3,8 @@
 `analyses/tensor_examples/chains/` —— 每条**链**一份文档，写清
 "目前做了什么、还有什么问题"。
 
-本文档写于 2026-10-19。例 5 的两份（`ex5_kst0` / `ex5_kst2`）随后补入。
+本文档写于 2026-10-19。例 5 的两份（`ex5_kst0` / `ex5_kst2`）随后补入；
+例 1/2 的四份（`ex1_rho` / `ex1_rho3` / `ex2_rho` / `ex2_kstar`）于 2026-10-20 补入。
 
 ## 这些文档是怎么来的
 
@@ -17,7 +18,7 @@
 所以**不要直接编辑 `chains/*.md`** —— 改 spec 或 `notes/*.notes.md`，然后：
 
 ```bash
-# 重新生成全部 7 份
+# 重新生成全部 11 份
 python analyses/tensor_examples/chains/gen_chain_docs.py
 
 # 只检查是否同步（CI 用，不同步时非零退出）
@@ -30,7 +31,7 @@ python analyses/tensor_examples/chains/gen_chain_docs.py --stdout b1pi
 同步检查已挂进测试套件：
 
 ```bash
-python agent/tensor/tests/test_chain_docs.py    # 4 项
+python agent/tensor/tests/test_chain_docs.py    # 5 项
 ```
 
 它包含一条**反向验证**（故意弄脏文档，`--check` 必须报错），

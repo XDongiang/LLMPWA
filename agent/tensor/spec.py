@@ -261,6 +261,45 @@ def validate(spec):
     spec["depth"] = depth
     _bases = spec["bases"] or [{"name": "omega", "kernel": "omega"}]
     wants_omega = any((b.get("kernel") or b["name"]) == "omega" for b in _bases)
+    def _tree_signature(spec_, tree_or_top):
+        """树的**拓扑**签名：把每对 `父 -> (子1, 子2)` 排序后元组化。
+
+        传节点名（顶层）时从 `spec_["particles"]` 现算 base 树；传 tree dict
+        （来自 `[[channel]].tree`）时直接用它。只比拓扑，不比 `(l,s)` ——
+        omega 只对拓扑敏感，`(l,s)` 走的是 `M`/`K`。
+        """
+        if isinstance(tree_or_top, str):
+            def _ds(n):
+                return _children(spec_, n)
+            tree, stack = {}, [tree_or_top]
+            while stack:
+                n = stack.pop()
+                d = _ds(n)
+                if d:
+                    tree[n] = tuple(d)
+                    stack.extend(d)
+        else:
+            tree = {k: tuple(v) for k, v in tree_or_top.items() if v}
+        return tuple(sorted(tree.items()))
+
+    # 除了深度，omega 还**硬性假定"所有道共用同一棵树"**：
+    # `omega.py` 的 `omega_from_momenta(mom, chain)` 只吃 **base chain**
+    # （`to_chain(spec)`），返回一份逐道共用的 `Omega`。如果某些道的
+    # `tree` 与 base chain 不同（置换族、旁观者交换），那些道就被静默算错。
+    #
+    # 这个坑比深度那个更危险：**emit 不报错、跑得出数**。实测：
+    #
+    #   | spec | 与 base 树不同的道 | 那些道的残差 |
+    #   |---|---|---|
+    #   | `ex1_pipipi0_rho`  | `u_rho_13` `u_rho_23`   | 0.30 / 0.27 |
+    #   | `ex1_pipipi0_rho3` | `u_rho3_13` `u_rho3_23` | 1.06 / 1.36 |
+    #   | `ex2_kkpi0_kstar`  | `u_kstar_23`            | 0.17 |
+    #
+    # 注意"顶层两个子节点都衰变"和"深度 <= 2"都**不是**正确判据 ——
+    # 前者会把 `ex2_kkpi0_rho`（只有一条道、树与 base 相同、实测正确）误拒，
+    # 后者拦不住三体（深度也是 2）。
+    # 顺序：先报**深度**（更基本，`D0*D1*D2` 装不下），再报**树的拓扑**
+    # （更隐蔽）。两者都成立时（如三层树 + 置换族），深度那条更直接。
     if depth > 2 and wants_omega:
         raise SpecError(
             "链的级联深度是 %d，但这份 spec 出了 omega 表象；omega 内核只算 "
@@ -268,6 +307,21 @@ def validate(spec):
             "  要么把树压到 2 级，要么去掉 [[basis]] name=\"omega\" "
             "（协变/螺度路线按道名硬编码公式，不读树，深度不限）。"
             % depth)
+
+    if wants_omega:
+        _base_sig = _tree_signature(spec, top)
+        # 只比**显式给了 tree** 的道：没给 tree 的道由 base 树补全，天然一致
+        # （`cascade_channels` 里 `c["tree"]` 是 `{}`，`with_tree` 再补）。
+        _bad = [c["name"] for c in spec["channels"]
+                if c.get("tree")
+                and _tree_signature(spec, c["tree"]) != _base_sig]
+        if _bad:
+            raise SpecError(
+                "这份 spec 出了 omega 表象，但有 %d 条道的树与 base chain 不同"
+                "（%s）。omega 只对 base chain 算**一份逐道共用**的 Omega，"
+                "这些道会被**静默算错**（实测残差 0.17–1.36，且 emit 不报错）。\n"
+                "  置换族 / 旁观者交换请用 helicity_cascade 表象。"
+                % (len(_bad), "、".join(_bad)))
 
     leaves = [n for n in order if not _children(spec, n)]
     keys = spec["input_keys"]

@@ -65,6 +65,12 @@ CHAINS = [
      "agent/tensor/chains/kstpi"),
     ("ex5_kst0", "analyses/tensor_examples/specs/ex5_kst0.toml",
      "agent/tensor/chains/kstpi"),
+    # 例 1/2 是**真三体**（末态 3 个粒子），只有 helicity_cascade 能 emit
+    # （cartesian/helicity 需要 chains/<chain>/<channel>.py 里的手写道函数）。
+    ("ex1_rho", "analyses/tensor_examples/specs/ex1_pipipi0_rho.toml", None),
+    ("ex1_rho3", "analyses/tensor_examples/specs/ex1_pipipi0_rho3.toml", None),
+    ("ex2_rho", "analyses/tensor_examples/specs/ex2_kkpi0_rho.toml", None),
+    ("ex2_kstar", "analyses/tensor_examples/specs/ex2_kkpi0_kstar.toml", None),
 ]
 
 
@@ -166,6 +172,41 @@ def channel_block(spec):
     return "\n".join(lines), len(casc)
 
 
+def _omega_tree_ok(spec):
+    """omega 只支持"所有道共用同一棵树"的 spec。
+
+    它的 `omega_from_momenta(mom, chain)` 只吃 **base chain**
+    （`to_chain(spec)`），返回**一份逐道共用**的 `Omega`。若某些道的
+    `[[channel]].tree` 与 base 树不同（置换族、旁观者交换），那些道会被
+    **静默算错** —— `emit` 不报错、跑得出数。
+
+    实测：
+
+    | spec | 与 base 树不同的道 | 残差 |
+    |---|---|---|
+    | `ex1_pipipi0_rho`  | `u_rho_13` `u_rho_23`   | 0.30 / 0.27 |
+    | `ex1_pipipi0_rho3` | `u_rho3_13` `u_rho3_23` | 1.06 / 1.36 |
+    | `ex2_kkpi0_kstar`  | `u_kstar_23`            | 0.17 |
+
+    ⚠️ "顶层两个子节点都衰变"**不是**正确判据 —— 它会把
+    `ex2_kkpi0_rho`（单道、树与 base 相同、实测残差 3e-16）误判为不安全。
+    """
+    try:
+        base = S.to_chain(spec)
+    except S.SpecError:
+        return False
+
+    def sig(tree):
+        return tuple(sorted((k, tuple(v)) for k, v in tree.items() if v))
+
+    base_sig = sig({n: base["nodes"][n].get("daughters")
+                    for n in base["nodes"]})
+    for c in spec["channels"]:
+        if c.get("tree") and sig(c["tree"]) != base_sig:
+            return False
+    return True
+
+
 def counting_block(spec):
     """计数律 ∏_n N_n。"""
     nodes = S.decaying_nodes(spec)
@@ -184,12 +225,25 @@ def counting_block(spec):
     lines.append("")
     non_top = [n for n in nodes if n != spec["top"]]
     multi = [n for n in non_top if len(S.allowed_ls(spec, n)) > 1]
+    # omega 除了"非顶层只能一个 (l,s)"，还硬性只算深度 <= 2（D0*D1*D2）。
+    # 深度 >= 3 时它**静默丢掉**最内层的角分布，所以哪怕 (l,s) 都唯一也不能用。
+    too_deep = spec["depth"] > 2
     if multi:
         lines.append("⚠️ 非顶层节点 %s **有多个** $(l,s)$ ⇒ omega 的信息容量"
                      "**不够**（它的 cache 里非顶层节点只有标量 $K_i$）。"
                      % "、".join("`%s`" % n for n in multi))
+    elif too_deep:
+        lines.append("⚠️ 深度 = %d > 2 ⇒ omega **不可用**（它只算 `D0*D1*D2`，"
+                     "会静默丢掉最内层的角分布）；即使非顶层节点都只有一个 "
+                     "$(l,s)$ 也一样。" % spec["depth"])
+    elif _omega_tree_ok(spec):
+        lines.append("✅ 非顶层节点都只有 **1 个** $(l,s)$，且深度 = %d ≤ 2 "
+                     "⇒ omega 的信息容量够用。" % spec["depth"])
     else:
-        lines.append("✅ 非顶层节点都只有 **1 个** $(l,s)$ ⇒ omega 的信息容量够用。")
+        lines.append("⚠️ 有道的树与 base chain 不同 ⇒ omega **不可用**"
+                     "（实测残差 0.17–1.36，**静默错**：emit 不报错、跑得出数）。"
+                     "`omega_from_momenta` 只对 base chain 算一份逐道共用的 "
+                     "`Omega`。置换族 / 旁观者交换用 `helicity_cascade`。")
     return "\n".join(lines), prod
 
 
