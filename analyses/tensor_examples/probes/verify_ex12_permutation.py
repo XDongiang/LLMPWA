@@ -48,6 +48,10 @@ CASES = [
     ("ex1_pipipi0_rho3.toml", "ex1_pipipi0_rho3.npz", "u_rho3", 3, 3),
     ("ex2_kkpi0_rho.toml", "ex2_kkpi0.npz", "u_rho_K", 1, 1),
     ("ex2_kkpi0_kstar.toml", "ex2_kkpi0.npz", "u_kstar", 1, 1),
+    # J=5 / l=5（2026-10-20 扩展内核上限后新增）
+    ("ex1_pipipi0_rho5.toml", "ex1_pipipi0_rho5.npz", "u_rho5", 5, 5),
+    ("ex2_kkpi0_kstar5.toml", "ex2_kkpi0.npz", "u_kstar5", 5, 5),
+    ("ex2_kkpi0_kstar3.toml", "ex2_kkpi0.npz", "u_kstar3", 3, 3),
 ]
 
 # 例 2 的两族的置换结构不同：
@@ -59,6 +63,7 @@ TWO_CHANNEL = {"u_kstar"}
 PAIRING = {
     "u_rho_12": (0, 1), "u_rho_13": (0, 2), "u_rho_23": (1, 2),
     "u_rho3_12": (0, 1), "u_rho3_13": (0, 2), "u_rho3_23": (1, 2),
+    "u_rho5_12": (0, 1), "u_rho5_13": (0, 2), "u_rho5_23": (1, 2),
 }
 
 

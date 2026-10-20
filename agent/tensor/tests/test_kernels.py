@@ -117,23 +117,55 @@ def test_cg_matrix_full_phif2():
 
 
 def test_blatt_weisskopf_limits():
-    """l = 0 时 B_0 == 1、node_barrier == 1；l >= 1 在 q -> 0 时 -> 0。"""
+    """`Bl` / `node_barrier` 的边界行为（含 l=5 的新能力）。
+
+    l=0：`B_0 == 1`、`node_barrier == 1`；
+    l>=1：`B_l(0) > 0`，而 `q^l B_l(q^2)` 在 q -> 0 时 -> 0 —— 这是位垒
+    因子的定义性行为（低能时高 l 被压低）。
+    """
     q = np.array([0.0, 0.01, 1.0, 10.0])
     assert np.allclose(RT.Bl(0, q), 1.0)
     assert np.allclose(RT.node_barrier(0, q), 1.0)
-    for l in (1, 2, 3, 4):
-        assert RT.Bl(l, np.array([0.0]))[0] > 0.0
+    for l in (1, 2, 3, 4, 5, 6):
+        assert RT.Bl(l, np.array([0.0]))[0] > 0.0, l
         assert abs(RT.node_barrier(l, np.array([0.0]))[0]) < 1e-12, l
-    try:
-        RT.Bl(5, q)
-    except NotImplementedError:
-        pass
-    else:
-        raise AssertionError("l=5 应当 NotImplementedError")
+
+
+def test_blatt_weisskopf_l5_matches_tf_pwa():
+    """l=5 的系数必须与 tf-pwa `Bprime_polynomial` 一致。
+
+    判据用**形状**（不依赖 `Q0` 这个约定）：`1/Bl^2` 必须正比于
+    `P_l(q^2/Q0^2)`，比值是与 q 无关的常数。
+    """
+    coeff = {0: [1.0], 1: [1.0, 1.0], 2: [1.0, 3.0, 9.0],
+             3: [1.0, 6.0, 45.0, 225.0],
+             4: [1.0, 10.0, 135.0, 1575.0, 11025.0],
+             5: [1.0, 15.0, 315.0, 6300.0, 99225.0, 893025.0]}
+
+    def poly(c, z):
+        r = 0.0
+        for a in c:
+            r = r * z + a
+        return r
+
+    x0 = RT.Q0 ** 2
+    q = np.array([0.05, 0.2, 0.5, 1.0, 2.0])
+    for l, c in coeff.items():
+        ref = poly(c, 1.0) / poly(c, q / x0)
+        ratio = RT.Bl(l, q) ** 2 / ref
+        assert np.allclose(ratio, ratio[0], rtol=1e-12), (l, ratio)
+
+    # l > 5 由 `_bprime_coeff` 现算，也要满足同样的形状关系
+    for l in (6, 7):
+        c = RT._bprime_coeff(l)
+        ref = poly(c, 1.0) / poly(c, q / x0)
+        ratio = RT.Bl(l, q) ** 2 / ref
+        assert np.allclose(ratio, ratio[0], rtol=1e-12), (l, ratio)
 
 
 def test_lam_slots_cover_spins():
-    for J in range(0, 5):
+    """`LAM_SLOTS` 必须覆盖 0..6，且每个都是 -J..J。"""
+    for J in range(0, 7):
         assert RT.LAM_SLOTS[J] == list(range(-J, J + 1)), J
 
 

@@ -4,7 +4,8 @@
 "目前做了什么、还有什么问题"。
 
 本文档写于 2026-10-19。例 5 的两份（`ex5_kst0` / `ex5_kst2`）随后补入；
-例 1/2 的四份（`ex1_rho` / `ex1_rho3` / `ex2_rho` / `ex2_kstar`）于 2026-10-20 补入。
+例 1/2 的七份于 2026-10-20 补入：`ex1_rho` / `ex1_rho3` / `ex1_rho5` /
+`ex2_rho` / `ex2_kstar` / `ex2_kstar3` / `ex2_kstar5`。
 
 ## 这些文档是怎么来的
 
@@ -63,12 +64,26 @@ python agent/tensor/tests/test_chain_docs.py    # 5 项
 | [`rhof2_generic`](rhof2_generic.md) | ψ→ρf₂→(ππ)(ππ) | 2 | 5 | cart / hel / omega | ❌ | — | **假想链** |
 | [`ex5_kst2`](ex5_kst2.md) | ψ→K*₂π→(φπ)π→(KK)(ππ) | **3** | 8 | cart / hel / **cascade** | ✅ | ⚠️ 4/8 | **例 5** |
 | [`ex5_kst0`](ex5_kst0.md) | ψ→K*₀π→(φπ)π→(KK)(ππ) | **3** | 2 | cart / hel / **cascade** | ✅ | ✅ 2/2 | **例 5** |
+| [`ex1_rho`](ex1_rho.md) | ψ→ρπ→(ππ)π | 2 | 3 | **cascade** | ✅ | — | **例 1** |
+| [`ex1_rho3`](ex1_rho3.md) | ψ→ρ₃π→(ππ)π | 2 | 3 | **cascade** | ✅ | — | **例 1** |
+| [`ex1_rho5`](ex1_rho5.md) | ψ→ρ₅π→(ππ)π | 2 | 3 | cart / hel / **cascade** | ✅ | — | **例 1，J=5** |
+| [`ex2_rho`](ex2_rho.md) | ψ→ρ′π→(KK)π | 2 | 1 | **cascade** | ✅ | — | **例 2** |
+| [`ex2_kstar`](ex2_kstar.md) | ψ→K*K→(Kπ)K | 2 | 2 | **cascade** | ✅ | — | **例 2** |
+| [`ex2_kstar3`](ex2_kstar3.md) | ψ→K*₃K→(Kπ)K | 2 | 2 | **cascade** | ✅ | — | **例 2，J=3** |
+| [`ex2_kstar5`](ex2_kstar5.md) | ψ→K*₅K→(Kπ)K | 2 | 2 | **cascade** | ✅ | — | **例 2，J=5** |
 
 "表象"列加粗的是该链**特有**的那个：
 
 * `phif0`/`phif2` 特有 **omega**（深度 2，omega 可用）；
 * `b1pi`/`rhopi`/`ex5_*` 特有 **cascade**（深度 3，omega 被禁止）；
-* `rhof2_generic` 三个表象都列了但**只有 omega 能出**。
+* `rhof2_generic` 三个表象都列了但**只有 omega 能出**；
+* 例 1/2 的七条链只有 **cascade** 能出 —— 三体置换道没有手写协变道函数。
+  唯一例外是 `ex1_rho5`：`agent/tensor/chains/rhopi5/` 为它写了三只手写
+  道函数，所以三条路线都能 emit（这是"协变张量路线也能表达 J=5"的落点）。
+
+"A1" 那列对例 1/2 的七条链留空（`—`）：它们不是 4 体 `φf_J` 链，
+没有 `EPS_A` 逐道对拍的参考产物；判据改用**置换协变性**与
+**三路线互相比**（见 `analyses/tensor_examples/README.md`）。
 
 "A1" = 级联 vs 协变逐道对拍（经 `EPS_A`）。✅ 表示到机器精度。
 

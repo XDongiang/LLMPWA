@@ -71,6 +71,10 @@ CHAINS = [
     ("ex1_rho3", "analyses/tensor_examples/specs/ex1_pipipi0_rho3.toml", None),
     ("ex2_rho", "analyses/tensor_examples/specs/ex2_kkpi0_rho.toml", None),
     ("ex2_kstar", "analyses/tensor_examples/specs/ex2_kkpi0_kstar.toml", None),
+    # J=5 / l=5（2026-10-20 把级联内核上限从 4 扩到 6）
+    ("ex1_rho5", "analyses/tensor_examples/specs/ex1_pipipi0_rho5.toml", None),
+    ("ex2_kstar5", "analyses/tensor_examples/specs/ex2_kkpi0_kstar5.toml", None),
+    ("ex2_kstar3", "analyses/tensor_examples/specs/ex2_kkpi0_kstar3.toml", None),
 ]
 
 

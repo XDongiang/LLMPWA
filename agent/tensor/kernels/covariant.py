@@ -32,6 +32,7 @@ phif223/phif243` 一一对应）由 `channels()` 返回。
 """
 from __future__ import annotations
 
+import itertools
 import os
 
 import numpy as onp
@@ -226,6 +227,44 @@ def B4(a, b, c):
                               + 1575 * q * (Q0 ** 6) + 11025 * (Q0 ** 8)))
 
 
+def B5(a, b, c):
+    r"""l=5 —— 论文 Eq.(17) 之后**被注释掉**的那一行（本仓库补上）。
+
+    论文原文：
+        %B_5(Q_{abc})\!&=&\! \\sqrt{998881\\over
+        %Q_{abc}^{10}+15Q_{abc}^8Q_0^2+
+        %315Q_{abc}^6Q^4_0+6300Q_{abc}^4Q^6_0+99225Q_{abc}^2Q^8_0+893025Q_0^{10}}
+
+    系数 `[1, 15, 315, 6300, 99225, 893025]` 与 tf-pwa
+    `breit_wigner.py::Bprime_polynomial` 的 `L=5` 行逐项一致（互为独立来源）。
+    """
+    q = Qabc(a, b, c)
+    return xp.sqrt(998881.0 / (q ** 5 + 15 * (q ** 4) * (Q0 ** 2)
+                               + 315 * (q ** 3) * (Q0 ** 4)
+                               + 6300 * (q ** 2) * (Q0 ** 6)
+                               + 99225 * q * (Q0 ** 8) + 893025 * (Q0 ** 10)))
+
+
+# l=6 的系数由反向 Bessel 多项式现算（与 `kernels/omega.py::_bprime_coeff`
+# 同源，都是 tf-pwa `get_bprime_coeff` 的口径）。写死是为了避免在这个内核里
+# 再引入一遍生成逻辑 —— 两处的一致性由 `tests/test_covariant_general.py` 钉住。
+_BPRIME_COEFF_6 = [1.0, 21.0, 630.0, 18900.0, 496125.0, 9823275.0, 108056025.0]
+
+
+def B6(a, b, c):
+    r"""l=6（`_BPRIME_COEFF_6` 的 num = P_6(1) = 118394977）。"""
+    q = Qabc(a, b, c)
+    den = 0.0
+    for i, cf in enumerate(_BPRIME_COEFF_6):
+        den = den + cf * q ** (6 - i) * (Q0 ** 2) ** i
+    return xp.sqrt(sum(_BPRIME_COEFF_6) / den)
+
+
+# l -> B_l。`t_l` 与 `T_l` 都用它按 l 取。
+_BL = {0: lambda a, b, c: xp.ones(_atleast2(a).shape[0]),
+       1: B1, 2: B2, 3: B3, 4: B4, 5: B5, 6: B6}
+
+
 # --------------------------------------------------------------- 节点张量
 def T1_cov(a, b, c):
     """Eq.(10)：\tilde{t}^{(1)}_{mu}，返回 (N,4)。"""
@@ -266,6 +305,116 @@ def T4_cov(a, b, c):
     p4 = P4(a)
     return xp.einsum("eijklmnop,em,en,eo,ep->eijkl", p4, r, r, r, r) \
         * B4(a, b, c)[:, None, None, None, None]
+
+
+# ------------------------------------------------- 通用 \tilde t^{(l)}（任意 l）
+#
+# 论文 Eq.(124-136) 把 \tilde t^{(l)} 写成"r~ 的 l 重外积 + 无迹化修正"，
+# 只列到 l=3；Eq.(258) 给出等价的一般形式：
+#
+#     \tilde t^{(L)}_{\mu_1...\mu_L}
+#         = (-1)^L P^{(L)}_{\mu_1...\mu_L \mu'_1...\mu'_L} r^{\mu'_1}...r^{\mu'_L} B_L
+#
+# 而 `P^(L)` 的显式展开（Eq.208-253）本身就是"对指标配对求和"的结构。
+# 把 P^(L) 作用到 r 的外积上，可以化简成下面这个**闭式**（无需显式构造
+# 4^(2L) 的投影算子）：
+#
+#     t_{i_1...i_L} = sum_{k=0}^{floor(L/2)} (-1)^k (2L-2k-1)!! / (2L-1)!!
+#                     * sum_{|S|=2k} (r.r)^k * prod_{pairs (u,v) in S} g~_{i_u i_v}
+#                                     * prod_{j not in S} r~_{i_j}
+#
+# 其中 `g~ = Gt_cov(a)`、`r~ = g~ . (b-c)`、`r.r = r~_mu r~_nu G^{mu nu}`。
+#
+# 判据（见 `tests/test_covariant_general.py`）：
+#   1. l=1..4 必须与写死的 `T1_cov..T4_cov` **逐位一致**（rel ~ 1e-16）；
+#   2. 对任意一对指标缩并度规必须为 0（无迹）；
+#   3. 同一指标的全对称（交换任意两个指标不变）。
+#
+# 这样 l>=5 也能算（原来 `T5_cov` 根本不存在），ρ₅ / K*₅ 才有协变表达式。
+_TL_LET = "ijklmnopqrstuvwxyz"
+
+
+def _double_factorial(n):
+    """n!! —— 只用于**构造**（Python 整数，与事例无关）。"""
+    r = 1
+    while n > 0:
+        r *= n
+        n -= 2
+    return r
+
+
+def _matchings(items):
+    """把 `items` 分成无序对的全部方式（递归；用于构造，不在热路径）。"""
+    if not items:
+        yield []
+        return
+    first = items[0]
+    for i in range(1, len(items)):
+        rest = items[1:i] + items[i + 1:]
+        for sub in _matchings(rest):
+            yield [(first, items[i])] + sub
+
+
+def _t_terms(l):
+    """`t_l` 的项表：[(系数, 配对数 k, 配对方案, 自由指标), ...]。
+
+    与事例无关，可缓存；`_t_l_impl` 每次只做 einsum。
+    """
+    l = int(l)
+    terms = []
+    for k in range(l // 2 + 1):
+        coef = (-1.0) ** k * _double_factorial(2 * l - 2 * k - 1) \
+            / float(_double_factorial(2 * l - 1))
+        for pairset in _combinations(range(l), 2 * k):
+            free = tuple(i for i in range(l) if i not in pairset)
+            for pairs in _matchings(list(pairset)):
+                terms.append((coef, k, tuple(pairs), free))
+    return terms
+
+
+def _combinations(seq, r):
+    return itertools.combinations(seq, r)
+
+
+_T_TERMS_CACHE = {}
+
+
+def _t_l_impl(l, a, b, c):
+    a, b, c = _atleast2(a), _atleast2(b), _atleast2(c)
+    l = int(l)
+    gt = Gt_cov(a)
+    tr = xp.einsum("eij,ej->ei", gt, b - c)
+    rr = dot(tr, tr)                       # r~ . r~ （用度规）
+    terms = _T_TERMS_CACHE.get(l)
+    if terms is None:
+        terms = _T_TERMS_CACHE[l] = _t_terms(l)
+
+    out_sub = "e" + _TL_LET[:l]
+    acc = 0.0
+    for coef, k, pairs, free in terms:
+        lhs = ["e%s%s" % (_TL_LET[u], _TL_LET[v]) for (u, v) in pairs]
+        lhs += ["e%s" % _TL_LET[i] for i in free]
+        ops = [gt] * len(pairs) + [tr] * len(free)
+        if ops:
+            t = xp.einsum(",".join(lhs) + "->" + out_sub, *ops)
+        else:
+            t = xp.ones((a.shape[0],))
+        if k:
+            t = t * rr.reshape((a.shape[0],) + (1,) * l) ** k
+        acc = acc + coef * t
+    return acc
+
+
+def t_l(l, a, b, c):
+    """通用 `\tilde t^{(l)}`（论文 Eq.258 / Eq.124-136），返回 `(N,4,...,4)`。
+
+    对 l=1..4 与写死的 `T1_cov..T4_cov` 逐位一致；l=5 起是**新能力**
+    （论文 Eq.158 之后把 B_5 注释掉了，本仓库补上 `B5`）。
+
+    ⚠️ `l` 只受"构造项数"限制（l=6 有 76 项），不受原来"只到 4"的限制。
+    """
+    return _t_l_impl(l, a, b, c) * _BL[int(l)](a, b, c).reshape(
+        (_atleast2(a).shape[0],) + (1,) * int(l))
 
 
 # ------------------------------------------------------------- 投影算子

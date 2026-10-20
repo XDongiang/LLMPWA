@@ -376,6 +376,7 @@ _COV_HEADER = '''#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
+import inspect
 import os
 import sys
 import time
@@ -389,8 +390,8 @@ if _HERE not in sys.path:
 import _backend as _B     # noqa: E402  后端选择（jax 优先，无 jax 回退 numpy）
 import covariant as CV    # noqa: E402  同目录的协变张量内核副本
 from covariant import (  # noqa: E402,F401  道函数体直接调用这些原语
-    B1, B2, B3, B4, Gt_con, Gt_cov, P2, P3, P4, Qabc, T1_cov, T2_cov, T3_cov,
-    T4_cov, dot, invm, leci_four, metric,
+    B1, B2, B3, B4, B5, B6, Gt_con, Gt_cov, P2, P3, P4, Qabc, T1_cov, T2_cov,
+    T3_cov, T4_cov, dot, invm, leci_four, metric, t_l,
     _einsum, _leci_con, _metric_axis, _raise_last, _s1_vector,
 )
 
@@ -402,6 +403,8 @@ CHAIN = {chain!r}
 CHANNELS = {channels!r}
 NAMES = [_n for (_n, _l, _s) in CHANNELS]
 LS_LIST = [(l, s) for (_n, l, s) in CHANNELS]
+# 道名 -> 该道的 tree；把道函数的参数名解析成四动量时用
+CHANNEL_TREES = {channel_trees!r}
 
 INPUT_KEYS = {keys!r}
 INPUT_LAYOUT = {layout!r}
@@ -426,20 +429,87 @@ def _psi(mom, n):
     return onp.broadcast_to(onp.array([0.0, 0.0, 0.0, PSI_MASS]), (n, 4))
 
 
+_SIG = inspect.signature
+
+# 4 体道函数的**统一历史签名**（`phif0`/`phif2` 两族的 7 条道都照抄它）。
+# 其中 `f2` 这个名字在 `phif0` 链里其实指 `f0` 节点 —— 签名是为统一而写的，
+# 不代表拓扑。所以按名字解析失败时，回退到这个固定绑定。
+_LEGACY_SIG = ("phi", "f2", "Kp", "Km", "Pip", "Pim")
+
+
+def _node_mom(mom, name, pos, chan):
+    """把一个参数名解析成 (N,4) 四动量。
+
+    末态直接取；中间节点 = 它的叶子之和（递归）。
+
+    节点拓扑有两个来源，**合并**使用：
+      * `CHANNEL_TREES[chan]` —— 该道自己的 tree（三体置换族靠它区分
+        哪一对配成共振，如 `rhopi5` 的 `_12`/`_13`/`_23`）；
+      * `CHAIN["nodes"]` —— 链的粒子表（4 体 spec 的 tree 是空的，
+        但 `[particles]` 里写了 `phi -> Kp + Km`，靠它解析）。
+
+    名字解析不了时**不在这里兜底** —— 由 `raw_tensors` 判断是不是历史
+    签名后整体回退，免得半套名字走一套拓扑、另一半走另一套。
+    """
+    if name in pos:
+        return mom[:, pos[name]]
+    tree = CHANNEL_TREES.get(chan) or {{}}
+    daughters = tree.get(name)
+    if daughters is None:
+        node = CHAIN["nodes"].get(name) or {{}}
+        daughters = node.get("daughters")
+    if not daughters:
+        raise KeyError("道 %s 的参数 %r 既不是末态 %s，也不在 tree / 粒子表里"
+                       % (chan, name, list(pos)))
+    total = None
+    for d in daughters:
+        part = _node_mom(mom, d, pos, chan)
+        total = part if total is None else total + part
+    return total
+
+
+def _legacy_mom(mom, name, pos):
+    """历史 4 体签名的固定绑定：`phi = Kp+Km`、`f2 = Pip+Pim`。"""
+    if name in pos:
+        return mom[:, pos[name]]
+    if name == "phi":
+        return mom[:, pos["Kp"]] + mom[:, pos["Km"]]
+    if name == "f2":
+        return mom[:, pos["Pip"]] + mom[:, pos["Pim"]]
+    raise KeyError("历史签名里没有 %r" % name)
+
+
 def raw_tensors(mom):
     """逐道算原始协变张量 T_i(e, mu)，返回 {{道名: (N, 4)}}。
 
-    道函数的签名固定是 `(psi, phi, f2, Kp, Km, Pip, Pim)`（见
-    `agent/tensor/chains/README` 的约定）。`phi` / `f2` 只对
-    `<phi f_J|LS>` 那些道有意义，rho'/b1 族忽略它们 —— 但签名保持统一，
-    这样道表可以混装两个族的道。
+    道函数的参数**按参数名绑定**（用 `inspect.signature` 读内联后的函数），
+    每个参数名解析成一个四动量：
+
+      * 名字在 `INPUT_KEYS` 里 -> 直接取该末态；
+      * 否则它是一个中间节点 -> 递归地把它的叶子加起来（`phi = Kp + Km`）。
+
+    这样同一份产物里可以混装 4 体（`(psi, phi, f2, Kp, Km, Pip, Pim)`）
+    与 3 体置换族（`(psi, Pip1, Pim2, Pi0)`）—— 两种签名都只是"名字的列表"，
+    不需要产物知道任何一种固定顺序。
+
+    若名字解析不了、而签名正好是 `_LEGACY_SIG`，整体回退到历史绑定
+    （`phif0` 的道函数把 `f0` 写成 `f2`，就是靠这条）。
     """
-    Kp, Km = mom[:, CHAIN["index"]["Kp"]], mom[:, CHAIN["index"]["Km"]]
-    Pip, Pim = mom[:, CHAIN["index"]["Pip"]], mom[:, CHAIN["index"]["Pim"]]
-    phi, f2 = Kp + Km, Pip + Pim
-    psi = _psi(mom, Kp.shape[0])
-    args = (psi, phi, f2, Kp, Km, Pip, Pim)
-    return {{nm: _FUNCS[nm](*args) for nm in NAMES}}
+    n = mom.shape[0]
+    psi = _psi(mom, n)
+    pos = {{k: i for i, k in enumerate(INPUT_KEYS)}}
+    out = {{}}
+    for nm in NAMES:
+        fn = _FUNCS[nm]
+        pnames = [p for p in _SIG(fn).parameters if p != "psi"]
+        try:
+            args = (psi,) + tuple(_node_mom(mom, p, pos, nm) for p in pnames)
+        except KeyError:
+            if tuple(pnames) != _LEGACY_SIG:
+                raise
+            args = (psi,) + tuple(_legacy_mom(mom, p, pos) for p in pnames)
+        out[nm] = fn(*args)
+    return out
 
 
 def stored(mom):
@@ -594,6 +664,8 @@ def _emit_covariant(spec, ch, chain, name, out_dir, suffix, basis):
         channel_lines=channel_lines, n_ch=len(ch), out_names=out_names,
         kernel=kernel, kernel_doc=kernel_doc, chain=chain,
         channels=[(n, l, s) for (n, l, s, _f) in ch],
+        channel_trees={n: t for (n, _l, _s, t) in ch},
+
         keys=spec["input_keys"], layout=spec["input_layout"],
         psi_mass=psi_mass, out_name=out_name,
         channel_imports=channel_imports,

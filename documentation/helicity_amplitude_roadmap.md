@@ -243,6 +243,23 @@ $$
 默认用粒子自己的 `spins` 列表，打开 `helicity_inner_full` 后用完整的
 $2J+1$ 个螺旋度槽（`-J…J`）。我们的 `LAM_SLOTS`（`omega.py:50`）就是后者。
 
+⚠️ **上限（2026-10-20 更新）**：`LAM_SLOTS` 原先只到 $J=4$，`Bl` 只到
+$l=4$，`spec.py` 据此硬拒 $J>4$ / $l>4$。逐项实测后确认 `cg` /
+`small_d_weight` / `D_lambda` / `covariant_hel_term` **本来就是通用的**，
+真正缺的只有 `LAM_SLOTS` 的键与 `Bl` 的 $l=5$ 系数。现已扩到 **6**。
+
+协变张量路线（`cartesian`/`helicity`）**也**扩到了 6（2026-10-20 后半段）：
+`covariant.py` 原来只有写死的 `T1_cov..T4_cov`，现补了论文
+`jpsipwa1.tex` Eq.(258) 的通用 `t_l` 与 `B5`/`B6`。`t_l(1..4)` 与写死的
+四个函数逐位一致（rel ≤ 6e-16），l=5/6 是新能力。上限取 6 是因为
+`small_d_weight` 的阶乘在 float64 下溢出（$J\approx50$ 时 NaN）。
+
+tf-pwa 的 `Bprime_polynomial` 有 $L=5$ 的系数表，更大的 $l$ 由反向 Bessel
+多项式现算（`get_bprime_coeff`），所以它本来就没有这道墙。我们已用
+tf-pwa 对 ρ₅ 做外部对拍：overlap=1.00000000、残差 2e-15
+（`agent/tensor/tests/test_j5_vs_tfpwa.py`）。
+见 `analyses/tensor_examples/probes/probe_j5_feasibility.py`。
+
 ### 3.4 逐节点多 $(l,s)$ 与共享参数（`split_ls.py`）
 
 `amp/split_ls.py:14` `ParticleDecayLS` / `:79` `ParticleBWRLS`：

@@ -201,23 +201,49 @@ def validate(spec):
     if top not in parts:
         raise SpecError("顶层粒子 %s 不在 [particles] 里" % top)
 
-    # 前置能力边界（审计 §2.3）：内核（Wigner-D / Blatt-Weisskopf / LAM_SLOTS）
-    # 只到 J = 4，位垒因子 Bl 只到 l = 4。超了要在**读 TOML 时**报错，
-    # 而不是运行时 KeyError。
+    # 前置能力边界（审计 §2.3）：超了要在**读 TOML 时**报错，而不是运行时
+    # KeyError / 静默算错。边界**按表象分级**（2026-10-20 扩展 J=5/l=5）：
     #
-    # 另外只支持**两级级联**（顶层 + 一层共振），因为 runtime 只算
-    # `D0 * D1 * D2`；更深的树在 validate 里拒绝，而不是静默算错。
+    # | 表象 | 张量来源 | J / l 上限 |
+    # |---|---|---|
+    # | `helicity_cascade` / `omega` | `kernels/omega.py` 的通用原语 | 6 / 6 |
+    # | `cartesian` / `helicity` | `kernels/covariant.py` 的 `t_l` | 6 / 6 |
+    #
+    # 级联路线的原语（`cg` / `small_d_weight` / `D_lambda` /
+    # `covariant_hel_term`）本来就是通用的，`LAM_SLOTS` 与 `Bl` 扩到 6 之后
+    # J=5/l=5 就能算（实测置换协变性残差 3e-15，见
+    # `analyses/tensor_examples/probes/probe_j5_feasibility.py`）。
+    #
+    # 协变张量路线 2026-10-20 也放开到 6：`covariant.py` 新增了论文
+    # Eq.(258) 的**通用** `t_l(l, a, b, c)`（l=1..4 与写死的 `T1_cov..T4_cov`
+    # 逐位一致，l=5/6 是新能力）与 `B5`/`B6`。但**能算 ≠ 能 emit**：
+    # 协变路线要把 `chains/<chain>/<channel>.py` 里的**手写**道函数内联进产物，
+    # 所以某条链能不能出，取决于有没有人为它写道函数（三体置换族默认没有，
+    # 只有 `helicity_cascade` 能出）。这是 emit 期的 LookupError，不是这里的
+    # 上限问题 —— 两件事分开报，免得把"没写道函数"误诊成"J 超限"。
+    #
+    # 上限 6（而不是更大）是因为 `small_d_weight` 的阶乘在 float64 下溢出：
+    # d 矩阵正交性 J=20 退到 4e-12、J=40 退到 2e-6、J=50 直接 NaN。
+    _bases_all = spec["bases"] or [{"name": "omega", "kernel": "omega"}]
+    _kernels = {(b.get("kernel") or b["name"]) for b in _bases_all}
+    _tensor_route = bool(_kernels & {"cartesian", "helicity"})
+    j_max, l_max_cap = 6, 6
+    _why = ("两条路线的原语都已通用：级联走 LAM_SLOTS/Bl，协变走 t_l/B5；"
+            "上限 6 是因为 small_d_weight 的阶乘在 float64 下溢出")
     for nm, p in sorted(parts.items()):
-        if p["J"] > 4:
+        if p["J"] > j_max:
             raise SpecError(
-                "粒子 %s 的 J=%d 超出内核上限 4（LAM_SLOTS / Wigner-D 只到 J=4）"
-                % (nm, p["J"]))
-        if "l" in p and p["daughters"] and int(p["l"]) > 4:
+                "粒子 %s 的 J=%d 超出%s的上限 %d（%s）"
+                % (nm, p["J"], "本表象" if _tensor_route else "级联内核",
+                   j_max, _why))
+        if "l" in p and p["daughters"] and int(p["l"]) > l_max_cap:
             raise SpecError(
-                "节点 %s 的 l=%d 超出内核上限 4（Blatt-Weisskopf Bl 只到 l=4）"
-                % (nm, int(p["l"])))
-    if spec["l_max"] > 4:
-        raise SpecError("[chain].l_max=%d 超出内核上限 4" % spec["l_max"])
+                "节点 %s 的 l=%d 超出%s的上限 %d（%s）"
+                % (nm, int(p["l"]), "本表象" if _tensor_route else "级联内核",
+                   l_max_cap, _why))
+    if spec["l_max"] > l_max_cap:
+        raise SpecError("[chain].l_max=%d 超出上限 %d（%s）"
+                        % (spec["l_max"], l_max_cap, _why))
 
     # 拓扑：从 top 出发走一遍，必须是二叉树且无环
     seen = set()

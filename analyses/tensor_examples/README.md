@@ -13,10 +13,11 @@
 |---|---|---|---|
 | **例 3** `ψ→φπ⁺π⁻` | 4 | 10（ρ′ 2 + b₁ 8） | 深度 3，三表象齐全 |
 | **例 5** `ψ→K⁺π⁻K⁻π⁺` | 4 | 10（K*₀ 2 + K*₂ 8） | 深度 3 |
-| **例 1** `ψ→π⁺π⁻π⁰` | **3** | 6（ρ 3 + ρ₃ 3） | 真三体，只有 cascade 能 emit |
-| **例 2** `ψ→K⁺K⁻π⁰` | **3** | 3（KK̄ 1 + Kπ 2） | 真三体，同上 |
+| **例 1** `ψ→π⁺π⁻π⁰` | **3** | 9（ρ 3 + ρ₃ 3 + ρ₅ 3） | 真三体，只有 cascade 能 emit |
+| **例 2** `ψ→K⁺K⁻π⁰` | **3** | 7（KK̄ 1 + Kπ 2 + Kπ₃ 2 + Kπ₅ 2） | 真三体，同上 |
 
-合计 **29 条道**。例 1/2 是 2026-10-20 新增的（置换求和模型）。
+合计 **36 条道**。例 1/2 是 2026-10-20 新增的（置换求和模型）；ρ₅ 同日把级联
+内核的 J/l 上限从 4 扩到 6。
 
 ## 现状
 
@@ -27,10 +28,11 @@
 | 例 5 `ψ→K⁺π⁻K⁻π⁺` 的 K*₀/K*₂ 道 | 431–623 | ✅ 已实现（2026-10-19） | 10 条（`u_kst0_*` + `u_PP/PF/FP/FF_*`） |
 | 例 1 `ψ→π⁺π⁻π⁰` 的 ρ 家族 | 200–273 | ✅ 已实现（2026-10-20） | `u_rho_{12,13,23}`（三体，3 条置换道） |
 | 例 1 `ψ→π⁺π⁻π⁰` 的 ρ₃(3⁻) 家族 | 236–247 | ✅ 已实现（2026-10-20） | `u_rho3_{12,13,23}`（符号 (+,-,-)） |
-| 例 1 `ψ→π⁺π⁻π⁰` 的 ρ₅(5⁻) | 249–263 | ❌ 超内核上限 | 需 J=5 与 l=5，`LAM_SLOTS`/`l_max` 到 4 |
+| 例 1 `ψ→π⁺π⁻π⁰` 的 ρ₅(5⁻) | 249–263 | ✅ 已实现（2026-10-20） | `u_rho5_{12,13,23}`（J=5/l=5，扩了内核上限） |
 | 例 2 `ψ→K⁺K⁻π⁰` 的 KK̄ 共振 | 274–304 | ✅ 已实现（2026-10-20） | `u_rho_K_12`（单项） |
 | 例 2 `ψ→K⁺K⁻π⁰` 的 K\* 共振 | 274–304 | ✅ 已实现（2026-10-20） | `u_kstar_{13,23}`（两项同号） |
-| 例 2 的 K\*₃ / K\*₅ | 274–304 | ⬜ 未做 | K\*₃ 可做；K\*₅ 超上限 |
+| 例 2 `ψ→K⁺K⁻π⁰` 的 K\*₅(5⁻) | 274–304 | ✅ 已实现（2026-10-20） | `u_kstar5_{13,23}`（J=5/l=5） |
+| 例 2 `ψ→K⁺K⁻π⁰` 的 K\*₃(3⁻) | 274–304 | ✅ 已实现（2026-10-20） | `u_kstar3_{13,23}`（J=3，两条道同号） |
 | 例 7–11 辐射衰变 | 845–1383 | ⬜ 需新基建 | 秩 2 振幅 + 横向投影 |
 | 例 4/6/12 | — | ❌ 不做 | 三体 / 深度 3 的 omega / 文档为空 |
 
@@ -49,8 +51,11 @@
 |---|---|---|---|---|
 | [`ex1_pipipi0_rho.toml`](specs/ex1_pipipi0_rho.toml) | 1 | ρ(1⁻) | 3 | `{12,13,23}` 全排列，三项**同号** |
 | [`ex1_pipipi0_rho3.toml`](specs/ex1_pipipi0_rho3.toml) | 1 | ρ₃(3⁻) | 3 | 同上，但三项**(+,−,−)** |
+| [`ex1_pipipi0_rho5.toml`](specs/ex1_pipipi0_rho5.toml) | 1 | ρ₅(5⁻) | 3 | 同 ρ₃；**J=5/l=5**，扩了内核上限 |
 | [`ex2_kkpi0_rho.toml`](specs/ex2_kkpi0_rho.toml) | 2 | KK̄ 共振 | 1 | **单项**（换 1↔3 就成 Kπ，不是同一个态） |
-| [`ex2_kkpi0_kstar.toml`](specs/ex2_kkpi0_kstar.toml) | 2 | Kπ 共振 | 2 | `{13,23}` 两项**同号**（K⁺K⁻ 同种粒子，1↔2 无新配对） |
+| [`ex2_kkpi0_kstar.toml`](specs/ex2_kkpi0_kstar.toml) | 2 | Kπ 共振 (J=1) | 2 | `{13,23}` 两项**同号**（K⁺K⁻ 同种粒子，1↔2 无新配对） |
+| [`ex2_kkpi0_kstar3.toml`](specs/ex2_kkpi0_kstar3.toml) | 2 | Kπ₃ 共振 (J=3) | 2 | 同 K*；J=3 |
+| [`ex2_kkpi0_kstar5.toml`](specs/ex2_kkpi0_kstar5.toml) | 2 | Kπ₅ 共振 (J=5) | 2 | 同 K*；**J=5/l=5** |
 
 实测（三体相空间 N=64，`helicity_cascade`）：
 
@@ -62,7 +67,7 @@
 | `check` 三体拓扑 | ✅ 4/4 |
 | `emit`（cascade）产物 vs 直接调内核 | **逐位相同**（0.0） |
 
-验收脚本：[`agent/tensor/tests/test_ex12_permutation.py`](../../agent/tensor/tests/test_ex12_permutation.py)（7 项）
+验收脚本：[`agent/tensor/tests/test_ex12_permutation.py`](../../agent/tensor/tests/test_ex12_permutation.py)（8 项）
 与探针 [`probes/verify_ex12_permutation.py`](probes/verify_ex12_permutation.py)。
 
 四个必须知道的坑：
@@ -73,14 +78,18 @@
    `B12 − B13 + B23` 而不是文档的 `B12 + B13 + B23`。
    隐蔽之处：每条道单独看都自洽（都能精确写成 `s·c·ε·B`，残差 1e-15），
    **只有做置换检验或求和才暴露** —— 所以判据用置换协变性，不用"每道能跑通"。
-2. **`ε·B` 恒等式只对 J=1 成立**。J=3 时文档的 `T̃⁽³⁾` 是秩 2 张量，
-   `ε·p_ψ` 缩并后**不能**化成单个 `ε_{μνλσ}p₁p₂p₃`（实测残差 1.04，
-   是结构性的）。ρ₃ 只验置换协变性。
-3. **`cartesian`/`helicity` 出不来**：`emit` 需要
-   `agent/tensor/chains/<chain>/<channel>.py` 里的**手写**道函数
-   （`_emit_covariant` 按 `def <name>` 取函数体内联）。三体置换道没有手写
-   函数，只有 `helicity_cascade` 能 emit（它按逐节点 `(l,s)` 描述道）。
-   这不是缺陷 —— 级联本来就是三体该用的内核。
+2. **`ε·B` 恒等式只对 J=1 成立**。J≥3 时文档的 `T̃⁽ᴶ⁾` 是秩 ≥2 的张量，
+   `ε·p_ψ` 缩并后**不能**化成单个 `ε_{μνλσ}p₁p₂p₃`（ρ₃ 实测残差 1.04，
+   是结构性的）。ρ₃/ρ₅ 只验置换协变性。
+3. **`cartesian`/`helicity` 需要手写道函数**：`emit` 按
+   `agent/tensor/chains/<chain>/<channel>.py` 里的 `def <name>` 取函数体
+   内联（`_emit_covariant`）。**"能算"≠"能 emit"** —— 只要有人写了道函数，
+   协变路线就能出；没人写就只有 `helicity_cascade` 能出（它按逐节点
+   `(l,s)` 描述道，不需要手写公式）。这不是缺陷，是两种路线的分工。
+
+   2026-10-20 起 `chains/rhopi5/` 为 ρ₅ 补了三只手写道函数，
+   于是 **ρ₅ 的 cartesian / helicity / cascade 三条路线都能 emit**，
+   实测互相一致（rel ~ 4e-15）。这是"协变张量路线也能表达 J=5"的落点。
 
 4. 🐛 **omega 对置换族是静默错的**（2026-10-20 发现，真缺陷）。
    `omega_from_momenta(mom, chain)` 只吃 **base chain**，返回**一份逐道共用**
@@ -93,8 +102,52 @@
    `spec.py` 的 `validate` 已按此拦截。
    **结论：置换族一律用 `helicity_cascade`；单道三体用 omega 可以。**
 
-超出内核上限、**没做**的两项：例 1 的 ρ₅(5⁻)、例 2 的 K\*₅ —— 需要
-J=5 与 l=5，而 `LAM_SLOTS` 与 `l_max` 都只到 4。K\*₃(3⁻) 技术上可做，未做。
+### J=5 / l=5：原本"超上限"，2026-10-20 已支持
+
+ρ₅(5⁻) 与 K\*₅(5⁻) 原本被 `spec.py` 以"`LAM_SLOTS`/Wigner-D 只到 4、
+`Bl` 只到 4"拒绝。逐项实测后发现**只有两处真缺**：
+
+| 组件 | 结论 |
+|---|---|
+| `cg` / `small_d_weight` / `D_lambda` / `covariant_hel_term` | ✅ **本来就通用**，不用动 |
+| `LAM_SLOTS` | 加 `5`/`6` 两个键 |
+| `Bl` | 加 l=5 的系数（tf-pwa `Bprime_polynomial` 有，且更大 l 由反向 Bessel 多项式现算） |
+| `covariant.py` 的 `T1..T4_cov` | 只有**协变张量**路线需要；已补通用 `t_l` + `B5`/`B6`（见下） |
+
+所以边界改成 **两条路线都到 6**（原来协变张量只到 4）。ρ₅ 与 K\*₅ 实测
+置换协变性残差 4.5e-15 / 0。详见
+[`chains/notes/ex1_rho5.notes.md`](chains/notes/ex1_rho5.notes.md)
+与探针 [`probes/probe_j5_feasibility.py`](probes/probe_j5_feasibility.py)。
+
+真正的墙不是 J=5，而是 `small_d_weight` 的阶乘溢出（J≈50 时 NaN）。
+
+#### 协变张量路线怎么补上的（2026-10-20 后半段）
+
+`covariant.py` 原来只有写死的 `T1_cov..T4_cov`，所以协变路线卡在 4。
+补的是论文 `jpsipwa1.tex` **Eq.(258)** 的通用构造：
+
+$$\tilde t^{(L)}_{i_1\cdots i_L}=\sum_k\frac{(-1)^k(2L-2k-1)!!}{(2L-1)!!}
+  \sum_{|S|=2k}(\tilde r\cdot\tilde r)^k
+  \prod_{(u,v)\in S}\tilde g_{i_ui_v}\prod_{j\notin S}\tilde r_{i_j}$$
+
+外加论文**注释掉**的 `B5`（本仓库照 tf-pwa `Bprime_polynomial` 补，两个
+独立来源互相印证）。
+
+| 判据 | 结果 |
+|---|---|
+| `t_l(1..4)` vs 写死的 `T1_cov..T4_cov` | **逐位一致**（rel ≤ 6e-16） |
+| 无迹性（任意指标对缩并度规 = 0） | l=2..6 全部 < 2e-14 |
+| 全对称（交换任意两指标不变） | < 1e-12 |
+| `B5` vs `omega.Bl(5,·)`（独立实现） | rel 2e-16 |
+| ρ₅ 三条路线互相比 | rel ~ 4e-15 |
+| ρ₅ vs **tf-pwa**（配对在壳） | overlap=1.00000000，残差 **2e-15** |
+
+⚠️ 与 tf-pwa 对拍时**必须把配对质量放在壳**：tf-pwa 的
+`has_barrier_factor=False` 只关 `B_l`，**仍然乘 `q^l`**，而我们的 `t_l`
+只含 `B_l`（`q^l` 由 `g_i` 吸收）。这是既有的**口径差异**，不是 bug。
+在壳之后 `q^l/B_l` 退化成常数，剩下的角分布/λ 分量/置换结构才可比。
+详见 [`agent/tensor/tests/make_tfpwa_j5_golden.py`](../../agent/tensor/tests/make_tfpwa_j5_golden.py)
+与 `test_j5_vs_tfpwa.py`。
 
 ## 目录
 
@@ -125,6 +178,7 @@ analyses/tensor_examples/
 │   └── make_momenta.py     ← 合成 ψ→φπ⁺π⁻→(K⁺K⁻)(π⁺π⁻) 四动量（自带守恒自检）
 ├── check_ex3.py            ← 端到端回归（**仅例 3**）：L1/L2/L3 + A1/A3/A7
 ├── probes/                 ← 诊断脚本（复现 roadmap §7 与边界实测）
+│   ├── probe_j5_feasibility.py ← **J=5/l=5 逐项实测**（哪卡住、tf-pwa 怎么做）
 │   ├── verify_ex5_port.py  ← 例 5 的 10 条道 vs jax 逐式对拍（10/10，1e-15）
 │   ├── probe_ex5_identify.py ← 例 5 级联可表示性穷举 + 阳性对照（b₁ 8/8）
 │   ├── probe_a1_sensitivity.py ← **判据 A1 自身的有效性**（错误注入）
@@ -132,7 +186,7 @@ analyses/tensor_examples/
 └── generated/  out/        ← 生成物与运行产物（.gitignore，可随时重建）
 ```
 
-**每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖十一条链
+**每条链的详细文档在 [`chains/`](chains/README.md)** —— 覆盖十四条链
 （`phif0` / `phif2` / `b1pi` / `rhopi` / `rhof2_generic` / `ex5_kst2` /
 `ex5_kst0`）各自的拓扑、分波、表象可用性、验收数据与遗留问题。
 
@@ -517,7 +571,7 @@ python agent/tensor/tests/test_ex3_channels.py      # 8 项
 python agent/tensor/tests/test_ex5_channels.py      # 6 项（例 5 的 10 条道）
 python agent/tensor/tests/test_helicity_cascade.py  # 13 项：A1/A2/A3/A4 + 三条边界
 python agent/tensor/tests/test_helicity_vs_tfpwa.py # 4 项：A5′（与 tf-pwa 对拍）
-python agent/tensor/tests/test_ex12_permutation.py  # 7 项：例 1/2 的置换求和 + emit + omega 护栏
+python agent/tensor/tests/test_ex12_permutation.py  # 8 项：例 1/2 的置换求和 + emit + omega/J=5 护栏
 python agent/tensor/tests/test_chain_docs.py        # 5 项：链文档与 spec 同步
 ```
 

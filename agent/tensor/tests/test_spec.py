@@ -117,24 +117,92 @@ def test_explicit_channels_win():
 
 
 def test_j_over_limit_is_readable_error():
-    """J > 4 必须在读 TOML 时报错，而不是运行时 KeyError。"""
+    """J 超过级联内核上限（6）必须在读 TOML 时报错，而不是运行时 KeyError。
+
+    上限在 2026-10-20 从 4 扩到 6（`LAM_SLOTS` / `Bl` / `spec.py` 一起改），
+    所以这里用 7 触发。J=5 现在**合法**（ρ₅），见
+    `test_j5_is_allowed_on_cascade_but_rejected_on_tensor_route`。
+    """
     t = _GOOD.replace("J = 2\nmass = 1.275", "J = 7\nmass = 1.275")
     try:
         spec.load_spec(_write(t))
     except spec.SpecError as e:
-        assert "J=7" in str(e) and "上限 4" in str(e), str(e)
+        assert "J=7" in str(e) and "上限 6" in str(e), str(e)
     else:
-        raise AssertionError("J>4 未报错")
+        raise AssertionError("J>6 未报错")
 
 
 def test_l_over_limit_is_readable_error():
-    t = _GOOD.replace("l = 2\n\n[particles.Kp]", "l = 6\n\n[particles.Kp]")
+    """l / `l_max` 超过级联内核上限（6）必须报错。"""
+    # (a) 节点 l=7 撞上限（`l_max` 也要放大，否则先撞三角枚举那条）
+    t = _GOOD.replace("l = 2\n\n[particles.Kp]", "l = 7\n\n[particles.Kp]")
+    t = t.replace("l_max = 4", "l_max = 7")
     try:
         spec.load_spec(_write(t))
     except spec.SpecError as e:
-        assert "上限 4" in str(e), str(e)
+        assert "上限 6" in str(e), str(e)
     else:
-        raise AssertionError("l>4 未报错")
+        raise AssertionError("l>6 未报错")
+
+    # (b) `[chain].l_max` 自己超限
+    t2 = _GOOD.replace("l_max = 4", "l_max = 9")
+    try:
+        spec.load_spec(_write(t2))
+    except spec.SpecError as e:
+        assert "l_max" in str(e) and "上限 6" in str(e), str(e)
+    else:
+        raise AssertionError("l_max>6 未报错")
+
+
+def test_j5_allowed_on_both_routes():
+    """J=5 / l=5 在**两条路线上都放行**（2026-10-20 扩展）。
+
+    级联路线：`LAM_SLOTS` + `Bl` 扩到 6。
+    协变张量路线：`covariant.py` 新增论文 Eq.(258) 的通用 `t_l` 与 `B5`，
+    所以 J=5 不再被上限挡住。
+
+    ⚠️ "validate 放行" ≠ "能 emit"：协变路线要内联手写道函数，三体置换族
+    默认没有（那是 emit 期的 LookupError，由
+    `tests/test_ex12_permutation.py::test_emit_end_to_end` 覆盖）。
+    """
+    t = _GOOD.replace("J = 2\nmass = 1.275", "J = 5\nmass = 1.275")
+    t = t.replace("l = 2\n\n[particles.Kp]", "l = 5\n\n[particles.Kp]")
+    t = t.replace("l_max = 4", "l_max = 5")
+
+    # 1) 默认（级联）路线：J=5/l=5 放行
+    s = spec.load_spec(_write(t))
+    assert s["particles"]["C"]["J"] == 5
+    assert s["particles"]["C"]["l"] == 5
+
+    # 2) 协变张量路线：同样放行
+    s2 = dict(s)
+    s2["bases"] = [{"name": "helicity", "kernel": "helicity"}]
+    spec.validate(s2)
+
+    # 3) 但 J=7 在两条路线上都要被拒（上限 6 是因为 small_d_weight 溢出）
+    #
+    # `load_spec` 自己就会 validate，所以 J=7 在**读 TOML 时**就炸 ——
+    # 这正是我们要的（而不是等到运行时 KeyError）。
+    t7 = t.replace("J = 5\nmass = 1.275", "J = 7\nmass = 1.275")
+    try:
+        spec.load_spec(_write(t7))
+    except spec.SpecError as e:
+        assert "J=7" in str(e) and "上限 6" in str(e), str(e)
+    else:
+        raise AssertionError("J=7 未被拒绝")
+
+    # 协变路线同样在 validate 层被拒（显式改 bases 再 validate）
+    s6 = spec.load_spec(_write(t))
+    s6 = dict(s6)
+    s6["particles"] = dict(s6["particles"])
+    s6["particles"]["C"] = dict(s6["particles"]["C"], J=7)
+    s6["bases"] = [{"name": "helicity", "kernel": "helicity"}]
+    try:
+        spec.validate(s6)
+    except spec.SpecError as e:
+        assert "J=7" in str(e) and "上限 6" in str(e), str(e)
+    else:
+        raise AssertionError("J=7 未被拒绝（协变路线）")
 
 
 def test_leaf_key_mismatch():

@@ -61,6 +61,15 @@ CASES = {
                 (M_K, M_K, M_PI0), 1.9),
     "ex2_kstar": ("ex2_kkpi0_kstar.toml", "u_kstar", 1, 1,
                   (M_K, M_K, M_PI0), 1.9),
+    # J=5 / l=5：2026-10-20 把级联内核的上限从 4 扩到 6 之后新增。
+    # 它同时是"上限确实扩了"的回归护栏 —— 若哪天又收回，这里会失败。
+    "ex1_rho5": ("ex1_pipipi0_rho5.toml", "u_rho5", 5, 5,
+                 (M_PI, M_PI, M_PI0), 2.5),
+    "ex2_kstar5": ("ex2_kkpi0_kstar5.toml", "u_kstar5", 5, 5,
+                   (M_K, M_K, M_PI0), 1.9),
+    # J=3 的 Kπ 共振：与 ex1_rho3 同类（J>=3 只验置换协变性）
+    "ex2_kstar3": ("ex2_kkpi0_kstar3.toml", "u_kstar3", 3, 3,
+                   (M_K, M_K, M_PI0), 1.9),
 }
 
 
@@ -217,13 +226,22 @@ def test_phase_space_is_genuine_threebody():
 
 
 # ------------------------------------------- 5) emit 端到端（产物 == 内核）
+# 哪些 spec 有**手写协变道函数**（`chains/<chain>/`）。
+# 其余 spec 的三体置换道没有手写函数，`cartesian`/`helicity` 会 LookupError，
+# 所以只能出 `helicity_cascade` —— 这不是缺陷，是"手写公式"与"自动生成"
+# 的边界（见 `agent/tensor/chains/README`）。
+HANDWRITTEN_COVARIANT = {"ex1_rho5"}
+
+
 def test_emit_end_to_end():
-    """`emit` 出的 cascade 产物，与直接调内核**逐位相同**。
+    """`emit` 出的产物与直接调内核**逐位相同**。
 
-    两件事一起验：
+    三件事一起验：
 
-    * 本套四个 spec 都**没有手写道函数**，所以 `emit` 应当只出
-      `helicity_cascade`（`cartesian`/`helicity` 会 `LookupError`）；
+    * 没有手写协变道函数的 spec，`emit` 只出 `helicity_cascade`
+      （`cartesian`/`helicity` 会 `LookupError`）；
+    * `ex1_rho5`（有 `chains/rhopi5/`）三条路线都出得来 —— 这是本次改动
+      的成果：协变张量路线第一次能表达 J=5/l=5；
     * 产物脚本跑出来的 `.npy` 与直接调内核逐位一致（生成器内联的代码
       与内核是同一份，不该有任何差别）。
 
@@ -233,46 +251,87 @@ def test_emit_end_to_end():
     import tempfile
 
     from agent.tensor import emitter
+    from agent.tensor.kernels.helicity import EPS_A
 
     for key, (spec_name, prefix, J, l, mass, m_res) in CASES.items():
         sp = specmod.load_spec(os.path.join(SPECS, spec_name))
         base = specmod.to_chain(sp)
         chans = specmod.cascade_channels(sp)
         mom = threebody(mass, m_res)
+        handwritten = key in HANDWRITTEN_COVARIANT
 
         with tempfile.TemporaryDirectory() as td:
             res = emitter.emit(sp, out_dir=td)
-            kernels = [e["kernel"] for e in res["scripts"]]
-            assert kernels == ["helicity_cascade"], (key, kernels)
-
-            src = open(res["scripts"][0]["script"], encoding="utf-8").read()
-            assert "import agent" not in src, key     # 产物自足
+            kernels = sorted(e["kernel"] for e in res["scripts"])
+            want_kernels = (["covariant", "helicity", "helicity_cascade"]
+                            if handwritten else ["helicity_cascade"])
+            assert kernels == want_kernels, (key, kernels)
 
             # 写回 spec 的 layout（x,y,z,E）再跑产物脚本
             keys = sp["input_keys"]
             npz = os.path.join(td, "mom.npz")
             np.savez(npz, **{keys[i]: mom[:, i][:, [1, 2, 3, 0]]
                              for i in range(len(keys))})
-            out = os.path.join(td, "out")
-            r = subprocess.run([sys.executable, res["scripts"][0]["script"],
-                                "--momenta", npz, "--out", out],
-                               capture_output=True, text=True)
-            assert r.returncode == 0, "%s: 产物脚本失败\n%s%s" % (
-                key, r.stdout, r.stderr)
-
-            # 产物名 = <chain_name>_hel.npy（`emitter.py:567`；suffix 只用于
-            # 生成器脚本内部的参数，不进文件名）
             chain_name = (sp["raw"].get("chain", {}).get("chain_name")
                           or sp["name"])
-            want = np.load(os.path.join(out, chain_name + "_hel.npy"))
 
             ours = np.stack([
                 HC.chain_amplitude(mom, HC.with_tree(base, c["tree"]),
                                    c["ls"], covariant=True)
                 for c in chans], axis=0)
-            assert ours.shape == want.shape, (key, ours.shape, want.shape)
-            d = np.abs(ours - want).max() / np.abs(want).max()
-            assert d < 1e-12, "%s: emit 产物与内核差 %.3e" % (key, d)
+
+            for entry in res["scripts"]:
+                kern = entry["kernel"]
+                src = open(entry["script"], encoding="utf-8").read()
+                assert "import agent" not in src, (key, kern)   # 产物自足
+
+                out = os.path.join(td, "out_" + kern)
+                r = subprocess.run([sys.executable, entry["script"],
+                                    "--momenta", npz, "--out", out],
+                                   capture_output=True, text=True)
+                assert r.returncode == 0, "%s/%s: 产物脚本失败\n%s%s" % (
+                    key, kern, r.stdout, r.stderr)
+
+                # 产物名 = <chain_name>_{hel,kk}.npy
+                # （`emitter.py`；suffix 只用于生成器脚本内部参数，不进文件名）
+                fn = chain_name + ("_kk.npy" if kern == "covariant"
+                                   else "_hel.npy")
+                got = np.load(os.path.join(out, fn))
+
+                if kern == "covariant":
+                    # 笛卡尔张量只有空间分量 (N,3)；投到螺度再比
+                    got = np.einsum("lm,ecm->ecl", EPS_A, got)
+
+                assert ours.shape == got.shape, (key, kern, ours.shape,
+                                                 got.shape)
+
+                if kern == "helicity_cascade":
+                    # 与内核同一套归一化 -> 逐位相同
+                    d = np.abs(ours - got).max() / np.abs(got).max()
+                    assert d < 1e-12, "%s/%s: emit 产物与内核差 %.3e" % (
+                        key, kern, d)
+                else:
+                    # 协变/螺度张量路线的**整体归一化**与级联不同：论文的
+                    # `t~` 带 Blatt-Weisskopf `B_l(Q)`，而级联路线把 BW
+                    # 因子放在 `g_i`（拟合参数）里，所以两条路线只差一个
+                    # **与事例无关的复常数**（实测 c = +0.001905i，即论文
+                    # 那个 `-i` 与 ε 缩并的乘积）。
+                    #
+                    # 判据：逐道拟合出的 c 必须**完全相同**（|c| 一致到
+                    # 1e-12）且残差 ~1e-15。若某个道差一个符号或差一个
+                    # 因子，这里会立刻炸 —— 这正是"置换求和符号写错"的
+                    # 检测器。
+                    cs = []
+                    for i in range(ours.shape[0]):
+                        p = got[i].reshape(-1)
+                        o = ours[i].reshape(-1)
+                        cs.append(np.vdot(p, o) / np.vdot(p, p))
+                        d = np.abs(o - cs[-1] * p).max() / np.abs(o).max()
+                        assert d < 1e-12, (
+                            "%s/%s: 道 %d 残差 %.3e" % (key, kern, i, d))
+                    assert np.allclose([abs(c) for c in cs], abs(cs[0]),
+                                       rtol=0, atol=1e-12), (
+                        "%s/%s: 逐道归一化常数不一致 %s" % (key, kern, cs))
 
 
 # ---------- 6) omega 对"置换族"是静默错的（回归护栏）
@@ -368,6 +427,86 @@ def test_omega_guard_rejects_permutation_family():
     sp2 = dict(sp)
     sp2["bases"] = [{"name": "omega", "kernel": "omega"}]
     specmod.validate(sp2)          # 不抛异常即通过
+
+
+# ------------------- 7) J=5/l=5 的能力边界（扩展的回归护栏）
+def test_j5_l5_is_supported_on_both_routes():
+    """J=5 / l=5 在**两条路线**上都可用（2026-10-20 扩展）。
+
+    级联路线：`LAM_SLOTS` 加 5/6、`Bl` 加 l=5 系数。
+    协变路线：`covariant.py` 加论文 Eq.(258) 的通用 `t_l` 与 `B5`/`B6`
+    —— 这条测试钉住三件事：
+
+    * ρ₅（J=5, l=5）的振幅**有限**且置换协变性成立（见
+      `test_permutation_covariance`，它已包含 `ex1_rho5`）；
+    * `cartesian`/`helicity` 路线**也**放行 J=5（validate 层）；
+    * 上限不能悄悄收回（J=7 仍被拒）。
+
+    参考实现：tf-pwa 的 `Bprime_polynomial` 有 L=5 的系数（且更通用地由
+    反向 Bessel 多项式现算），`cg_coef` / `dfun` 本来就不设 J 上限。
+    """
+    # 1) 级联路线：J=5 可用，振幅有限
+    spec_name, prefix, J, l, mass, m_res = CASES["ex1_rho5"]
+    assert (J, l) == (5, 5)
+    sp, base, chans, mom, _p, _J, _l = _load("ex1_rho5")
+    A = _amp(base, chans, sorted(chans)[0], mom)
+    assert A.shape == (mom.shape[0], 3), A.shape
+    assert np.isfinite(A).all()
+    assert np.abs(A).max() > 0.0
+
+    # 2) 协变张量路线：J=5 同样放行（validate 层）
+    for kern in ("cartesian", "helicity"):
+        sp2 = dict(sp)
+        sp2["bases"] = [{"name": kern, "kernel": kern}]
+        specmod.validate(sp2)          # 不该抛
+
+    # 3) 上限不能悄悄收回：J=7 在两条路线上都仍被拒
+    for kern in ("cartesian", "helicity"):
+        sp7 = dict(sp)
+        sp7["particles"] = dict(sp7["particles"])
+        sp7["particles"]["rho5"] = dict(sp7["particles"]["rho5"], J=7)
+        sp7["bases"] = [{"name": kern, "kernel": kern}]
+        try:
+            specmod.validate(sp7)
+        except specmod.SpecError as e:
+            assert "上限 6" in str(e), (kern, str(e))
+        else:
+            raise AssertionError("%s + J=7 应该被拒绝" % kern)
+
+    # 3) `Bl` 的 l=5 系数与 tf-pwa 的 `Bprime_polynomial` 一致
+    from agent.tensor.kernels import omega as RT
+    assert RT._bprime_coeff(5) == [1.0, 15.0, 315.0, 6300.0, 99225.0, 893025.0]
+    # l>5 是现算的（反向 Bessel 多项式）。判据：降幂、首项 1、常数项 > 0，
+    # 且 **l=1..5 的现算结果必须复现写死的表** —— 这条能抓住排序写反
+    # （升幂/降幂）这类错误，比只查长度强得多。
+    for l in (1, 2, 3, 4, 5, 6, 7):
+        c = RT._bprime_coeff(l)
+        assert len(c) == l + 1, (l, c)
+        assert c[0] == 1.0, ("降幂首项应为 1（最高次系数）", l, c)
+        assert c[-1] > 0.0, ("常数项应 > 0", l, c)
+        assert all(x > 0.0 for x in c), (l, c)
+    # 现算 vs 写死的表：l<=5 必须逐项一致（绕过缓存直接现算）
+    known = {1: [1.0, 1.0], 2: [1.0, 3.0, 9.0], 3: [1.0, 6.0, 45.0, 225.0],
+             4: [1.0, 10.0, 135.0, 1575.0, 11025.0],
+             5: [1.0, 15.0, 315.0, 6300.0, 99225.0, 893025.0]}
+    import fractions
+    import math
+
+    def gen(l):
+        co = [fractions.Fraction(math.factorial(l + k),
+                                 math.factorial(l - k) * math.factorial(k)
+                                 * 2 ** k) for k in range(l + 1)]
+        a = [complex(co[l - j]) * (1j) ** j for j in range(l + 1)]
+        prod = [0j] * (2 * l + 1)
+        for i, x in enumerate(a):
+            for j, y in enumerate(a):
+                prod[i + j] += x * y.conjugate()
+        return [prod[2 * i].real for i in range(l + 1)][::-1]
+
+    for l, want in known.items():
+        got = gen(l)
+        assert all(abs(g - w) < 1e-9 * max(1.0, abs(w))
+                   for g, w in zip(got, want)), (l, got, want)
 
 
 def main():

@@ -1,0 +1,93 @@
+# 例 1（ρ₅ 家族）：psi(2S) -> rho5(5^-) pi0 -> (pi+ pi-)(pi0)
+#
+# 文档 249–263 行，`U_{rho5}^mu`：
+#   U_{rho5}^mu = -i eps_{mu nu lam sig} p_psi^sig
+#                 [ T~^{(5) nu a b g d}_{(rho5 3)} t~^{(5) lam}_{(12) a b g d}
+#                   * f^{(rho5)}_{(12)} - (1<->3) - (2<->3) ]
+#
+# 与 rho3 同构（三条置换道、后两项反号），但 J=5、l=5 都到了内核原上限之外。
+#
+# 这个文件是**能力边界探针**：它存在的意义是逼出"到底哪里卡住 J=5"。
+# 见 analyses/tensor_examples/probes/probe_j5_feasibility.py。
+
+[chain]
+name = "ex1_pipipi0_rho5"
+top = "psi2s"
+output = "../generated/ex1_pipipi0_rho5"
+l_max = 5
+chain_name = "rhopi5"
+suffix = "_pipipi0"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Pip1", "Pim2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rho5", "Pi0"]
+
+[particles.rho5]
+J = 5
+mass = 2.3
+parity = -1
+daughters = ["Pip1", "Pim2"]
+# 显式 l=5：rho5 -> pi pi 是 H 波
+l = 5
+
+[particles.Pip1]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+[[channel]]
+name = "u_rho5_12"
+l = 5
+s = 5
+ls = { psi2s = [[5, 5]], rho5 = [[5, 0]] }
+tree = { psi2s = ["rho5", "Pi0"], rho5 = ["Pip1", "Pim2"] }
+
+[[channel]]
+name = "u_rho5_13"
+l = 5
+s = 5
+ls = { psi2s = [[5, 5]], rho5 = [[5, 0]] }
+tree = { psi2s = ["rho5", "Pim2"], rho5 = ["Pi0", "Pip1"] }
+
+[[channel]]
+name = "u_rho5_23"
+l = 5
+s = 5
+ls = { psi2s = [[5, 5]], rho5 = [[5, 0]] }
+tree = { psi2s = ["rho5", "Pip1"], rho5 = ["Pi0", "Pim2"] }
+
+# 级联路线（原上限外，2026-10-20 起支持 J/l<=6）
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 chains/rhopi5/ 下
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

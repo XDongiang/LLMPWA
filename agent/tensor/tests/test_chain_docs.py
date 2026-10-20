@@ -66,6 +66,29 @@ def test_every_chain_has_notes():
             "%s.md" % name)), "缺 chains/%s.md（跑 gen_chain_docs.py）" % name
 
 
+def test_index_lists_every_chain():
+    """`chains/README.md` 的「一张表看全」必须列出**每一条**链。
+
+    这张索引表是**手工维护**的（生成器只管 `<chain>.md`，不管 README），
+    所以最容易悄悄漏行 —— 加了新链、跑完生成器、README 却忘了加。
+    2026-10-20 就漏过 7 条（例 1/2 的 ex1_*/ex2_*），所以补这条守卫。
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gen_chain_docs", GEN)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    idx = os.path.join(_ROOT, "analyses", "tensor_examples", "chains",
+                       "README.md")
+    text = open(idx, encoding="utf-8").read()
+    missing = sorted(name for name, _sp, _hd in mod.CHAINS
+                     if "(%s.md)" % name not in text)
+    assert not missing, (
+        "chains/README.md 的索引表漏了：%s\n"
+        "（新链要手工加进「一张表看全」）" % ", ".join(missing))
+
+
 def test_no_broken_links():
     """生成物里的相对链接必须都能解析（曾因手数 `../` 少一层断过 5 条）。"""
     import glob

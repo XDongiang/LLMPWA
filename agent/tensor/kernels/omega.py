@@ -48,7 +48,27 @@ Q0 = 0.197321                       # BASE.py 的 Q0（R = 1）
 # 也没有理由把常数放到设备上（XLA 会在编译期折叠它）。
 G_METRIC = onp.diag([1.0, -1.0, -1.0, -1.0])   # (E,x,y,z)
 LAM_SLOTS = {0: [0], 1: [-1, 0, 1], 2: [-2, -1, 0, 1, 2],
-             3: [-3, -2, -1, 0, 1, 2, 3], 4: [-4, -3, -2, -1, 0, 1, 2, 3, 4]}
+             3: [-3, -2, -1, 0, 1, 2, 3], 4: [-4, -3, -2, -1, 0, 1, 2, 3, 4],
+             5: list(range(-5, 6)), 6: list(range(-6, 7))}
+
+# Blatt-Weisskopf 分母多项式的系数（**降幂**），与 tf-pwa
+# `breit_wigner.py::Bprime_polynomial` 逐项一致。`num` 是该行系数之和
+# （= P_l(1)），也就是 `Bl(l,q) = sqrt(num / P_l(q^2/Q0^2))`。
+#
+# l <= 4 的 num 与仓库原有的 `BASE.py::B1..B4` 相同（1, 2, 13, 277, 12746）；
+# l = 5 是新增的，系数取自 tf-pwa 写死的 L=5 行，并已用
+# `|theta_l(iw)|^2`（反向 Bessel 多项式）独立复算过 —— 见
+# `analyses/tensor_examples/probes/probe_j5_feasibility.py`。
+#
+# 超过 l=5 时 `Bl` 会现算系数（`_bprime_coeff`），不再写死。
+_BPRIME_COEFF = {
+    0: [1.0],
+    1: [1.0, 1.0],
+    2: [1.0, 3.0, 9.0],
+    3: [1.0, 6.0, 45.0, 225.0],
+    4: [1.0, 10.0, 135.0, 1575.0, 11025.0],
+    5: [1.0, 15.0, 315.0, 6300.0, 99225.0, 893025.0],
+}
 
 
 # ------------------------------------------------------------------ CG / D
@@ -174,23 +194,55 @@ def mass(p):
     return xp.sqrt(xp.maximum(_s(p), 0.0))
 
 
+def _bprime_coeff(l):
+    """`Bprime_polynomial` 的系数（降幂），l > 5 时现算。
+
+    来源：tf-pwa `get_bprime_coeff` —— 反向 Bessel 多项式
+    `theta_l(x)` 满足 `|theta_l(i w)|^2 = sum_i c_i w^(2i)`，
+    这些 `c_i` 就是分母多项式的系数。这里用 `fractions.Fraction` 做
+    **精确有理数**运算，再转 float，避免多项式乘法累积误差。
+    """
+    import fractions
+    l = int(l)
+    if l in _BPRIME_COEFF:
+        return _BPRIME_COEFF[l]
+    # theta_l(x) = sum_k co[k] * x^(l-k)，co[k] = (l+k)! / ((l-k)! k! 2^k)
+    co = [fractions.Fraction(math.factorial(l + k),
+                             math.factorial(l - k) * math.factorial(k) * 2 ** k)
+          for k in range(l + 1)]
+    # 代 x = i w：w^j 的系数（升幂）a_j = co[l-j] * i^j
+    a = [complex(co[l - j]) * (1j) ** j for j in range(l + 1)]
+    n = len(a)
+    prod = [0j] * (2 * n - 1)
+    for i, x in enumerate(a):
+        for j, y in enumerate(a):
+            prod[i + j] += x * y.conjugate()
+    # prod 是 w 的升幂系数；`|theta|^2` 只含偶次，取出来就是 z = w^2 的升幂
+    asc = [prod[2 * i].real for i in range(l + 1)]
+    # 统一成**降幂**（与 `_BPRIME_COEFF` 的表一致，`Bl` 的 Horner 依赖这个约定）
+    return [float(c) for c in reversed(asc)]
+
+
 def Bl(l, q):
-    """Blatt-Weisskopf B_l(q)（BASE.py::B1..B4，R = 1）。q 是 q^2。"""
+    """Blatt-Weisskopf B_l(q)，R = 1。q 是 **q^2**。
+
+    与 tf-pwa `Bprime` 的关系：本式是 `sqrt(P_l(1) / P_l(q^2/Q0^2))`，
+    tf-pwa 是 `sqrt(P_l(q0^2 d^2) / P_l(q^2 d^2))`。两者**形状相同**
+    （只差一个与 q 无关的常数因子，被 `g_i` 吸收）；`Q0` 与 `d` 的对应
+    见 `documentation/tensor_examples_feasibility.md`。
+
+    l 上限由 `_bprime_coeff` 决定 —— l <= 5 查表，更大现算。
+    真正会崩的是 `small_d_weight` 的阶乘（J 约 50 以上，见
+    `probe_j5_feasibility.py` 的实测），不是这里。
+    """
+    l = int(l)
     x0 = Q0 ** 2
-    num = {0: 1.0, 1: 2.0, 2: 13.0, 3: 277.0, 4: 12746.0}.get(int(l))
-    if num is None:
-        raise NotImplementedError("Bl 只支持 l = 0..4，收到 %r" % (l,))
-    if l == 0:
-        den = xp.ones_like(q)
-    elif l == 1:
-        den = q + x0
-    elif l == 2:
-        den = q * q + 3 * q * x0 + 9 * x0 ** 2
-    elif l == 3:
-        den = q ** 3 + 6 * q ** 2 * x0 + 45 * q * x0 ** 2 + 225 * x0 ** 3
-    else:
-        den = (q ** 4 + 10 * q ** 3 * x0 + 135 * q ** 2 * x0 ** 2
-               + 1575 * q * x0 ** 3 + 11025 * x0 ** 4)
+    coeff = _bprime_coeff(l)
+    num = sum(coeff)
+    # Horner，从最高次开始；q 是 q^2，所以每项是 q^(l-i) * x0^i
+    den = 0.0
+    for i, c in enumerate(coeff):
+        den = den * q + c * x0 ** i
     return xp.sqrt(num / den)
 
 

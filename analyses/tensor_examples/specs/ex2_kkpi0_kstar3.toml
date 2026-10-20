@@ -1,0 +1,80 @@
+# 例 2（K*₃ 家族）：psi(2S) -> K*_3(3^-) K -> (K pi0)(K)
+#
+# 文档 274–304 行，`U_{K*_3}^mu`：
+#   U_{K*_3}^mu = eps_{mu nu lam sig} p_psi^sig
+#                 [ T~^{(3) nu a b}_{(K*_3 2)} t~^{(3) lam}_{(13) a b}
+#                   * f^{(K*_3)}_{(13)} - (1<->2) ]
+#
+# 与 K*₅ 同构（只有 (13)/(23) 两对，因为 K+ K- 同种粒子），J=3/l=3。
+#
+# 这条和 ex1_rho3 是同一类：J>=3 时 T~^{(J)} 是秩 >=2 的张量，
+# `eps·p_psi·T~·t~` **不能**化简成单个 `eps_{mu nu lam sig} p1 p2 p3`
+# （那个化简只对 J=1 成立）。所以本链只验**置换协变性**，不验 eps·B 恒等式。
+#
+# ⚠️ 文档写的是 `- (1<->2)`。实测两条道在置换下**同号**（与 J=1 的 U_{K*}
+# 和 J=5 的 U_{K*_5} 一致）—— 那个负号来自 T~^{(J)} 缩并的整体因子，
+# 不是道与道之间的相对符号。详见 chains/notes/ex2_kstar3.notes.md。
+
+[chain]
+name = "ex2_kkpi0_kstar3"
+top = "psi2s"
+output = "../generated/ex2_kkpi0_kstar3"
+l_max = 3
+chain_name = "ex2_kkpi0_kstar3"
+suffix = "_kkpi0kst3"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp1", "Km2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["kstar3", "Km2"]
+
+[particles.kstar3]
+J = 3
+mass = 1.9
+parity = -1
+daughters = ["Kp1", "Pi0"]
+l = 3
+
+[particles.Kp1]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km2]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+# (13) 配对：K*₃ = K+ + pi0，旁观者 = K-
+[[channel]]
+name = "u_kstar3_13"
+l = 3
+s = 3
+ls = { psi2s = [[3, 3]], kstar3 = [[3, 0]] }
+tree = { psi2s = ["kstar3", "Km2"], kstar3 = ["Kp1", "Pi0"] }
+
+# (23) 配对：K*₃ = K- + pi0，旁观者 = K+
+[[channel]]
+name = "u_kstar3_23"
+l = 3
+s = 3
+ls = { psi2s = [[3, 3]], kstar3 = [[3, 0]] }
+tree = { psi2s = ["kstar3", "Kp1"], kstar3 = ["Km2", "Pi0"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
