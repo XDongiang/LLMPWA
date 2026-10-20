@@ -1,0 +1,6 @@
+# 画图用的临时虚拟环境（matplotlib），由 run/plot_phase_breakdown.py 使用
+.venv-plot/
+
+# matplotlib 字体缓存
+__pycache__/
+*.pyc

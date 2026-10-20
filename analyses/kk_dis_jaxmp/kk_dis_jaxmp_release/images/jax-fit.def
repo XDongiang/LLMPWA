@@ -1,0 +1,57 @@
+Bootstrap: docker
+# 必须写全镜像仓库地址：集群里 registry-1.docker.io 不通（DNS 能解析、连接超时），
+# 故走 daocloud 镜像源。换环境时改成你能访问的镜像源即可。
+From: docker.m.daocloud.io/library/python:3.12-slim
+
+# ============================================================================
+# kk_dis_jaxmp 运行镜像
+#
+# 为什么锁 jax[cuda12]==0.11.2：
+#   V100 是 sm_70（Volta）。NVIDIA 在 CUDA 13 里移除了 Volta，JAX 的
+#   jax[cuda13] 要求 sm_75+；只有 CUDA 12 这条线还带 sm_70。
+#   真正装 CUDA kernel 的是 jax-cuda12-pjrt（不是 jax-cuda12-plugin，
+#   后者只有几 MB、不含 sm_ 内核）。
+#
+# 构建（镜像约 3.5 GB，视网速 5–15 分钟）：
+#   module load singularity
+#   cd <本目录>/..
+#   apptainer build --fakeroot images/jax-fit.sif images/jax-fit.def
+#
+# 验证：
+#   apptainer exec --nv images/jax-fit.sif python3 -c \
+#     "import jax; print(jax.__version__, jax.devices())"
+# ============================================================================
+
+%post
+    set -eux
+    # 国内 PyPI 镜像；换环境时改掉
+    export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+    export PIP_DEFAULT_TIMEOUT=120
+
+    python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+    python3 -m pip install --no-cache-dir \
+        "jax[cuda12]==0.11.2" \
+        numpy \
+        scipy
+
+    # 画图 / 出表用（可选，不影响拟合）
+    python3 -m pip install --no-cache-dir matplotlib || true
+
+    python3 -c "import jax, numpy, scipy; print('jax', jax.__version__, 'numpy', numpy.__version__, 'scipy', scipy.__version__)"
+
+%environment
+    # V100 只有 16 GB：不预占整卡显存，按需分配，OOM 时更好定位
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+    export PYTHONUNBUFFERED=1
+
+%labels
+    Author   kk_dis_jaxmp
+    Purpose  "JAX CUDA12 (V100/sm_70) runtime for KK dispersion fits"
+
+%help
+    JAX 0.11.2（CUDA 12 线，支持 V100/sm_70）拟合运行环境。
+
+    用法：
+      apptainer exec --nv --bind /project/caihao1,/scratch/caihao1 \
+          images/jax-fit.sif python3 run/fit_object_kk.py

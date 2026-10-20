@@ -1,0 +1,49 @@
+{
+  "_comment": "显存时序图数据。采样间隔 5 s，t=0 与 sbatch 脚本起始对齐（与日志 date= 行同源）。各阶段边界为作业相对秒数，由日志时间戳减去 date= 行得到。",
+  "configs": [
+    {
+      "label": "旧版 1 卡",
+      "csv": "vram_old1gpu_3729584.csv",
+      "job": 3729584,
+      "n_events": 23109,
+      "elapsed": 670,
+      "compile": [11, 476],
+      "optimize": [476, 648],
+      "peak": 6722,
+      "nll": "-3092.8334"
+    },
+    {
+      "label": "旧版 4 卡",
+      "csv": "vram_old4gpu_3729645.csv",
+      "job": 3729645,
+      "n_events": 23108,
+      "elapsed": 674,
+      "compile": [14, 595],
+      "optimize": [595, 655],
+      "peak": 3432,
+      "nll": "-2900.8461（目标函数错误）"
+    },
+    {
+      "label": "新版 1 卡",
+      "csv": "vram_new1gpu_3729582.csv",
+      "job": 3729582,
+      "n_events": 23109,
+      "elapsed": 328,
+      "compile": [56, 89],
+      "optimize": [89, 302],
+      "peak": 4636,
+      "nll": "-3092.8743"
+    },
+    {
+      "label": "新版 4 卡",
+      "csv": "vram_new4gpu_3729583.csv",
+      "job": 3729583,
+      "n_events": 23108,
+      "elapsed": 125,
+      "compile": [33, 69],
+      "optimize": [69, 114],
+      "peak": 2818,
+      "nll": "-3089.1209"
+    }
+  ]
+}

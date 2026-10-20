@@ -1,0 +1,43 @@
+Bootstrap: localimage
+From: /scratch/caihao1/hyx/kk_dis_jaxmp/images/base_py312.sif
+
+# JAX image for the kk_dis_jaxmp analysis on V100 (sm_70) nodes.
+# V100 is only supported by the CUDA 12 line (CUDA 13 dropped sm_70),
+# so we pin the CUDA 12 plugin wheels explicitly.
+#
+# Build:  apptainer build --fakeroot jax-fit.sif jax-fit.def
+# Run:    apptainer exec --nv --bind /project/caihao1,/scratch/caihao1 jax-fit.sif python3 ...
+
+%post
+    set -eux
+    export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+    export PIP_DEFAULT_TIMEOUT=120
+
+    python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+    # jax[cuda12] pulls jaxlib + jax-cuda12-plugin + jax-cuda12-pjrt.
+    # The pjrt wheel carries the XLA CUDA kernels (incl. sm_70) and the
+    # nvidia-* runtime libs; the host driver comes in via --nv.
+    python3 -m pip install --no-cache-dir \
+        "jax[cuda12]==0.11.2" \
+        numpy \
+        scipy
+
+    python3 -m pip install --no-cache-dir pytest || true
+
+    python3 -c "import jax, numpy, scipy; print('jax', jax.__version__, 'numpy', numpy.__version__, 'scipy', scipy.__version__)"
+
+%environment
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+    export PYTHONUNBUFFERED=1
+
+%labels
+    Author kk_dis_jaxmp
+    Purpose "JAX CUDA12 (V100/sm_70 capable) runtime for KK fits"
+
+%help
+    JAX 0.11.2 on the CUDA 12 line, built for V100 (sm_70) HPC nodes.
+
+    Usage:
+      apptainer exec --nv --bind /project/caihao1,/scratch/caihao1 \
+          jax-fit.sif python3 /scratch/caihao1/hyx/kk_dis_jaxmp/run/fit_object_kk.py

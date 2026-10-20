@@ -1,0 +1,38 @@
+[
+  {
+    "label": "旧版 1卡",
+    "startup": 15.346,
+    "compile": 467.189,
+    "optimize": 176.814,
+    "hessian": 19.411,
+    "elapsed": 679,
+    "tail": 0.2400000000000091
+  },
+  {
+    "label": "旧版 4卡",
+    "startup": 14.077,
+    "compile": 581.546,
+    "optimize": 59.421,
+    "hessian": 16.364,
+    "elapsed": 674,
+    "tail": 2.5919999999999845
+  },
+  {
+    "label": "新版 1卡",
+    "startup": 14.508,
+    "compile": 28.648,
+    "optimize": 211.214,
+    "hessian": 17.698,
+    "elapsed": 274,
+    "tail": 1.9320000000000164
+  },
+  {
+    "label": "新版 4卡",
+    "startup": 13.927,
+    "compile": 31.805,
+    "optimize": 41.978,
+    "hessian": 3.534,
+    "elapsed": 94,
+    "tail": 2.7560000000000002
+  }
+]

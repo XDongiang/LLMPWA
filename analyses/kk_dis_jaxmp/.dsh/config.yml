@@ -1,0 +1,27 @@
+# Per-analysis remote configuration for the remote_* tools.
+# Target: caihao1@202.114.96.180 (swarm02) — the HPC login node.
+# Compute is reached only through Slurm: `sbatch --partition=gpu` (see below).
+#
+# Auth: the user's existing key ~/.ssh/id_ed25519 (no key is copied into this analysis).
+# Host keys are pinned by SHA256 fingerprint; strict verification (no TOFU).
+#
+# remoteRoot = /scratch/caihao1 (the user's scratch symlink target on the cluster).
+#   All remote_* paths resolve inside this root; absolute paths outside it are refused.
+#   Notes on how the task's paths map onto this cluster:
+#     ~/project          -> /project/caihao1        (symlink; small quota 500G)
+#     ~/scratch          -> /scratch/caihao1        (symlink; 3T quota, 1.86T used)
+#     ~/scratch/sunyc/cgpwa_kk/temp.sbatch   example sbatch (partition=a100x4 there)
+#     data root          -> /scratch/caihao1/sunyc/cgpwa_kk/data
+#   The literal `/home/sunyc/cgpwa_kk/data` does not exist on this cluster.
+remote:
+  host: 202.114.96.180
+  port: 22
+  user: caihao1
+  remoteRoot: /scratch/caihao1
+  auth:
+    kind: key
+    keyPath: /home/iso/.ssh/id_ed25519
+  # ssh-ed25519 host key of 202.114.96.180 (already present in ~/.ssh/known_hosts).
+  hostKeyFingerprint: qAOPZ8qfdAEbCD27mYHVThGSvNN4Q4vJbsIzp+FD50I=
+  connectTimeoutMs: 20000
+  timeoutMs: 120000
