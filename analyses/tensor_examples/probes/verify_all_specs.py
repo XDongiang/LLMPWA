@@ -52,6 +52,26 @@ A1_KNOWN = {
     ("ex3_rhopi", "u_rho_1"), ("ex3_rhopi", "u_rho_2"),
 }
 
+# 例 6 拆成三份 spec（一份一个子分支）—— 拆开的**唯一理由**就是让 A1 状态
+# 每份只有一个答案：
+#
+#   ex6_phi4pi_ss  : ✅ 14/14 全过（worst 7.35e-15）
+#   ex6_phi4pi_rr  : 混合 —— f_0 的 4 条过（worst 5.67e-15），f_2 的 10 条不过（0.47–0.86）
+#   ex6_phi4pi_f2s : ⚠️ 10/10 全不过（0.47–1.08）
+#
+# `rr` 里 f_0 过而 f_2 不过，根因是**自旋结构**不同，不是实现差异：
+#   * f_0 是标量：两个 ρ 先合成 S=0，用 f_0 的横向度规夹住就够了
+#     （`S_rr`），**不涉及** $P^{(2)}$ —— 没有无迹化参考系问题；
+#   * f_2 要 $1\otimes1\to2$：$P^{(2)}(p_{f_2})$ 作用在**实验室系**张量上，
+#     缺"先 boost 到 $f_2$ 系、去迹、再 boost 回来"这一步。
+# 见 `documentation/tensor_examples_feasibility.md` §2.3.1。
+_A1_F2_INCOMPLETE = ["u_phif2_%s_%s%s" % (fam, ls, sfx)
+                     for fam in ("rr", "f2s")
+                     for ls in ("01", "21", "22", "23", "43")
+                     for sfx in ("", "_b")]
+A1_KNOWN |= {("ex6_phi4pi_rr", n) for n in _A1_F2_INCOMPLETE if "_rr_" in n}
+A1_KNOWN |= {("ex6_phi4pi_f2s", n) for n in _A1_F2_INCOMPLETE if "_f2s_" in n}
+
 # 故意的对照 spec：4 条 `*_paper` 就是历史形式（缺陷本身），A1 必然失败。
 A1_SKIP_SPECS = {"ex5_kst2_paper"}
 

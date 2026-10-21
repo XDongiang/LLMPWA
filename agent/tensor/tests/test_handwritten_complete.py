@@ -54,10 +54,38 @@ A1_EXEMPT = {
     ("ex3_rhopi.toml", "u_rho_1"), ("ex3_rhopi.toml", "u_rho_2"),
 }
 
+# 例 6 拆成三份 spec，A1 状态每份一个答案：
+#   ss  : 全过 → 不需要豁免
+#   rr  : f_0 的 4 条过；f_2 的 10 条不过（1⊗1→2 的无迹化参考系）
+#   f2s : 10 条全不过（2⊗0→2，同一类问题）
+#
+# 与 `ex4_omega_kk` 的"无级联对象"不同：这里**有**级联产物，只是对不上 ——
+# 所以是 EXEMPT（跑了、已知原因失配），不是 NO_CASCADE。
+A1_EXEMPT |= {
+    ("ex6_phi4pi_%s.toml" % fam, "u_phif2_%s_%s%s" % (fam, ls, sfx))
+    for fam in ("rr", "f2s")
+    for ls in ("01", "21", "22", "23", "43")
+    for sfx in ("", "_b")
+}
+
 # 这份 spec 是**故意的对照实验**：4 条 `*_paper` 就是历史形式（未修正），
 # A1 必然失败 —— 它存在的意义就是展示"论文形式 vs 修正形式"的差。
 # 所以整份 spec 跳过 A1，只验 L1/L2/L3（emit 与产物自洽）。
 A1_SKIP_SPECS = {"ex5_kst2_paper.toml"}
+
+# **没有**级联产物的 spec —— A1 不是"失败"，是**无对象可比**。
+#
+#   ex4_omega_kk : 文档的 omega^mu 是**单节点三体**对象（418–430 行），
+#                  三体节点不被 spec.py 接受（3 个 daughter -> SpecError），
+#                  所以这份 spec 只出 cartesian/helicity，没有
+#                  helicity_cascade 产物。这正是缺陷本身，见
+#                  documentation/tensor_examples_feasibility.md §2.5。
+#
+# ⚠️ 这里必须与 `A1_EXEMPT` 分开：`A1_EXEMPT` 是"跑了但对不上（已知原因）"，
+#    这里是"根本没法跑"。混在一起会掩盖缺陷。
+A1_NO_CASCADE_SPECS = {
+    "ex4_omega_kk.toml": "omega 是真三体节点，级联内核算不了（feasibility §2.5）",
+}
 
 
 def test_every_spec_channel_has_a_handwritten_file():
@@ -131,11 +159,14 @@ def test_a1_cascade_vs_handwritten_covariant():
     from agent.tensor.kernels import helicity_cascade as HC       # noqa: E402
 
     kin = {}
-    bad, exempted = [], []
+    bad, exempted, nocasc = [], [], []
     for p in SPECS:
         name = os.path.basename(p)
         if name in A1_SKIP_SPECS:
             continue                       # 故意的对照 spec（见文件头）
+        if name in A1_NO_CASCADE_SPECS:
+            nocasc.append((name, A1_NO_CASCADE_SPECS[name]))
+            continue                       # 没有级联产物，A1 无对象
         sp = specmod.load_spec(p)
         base = specmod.to_chain(sp)
         kind = pick(p)
@@ -155,12 +186,30 @@ def test_a1_cascade_vs_handwritten_covariant():
                 exempted.append((name, c["name"], r))
             elif r >= 1e-12:
                 bad.append((name, c["name"], r))
+    # 无级联对象的必须**确实**没有 helicity_cascade 表象 —— 否则说明它已经
+    # 能被级联算，该从这张表里删掉（缺陷已修）。
+    for name, why in nocasc:
+        sp = specmod.load_spec([q for q in SPECS
+                                if os.path.basename(q) == name][0])
+        kernels = {b["kernel"] for b in sp["bases"]}
+        assert "helicity_cascade" not in kernels, (
+            "%s 已经有 helicity_cascade 表象了（%s）—— 三体节点缺陷可能已修，"
+            "请把它从 A1_NO_CASCADE_SPECS 删掉并更新 feasibility §2.5"
+            % (name, why))
+    if nocasc:
+        print("  NOTE 跳过 A1（无级联产物，见 feasibility §2.5）：%s"
+              % ", ".join(n for n, _w in nocasc))
     assert not bad, "A1 失配（未豁免）：%s" % bad
     # 豁免的必须**确实**失配 —— 否则说明它被修好了，该从表里删掉
+    seen = {(name, cname) for name, cname, _r in exempted}
     for name, cname, r in exempted:
         assert r > 1e-6, (
             "%s/%s 的 A1 残差 %.3e —— 已经对了，请把它从 A1_EXEMPT 删掉"
             % (name, cname, r))
+    # 表里的每一条都必须**真的被走到**（拼错道名会让豁免静默失效）
+    missing = sorted(k for k in A1_EXEMPT if k[0] != "ex3_rhopi.toml"
+                     and k not in seen)
+    assert not missing, "A1_EXEMPT 里有走不到的条目：%s" % missing
 
 
 def main():

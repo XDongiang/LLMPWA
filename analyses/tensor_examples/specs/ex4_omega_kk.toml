@@ -1,0 +1,154 @@
+# 例 4：psi(2S) -> omega K+K- -> (pi+ pi- pi0) K+ K-
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 418–430 行。
+#
+# ⚠️ 本链**只有协变/螺度表象**。文档的公式是
+#
+#     <omega f_J|LS> = [把例 3 公式里的 t~(1)_{(12)}^mu 换成 omega^mu]
+#
+# 其中 omega^mu 是一个**单节点三体对象**：
+#
+#     omega^mu = eps^{mu nu l s} p_1^nu p_2^l p_0^s [B1 B1 f^(rho)]_(12)
+#                                            + [..]_(10) + [..]_(20)
+#
+# 三个末态动量同时进同一个 eps —— 没有任何两体树能表示它（两体节点的
+# eps(p_omega, p_rho, p_pi) 恒为零，因为 p_omega = p_rho + p_pi）。
+# 所以：
+#   * `helicity_cascade` **算不了**这条链（它按树逐节点算，没有三体节点）；
+#   * `omega` 表象同理，且它的深度上限也挡住了；
+#   * 只有 `covariant` / `helicity` 的手写道能算 —— 道函数直接调
+#     `kernels/covariant.py::omega_mu`。
+#
+# 这也正是"缺一个真正的三体节点"这条缺陷的具体落点，见
+# `documentation/tensor_examples_feasibility.md` §「缺陷：三体节点」。
+
+[chain]
+name = "ex4_omega_kk"
+top = "psi2s"
+output = "../generated/ex4_omega_kk"
+l_max = 4
+chain_name = "ex4_omega_kk"
+suffix = "_omega_kk"
+# (l,s) 不是完备标签：omega 是三体对象，tree 只是占位
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp", "Km", "Pi0", "Pip", "Pim"]
+layout = "x,y,z,E"
+
+# ⚠️ 这棵树是**占位**。物理上 omega 是一个**三体节点**：
+#
+#     omega -> Pi0 + Pip + Pim
+#
+# `spec.py:264` 硬性拒绝三女儿（`raise SpecError("... 只支持两体衰变")`），
+# 所以这里写成等价的**二叉占位** omega -> rho + Pi0, rho -> Pip + Pim，
+# 只为让 `validate` 的二叉树遍历与「叶子 = input.keys」两条检查通过。
+# 道函数**完全不读这棵树**（它们调 `omega_mu` 拿到三体分析器），
+# 所以占位不改任何数值。真三体节点落地后这四行应塌成一行
+# `omega -> Pi0 + Pip + Pim`（见 feasibility §「缺陷：三体节点」）。
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["omega", "f2"]
+
+[particles.omega]
+J = 1
+mass = 1.5          # 虚拟质量，见 ../data/make_omega5.py 的说明
+parity = -1
+daughters = ["rho", "Pi0"]
+
+# KK̄ 那一对。文档里它既是 f_0 也是 f_2（两个自旋假设）—— 这里两份都
+# 登记，好让 `_node_mom` 按参数名解析（道函数签名里分别叫 f0 / f2）。
+[particles.f2]
+J = 2
+mass = 1.9
+parity = 1
+l = 2
+daughters = ["Kp", "Km"]
+
+[particles.f0]
+J = 0
+mass = 1.9
+parity = 1
+l = 0
+daughters = ["Kp", "Km"]
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.rho]
+J = 1
+mass = 1.0
+parity = -1
+daughters = ["Pip", "Pim"]
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[[channel]]
+name = "u_omega_f0_01"
+l = 1
+s = 1
+
+[[channel]]
+name = "u_omega_f0_21"
+l = 2
+s = 1
+
+[[channel]]
+name = "u_omega_f2_01"
+l = 1
+s = 2
+
+[[channel]]
+name = "u_omega_f2_21"
+l = 2
+s = 2
+
+[[channel]]
+name = "u_omega_f2_22"
+l = 2
+s = 2
+
+[[channel]]
+name = "u_omega_f2_23"
+l = 2
+s = 3
+
+[[channel]]
+name = "u_omega_f2_43"
+l = 4
+s = 3
+
+# 只有协变 / 螺度两条路：道函数是手写的 omega_mu，级联内核算不了。
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

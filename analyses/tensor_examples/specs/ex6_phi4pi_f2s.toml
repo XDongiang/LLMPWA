@@ -1,0 +1,202 @@
+# 例 6：psi(2S) -> phi pi+pi-pi+pi- -> K+K- pi+pi-pi+pi-  ——  f₂(1270)σ
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 624–795 行，
+# 原始 tex：`documentation/jpsipwa1.tex` 706–873 行（已与 md 逐式核对，一致）。
+#
+# 末态编号照文档：K+ = 1、K- = 2、pi+ = 3、pi- = 4、pi+ = 5、pi- = 6。
+#
+# 例 6 有三条子分支，**拆成三份 spec**（一份一个家族）：
+#
+#   | spec                    | 子分支            | 文档行   | 道数 | A1        |
+#   |-------------------------|-------------------|----------|------|-----------|
+#   | `ex6_phi4pi_ss.toml`    | f_J -> sigma sigma| 630–674  | 14   | ✅ 7e-15  |
+#   | `ex6_phi4pi_rr.toml`    | f_J -> rho rho    | 676–730  | 14   | 混合，见下 |
+#   | `ex6_phi4pi_f2s.toml`   | f_2 -> f_2(1270)s | 732–775  | 10   | ⚠️ 通不过 |
+#
+# 拆开的理由：三条分支的**状态不同**（两条可用、一条不可用），混在一份 spec
+# 里会让"这份 spec 过不过 A1"变成一个没法回答的问题 —— A1 是逐道的，
+# 一份 spec 里既有过的道又有不过的道，报告里只能说"部分过"，很容易读错。
+#
+# 本份只做 **f_2 -> f_2(1270) sigma**（10 条道）：5 个 (l,s) × 2 配对。
+#
+# ⚠️ 这一族**通不过 A1**（实测 0.66–1.25）。公式按文档 764–774 逐式直译
+# （`T2_f2s`），问题在 2⊗0→2 的无迹化参考系：P^(2)(p_f2) 作用在**实验室系**
+# 张量上，缺"先 boost 到 f_2 系、去迹、再 boost 回来"这一步的等价物。
+#
+# 已在 `A1_KNOWN` / `A1_EXEMPT` 显式记账，两处都要求"豁免项必须确实失配"。
+# **不要拿这 10 条去拟合。**用途：(a) 把文档公式钉在代码里；
+# (b) 给未来修无迹化参考系留对照基线。
+#
+# 六体末态 + 三层 -> 只有 helicity_cascade 能路由（协变/螺度是手写道）。
+
+[chain]
+name = "ex6_phi4pi_f2s"
+top = "psi2s"
+output = "../generated/ex6_phi4pi_f2s"
+l_max = 4
+# 三份 spec 共用一个 chain 目录（道名不重叠）—— 与 ex5_kst2/ex5_kst0 同模式
+chain_name = "ex6_phi4pi"
+suffix = "_phi4pi_f2s"
+# (l,s) 不是完备标签：同一组 (l,s) 有多个 σσ/ρρ 配对（多条道）
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim", "Pip2", "Pim2"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["phi", "f2"]
+
+[particles.phi]
+J = 1
+mass = 1.019461
+parity = -1
+l = 1
+daughters = ["Kp", "Km"]
+
+# KKbar 那一对：文档里 f_0 与 f_2 都从 pi+pi- 重建，不来自 KK。
+# 这里写成 phi + fJ，fJ 由四个 pi 重建（见下面的 sigma 节点）。
+[particles.f2]
+J = 2
+mass = 1.9          # 虚拟质量，见 ../data/make_phi4pi.py 的说明
+parity = 1
+l = 2
+daughters = ["sigA", "sigB"]
+
+[particles.f0]
+J = 0
+mass = 1.9
+parity = 1
+l = 0
+daughters = ["sigA", "sigB"]
+
+[particles.sigA]
+J = 1
+mass = 0.775
+parity = -1
+l = 1
+daughters = ["Pip", "Pim"]
+
+[particles.sigB]
+J = 1
+mass = 0.775
+parity = -1
+l = 1
+daughters = ["Pip2", "Pim2"]
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pip2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+# ---- f_0 -> sigma sigma：两个配对，两套 (l,s) ----
+#
+# 第一个配对 (34)(56)：sigA = Pip+Pim, sigB = Pip2+Pim2（就是上面的树）
+# 第二个配对 (36)(45)：sigA = Pip+Pim2, sigB = Pip2+Pim
+
+[[channel]]
+name = "u_phif2_f2s_01"
+l = 0
+s = 1
+ls = { psi2s = [[0, 1]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim"], sigB = ["Pip2", "Pim2"] }
+[[channel]]
+name = "u_phif2_f2s_01_b"
+l = 0
+s = 1
+ls = { psi2s = [[0, 1]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim2"], sigB = ["Pip2", "Pim"] }
+[[channel]]
+name = "u_phif2_f2s_21"
+l = 2
+s = 1
+ls = { psi2s = [[2, 1]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim"], sigB = ["Pip2", "Pim2"] }
+[[channel]]
+name = "u_phif2_f2s_21_b"
+l = 2
+s = 1
+ls = { psi2s = [[2, 1]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim2"], sigB = ["Pip2", "Pim"] }
+[[channel]]
+name = "u_phif2_f2s_22"
+l = 2
+s = 2
+ls = { psi2s = [[2, 2]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim"], sigB = ["Pip2", "Pim2"] }
+[[channel]]
+name = "u_phif2_f2s_22_b"
+l = 2
+s = 2
+ls = { psi2s = [[2, 2]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim2"], sigB = ["Pip2", "Pim"] }
+[[channel]]
+name = "u_phif2_f2s_23"
+l = 2
+s = 3
+ls = { psi2s = [[2, 3]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim"], sigB = ["Pip2", "Pim2"] }
+[[channel]]
+name = "u_phif2_f2s_23_b"
+l = 2
+s = 3
+ls = { psi2s = [[2, 3]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim2"], sigB = ["Pip2", "Pim"] }
+[[channel]]
+name = "u_phif2_f2s_43"
+l = 4
+s = 3
+ls = { psi2s = [[4, 3]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim"], sigB = ["Pip2", "Pim2"] }
+[[channel]]
+name = "u_phif2_f2s_43_b"
+l = 4
+s = 3
+ls = { psi2s = [[4, 3]], f2 = [[0, 2]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"], sigA = ["Pip", "Pim2"], sigB = ["Pip2", "Pim"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+files  = ["ex6_phi4pi_f2s_cascade.npy"]
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

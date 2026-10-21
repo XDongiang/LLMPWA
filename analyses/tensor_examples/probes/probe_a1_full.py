@@ -77,6 +77,30 @@ def mom_ex12(case, n=32, seed=5):
     return d, list(d)
 
 
+def mom_omega5(n=32, seed=5):
+    """例 4 的五体相空间：`data/make_omega5.py`（虚拟 m_ω = 1.5）。"""
+    import importlib.util
+    p = os.path.join(_ROOT, "analyses", "tensor_examples", "data",
+                     "make_omega5.py")
+    spec = importlib.util.spec_from_file_location("_mo5", p)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    d = m.make(n=n, seed=seed)
+    return d, list(d)
+
+
+def mom_ex6(n=32, seed=5):
+    """例 6 的六体相空间：`data/make_phi4pi.py`（虚拟 m_f₂ = 1.9）。"""
+    import importlib.util
+    p = os.path.join(_ROOT, "analyses", "tensor_examples", "data",
+                     "make_phi4pi.py")
+    spec = importlib.util.spec_from_file_location("_mp4", p)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    d = m.make(n=n, seed=seed)
+    return d, list(d)
+
+
 def mom_rhof2(n=32, seed=7):
     """ψ→ρf₂→(ππ)(ππ)：与 `probe_missing_covariant.py` 的 B 段同一构造。"""
     pair, boost = T._pair, T._boost
@@ -98,6 +122,8 @@ KIN = {
     "ex1": lambda: mom_ex12("ex1"),
     "ex2": lambda: mom_ex12("ex2"),
     "rhof2": mom_rhof2,
+    "ex4": mom_omega5,
+    "ex6": mom_ex6,
 }
 
 
@@ -149,6 +175,10 @@ def pick(path):
         return "ex1"
     if b.startswith("ex2"):
         return "ex2"
+    if b.startswith("ex4"):
+        return "ex4"
+    if b.startswith("ex6"):
+        return "ex6"
     return "ex3"
 
 
