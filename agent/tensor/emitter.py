@@ -391,8 +391,10 @@ import _backend as _B     # noqa: E402  后端选择（jax 优先，无 jax 回�
 import covariant as CV    # noqa: E402  同目录的协变张量内核副本
 from covariant import (  # noqa: E402,F401  道函数体直接调用这些原语
     B1, B2, B3, B4, B5, B6, Gt_con, Gt_cov, P2, P3, P4, Qabc, T1_cov, T2_cov,
-    T2_from_pair, T3_cov, T4_cov, dot, invm, leci_four, metric, t_l,
-    _einsum, _leci_con, _metric_axis, _raise_last, _s1_vector,
+    S_rr, T2_f2s, T2_from_pair, T2_rr, T2_ss, T3_cov, T4_cov, dot, invm,
+    leci_four, metric,
+    omega_mu, t_l,
+    _einsum, _leci_con, _metric_axis, _raise_last, _s1_vector, s1_from_T2,
 )
 
 xp = _B.xp

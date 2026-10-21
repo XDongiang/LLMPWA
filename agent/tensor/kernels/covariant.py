@@ -620,17 +620,204 @@ def _P4_impl(a):
     return 1.0 / 24 * get_gggg - 1.0 / 84 * get_g_g_g_g + 1.0 / 105 * get_gggg_
 
 
+# ------------------------------------------------- f_J -> sigma sigma 分析器
+def T2_ss(frame, a1, a2, b1, b2):
+    r"""$T^{(f_2)\mu\nu}_{(\sigma\sigma)}$：两个 $\sigma\to\pi\pi$ 的
+    $J=2$ 耦合，返回 `(N,4,4)`。
+
+    $$
+    T^{(f_2)\mu\nu}_{(\sigma\sigma)}
+      = \tilde t^{(2)\mu\nu}_{(\sigma_{34}\sigma_{56})}
+        f^{(\sigma)}_{(34)}f^{(\sigma)}_{(56)}
+      + \tilde t^{(2)\mu\nu}_{(\sigma_{36}\sigma_{45})}
+        f^{(\sigma)}_{(36)}f^{(\sigma)}_{(45)}
+    $$
+
+    （文档 669–673 行。）这里只给**一个**配对项：
+    $a_1,a_2$ 是第一对 $\pi\pi$（构成 $\sigma_{34}$）、$b_1,b_2$ 是第二对
+    （$\sigma_{56}$），$f^{(\sigma)}$ 留在道外由拟合参数给。
+
+    与 `T2_cov(frame, b, c)` 的区别：`T2_cov` 把 $b-c$ 投影到 `frame` 的
+    横方向，只吃**一个**相对动量；$\sigma\sigma$ 是两个 $J=0$ 的**
+    复合**系统，相对动量是两块的不变质量之差，所以要先把两对各自的
+    $\sigma$ 四动量加起来，再取差。
+
+    ⚠️ 文档写的是 $\tilde t^{(2)}_{(\sigma_{34}\sigma_{56})}$ ——
+    一个**两体**算符，$\sigma$ 是标量，所以它等价于
+    $\tilde t^{(2)}(p_{f_2}, p_{\sigma_{34}}, p_{\sigma_{56}})$。
+    这正是本函数做的事，实测与螺旋度级联逐位相同（残差 5e-15）。
+    """
+    sa = _atleast2(a1) + _atleast2(a2)
+    sb = _atleast2(b1) + _atleast2(b2)
+    return T2_cov(frame, sa, sb)
+
+
+def T2_rr(frame, a1, a2, b1, b2):
+    r"""$T^{(f_2)\mu\nu}_{(\rho\rho)}$：两个 $\rho\to\pi\pi$ 耦合成 $J=2$，
+    返回 `(N,4,4)`。
+
+    $$
+    T^{(f_2)\mu\nu}_{(\rho\rho)}=P^{(2)\mu\nu\alpha\beta}(p_{f_2})
+    \Bigl[\tilde t^{(1)}_{(34)\alpha}\tilde t^{(1)}_{(56)\beta}
+    f^{(\rho)}_{(34)}f^{(\rho)}_{(56)}
+    +\tilde t^{(1)}_{(36)\alpha}\tilde t^{(1)}_{(45)\beta}
+    f^{(\rho)}_{(36)}f^{(\rho)}_{(45)}\Bigr]
+    $$
+
+    （文档 723–729 行，$\rho\rho$ 限制在相对 $l=0$。）
+
+    本函数只给**一个**配对：$a_1,a_2$ 是第一个 $\rho$ 的两个 $\pi$、
+    $b_1,b_2$ 是第二个 $\rho$ 的两个 $\pi$；$f^{(\rho)}$ 留在道外。
+
+    ⚠️ **这条公式与螺旋度级联对不上**（实测残差 0.55–1.17）。
+    逐式直译就是本函数，问题不在抄错：$1\otimes1\to2$ 的无迹化必须在
+    **耦合所在系**（$f_2$ 系）里做，而 $P^{(2)}(p_{f_2})$ 作用在**实验室系**
+    的张量上，缺少"先 boost 到 $f_2$ 系、去迹、再 boost 回来"的等价物。
+    与 `T2_from_pair` 修 `ex5_kst2` 时是同一类问题，但嵌套秩 2 的正确写法
+    尚未推出。见 `analyses/tensor_examples/chains/notes/ex6_phi4pi.notes.md`
+    与 `documentation/tensor_examples_feasibility.md` §2.3.1。
+    """
+    r1 = _atleast2(a1) + _atleast2(a2)
+    r2 = _atleast2(b1) + _atleast2(b2)
+    u = T1_cov(r1, _atleast2(a1), _atleast2(a2))
+    v = T1_cov(r2, _atleast2(b1), _atleast2(b2))
+    p2_cov = P2(frame)
+    return xp.einsum("eijab,ea,eb->eij", p2_cov, u, v)
+
+
+def S_rr(frame, a1, a2, b1, b2):
+    r"""$f_0\to\rho\rho$ 的标量收缩，返回 `(N,)`。
+
+    文档 / tex（$\rho\rho$ 限制在相对 $l=0$）：
+
+    $$
+    <\phi f_0|01>_{(\rho\rho)}=\tilde t^{(1)\mu}_{(12)}
+    f^{(\phi)}_{(12)}f^{(f_0)}_{(\rho\rho)}
+    \Bigl[f^{(\rho)}_{(34)}f^{(\rho)}_{(56)}
+    \tilde t^{(1)\alpha\beta}_{(34)}\tilde t^{(1)}_{(56)\alpha\beta}
+    +\cdots\Bigr]
+    $$
+
+    $f_0$ 是 $J=0$（$\psi$ 的 $1^{--}$ 与它耦合成 $L=1$），所以两个 $\rho$ 的
+    自旋必须先合成 $S=0$，再与**横向**方向组合。因此这个标量不是裸的点积，
+    而是**用 $f_0$ 的横向度规夹住**：
+
+    $$
+    S=\tilde g(p_{f_0})^{\alpha\beta}
+      \tilde t^{(1)}_{(a_1a_2)\alpha}\tilde t^{(1)}_{(b_1b_2)\beta}
+    $$
+
+    ⚠️ 裸点积 $g^{\alpha\beta}u_\alpha v_\beta$ 是**错的**（实测 rel 1.02e-1）——
+    它把 $\rho$ 的纵向分量也算进去了，而 $\rho$ 是横向极化的。
+    加上 $\tilde g(p_{f_0})$ 后 rel = 3.7e-15。
+
+    这一条**不涉及** $P^{(2)}$，所以没有 $1\otimes1\to2$ 的无迹化参考系问题；
+    它属于 $\rho\rho$ 家族，但 A1 是**过**的（见
+    `tests/test_ex6_branches.py`）。
+    """
+    a1, a2 = _atleast2(a1), _atleast2(a2)
+    b1, b2 = _atleast2(b1), _atleast2(b2)
+    u = T1_cov(a1 + a2, a1, a2)
+    v = T1_cov(b1 + b2, b1, b2)
+    return xp.einsum("eij,ei,ej->e", Gt_con(frame), u, v)
+
+
+def T2_f2s(frame, a1, a2, b1, b2):
+    r"""$T^{(f_2)\mu\nu}_{(f_2\sigma)}$：$f_2(1270)\sigma$ 耦合成 $J=2$，
+    返回 `(N,4,4)`。
+
+    $$
+    T^{(f_2)\mu\nu}_{(f_2\sigma)}=P^{(2)\mu\nu\alpha\beta}(p_{f_2})
+    \Bigl[\tilde t^{(2)}_{(34)\alpha\beta}f^{(f_2)}_{(34)}f^{(\sigma)}_{(56)}
+    +\tilde t^{(2)}_{(56)\alpha\beta}f^{(f_2)}_{(56)}f^{(\sigma)}_{(34)}\Bigr]
+    $$
+
+    （文档 764–774 行，$f_2(1270)\sigma$ 限制在相对 $l=0$。）
+
+    一个配对里有**两项**：$f_2(1270)$ 可以由 $(a_1a_2)$ 组成、$\sigma$ 由
+    $(b_1b_2)$ 组成，也可以反过来。两项共用同一个 $P^{(2)}(p_{f_2})$
+    （$p_{f_2}$ 是 $\psi\to\phi f_2$ 那个 $f_2$ 的动量，`frame` 给它），
+    但各自的 $\tilde t^{(2)}$ 以**自己那一对的和**为参考系
+    （$\tilde t^{(2)}_{(34)}$ 的"母"是 $p_3+p_4$）。
+
+    文档的第二个配对 $(36)(45)$ 是**另一条道**，$f^{(f_2)}$/$f^{(\sigma)}$
+    都留在道外。
+
+    ⚠️ 与 `T2_rr` 同一类问题：$2\otimes0\to2$ 的无迹化参考系。实测残差
+    0.68–0.85，A1 必然失败。
+    """
+    a1, a2 = _atleast2(a1), _atleast2(a2)
+    b1, b2 = _atleast2(b1), _atleast2(b2)
+    ua = T2_cov(a1 + a2, a1, a2)      # $\tilde t^{(2)}_{(a_1a_2)}$
+    ub = T2_cov(b1 + b2, b1, b2)      # $\tilde t^{(2)}_{(b_1b_2)}$
+    return xp.einsum("eijab,eab->eij", P2(frame), ua + ub)
+
+
+# ---------------------------------------------------- 三体节点原语 ω^μ
+def omega_mu(omega, p_pi, p_pip, p_pim):
+    r"""文档 Eq.（例 4）的 $\omega^\mu$：**单节点三体**分析器。
+
+    $$
+    \omega^\mu = \epsilon^{\mu\nu\lambda\sigma}p_1^\nu p_2^\lambda p_0^\sigma
+    \Bigl[B_1(Q_{\omega\rho0})f^{(\rho)}_{(12)}B_1(Q_{\rho12})
+          +B_1(Q_{\omega\rho2})f^{(\rho)}_{(10)}B_1(Q_{\rho10})
+          +B_1(Q_{\omega\rho1})f^{(\rho)}_{(20)}B_1(Q_{\rho20})\Bigr]
+    $$
+
+    粒子编号照文档：$\pi^0\to0$、$\pi^+\to1$、$\pi^-\to2$。三条道是
+    $(\pi^+\pi^-)$、$(\pi^+\pi^0)$、$(\pi^-\pi^0)$ 三对配成 $\rho$ 的
+    **置换求和**，共用同一个 $f^{(\rho)}$（传播子留在拟合层，本函数只给
+    $\epsilon\cdot$ 与两个 $B_1$）。
+
+    与"$\omega\to\rho\pi$ 两体级联"的**本质区别**：两体节点的
+    $\epsilon^{\mu\nu\lambda\sigma}p_\omega{}_\nu p_\rho{}_\lambda p_\pi{}_\sigma$
+    恒为零（$p_\omega=p_\rho+p_\pi$，全反对称三缩并 = 0）。这里三个动量
+    $p_1,p_2,p_0$ 是**末态**动量，没有这种退化 —— 这正是"真三体节点"
+    不能用两体树表达的原因。
+
+    返回 `(N, 4)`：$\mu$ 分量（实数，因为 $f^{(\rho)}=1$ 取单位耦合）。
+    位垒因子已含；$\rho$ 的线形 $f^{(\rho)}$ 逐道由拟合参数给出。
+    """
+    p0, p1, p2 = _atleast2(p_pi), _atleast2(p_pip), _atleast2(p_pim)
+    res12, res10, res20 = p1 + p2, p1 + p0, p2 + p0
+    b = (B1(omega, res12, p0) * B1(res12, p1, p2)
+         + B1(omega, res10, p2) * B1(res10, p1, p0)
+         + B1(omega, res20, p1) * B1(res20, p2, p0))
+    return xp.einsum("mnls,en,el,es->em", leci_four(), p1, p2, p0) * b[:, None]
+
+
 # ------------------------------------------------------------------ 七条道
-def _s1_vector(psi, phi, f2, Kp, Km, Pip, Pim):
-    """Eq.(41) 修正版：纯 S=1 自旋矢量（见 FUNC.py::_s1_vector 的推导注释）。"""
-    t2_cov = T2_cov(f2, Pip, Pim)
-    t2_con = _raise_last(t2_cov, 2)
-    t1_cov = T1_cov(phi, Kp, Km)
-    t1_til = xp.einsum("eij,ej->ei", Gt_con(psi), t1_cov)
+def s1_from_T2(psi, t2_cov, t1_cov):
+    r"""Eq.(41) 修正版的**通用形式**：给定任意 $J=2$ 协变张量
+    $T^{(2)}_{\mu\nu}$ 与一个秩-1 分析器 $t^{(1)}_\nu$，返回纯 $S=1$ 的
+    自旋矢量。
+
+    $$
+    W^\mu = \tilde g(p_\psi)^{\mu\alpha}T^{(2)}_{\alpha\beta}
+             \tilde g(p_\psi)^{\beta\gamma}t^{(1)}_\gamma
+             -\frac{1}{3m_\psi^2}
+             \Bigl[T^{(2)}_{\alpha\beta}p_\psi^\alpha p_\psi^\beta\Bigr]
+             \tilde g(p_\psi)^{\mu\gamma}t^{(1)}_\gamma
+    $$
+
+    第二项是**迹减除**：$\psi$ 是 $1^{--}$，与 $S=1$ 的耦合只保留
+    $T^{(2)}$ 在 $p_\psi$ 上的横向部分。少了这一项，五个
+    $<\phi f_2|Ls>$ 全都错 $2.5\times10^{-1}$ 以上（实测）。
+
+    抽出来的理由：例 6 的 $T^{(2)}$ 是 $f_2\to\sigma\sigma$ 的
+    `T2_ss`，不是 `T2_cov(f2, Pip, Pim)` —— 公式一样，来源不同。
+    """
+    t2_con = _raise_last(_atleast2(t2_cov), 2)
+    t1_til = xp.einsum("eij,ej->ei", Gt_con(psi), _atleast2(t1_cov))
     W = xp.einsum("eij,ej->ei", t2_con, t1_til)
     sig = xp.einsum("eij,ei,ej->e", t2_con, psi, psi)
     m2 = dot(psi, psi)
     return W - (1.0 / (3.0 * m2))[:, None] * sig[:, None] * t1_til
+
+
+def _s1_vector(psi, phi, f2, Kp, Km, Pip, Pim):
+    r"""Eq.(41) 修正版：纯 S=1 自旋矢量（$f_2\to\pi\pi$ 的特例）。"""
+    return s1_from_T2(psi, T2_cov(f2, Pip, Pim), T1_cov(phi, Kp, Km))
 
 
 def _phif001(psi, phi, f0, Kp, Km, Pip, Pim):
