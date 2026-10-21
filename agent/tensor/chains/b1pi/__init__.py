@@ -1,4 +1,4 @@
-"""chain.name = "b1pi" —— psi(2S) -> b1 pi -> (phi pi) pi -> (K+K-)(pi+pi-)。
+r"""chain.name = "b1pi" —— psi(2S) -> b1 pi -> (phi pi) pi -> (K+K-)(pi+pi-)。
 
 中间共振态 X = b1(1^{+-})，由 phi + pi 重建。psi->b1pi 与 b1->phi pi 都可以
 既有 S 波又有 D 波，所以有**四个**独立振幅（文档 391–416 行）：

@@ -1,4 +1,4 @@
-"""chain.name = "phif2" —— psi(2S) -> phi f_2 -> (K+K-)(pi+pi-)。"""
+r"""chain.name = "phif2" —— psi(2S) -> phi f_2 -> (K+K-)(pi+pi-)。"""
 from .phif201 import phif201  # noqa: F401
 from .phif221 import phif221  # noqa: F401
 from .phif222 import phif222  # noqa: F401

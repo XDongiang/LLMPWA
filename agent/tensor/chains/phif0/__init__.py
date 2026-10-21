@@ -1,4 +1,4 @@
-"""chain.name = "phif0" —— psi(2S) -> phi f_0 -> (K+K-)(pi+pi-)。
+r"""chain.name = "phif0" —— psi(2S) -> phi f_0 -> (K+K-)(pi+pi-)。
 
 f0 自旋为 0，S 只能来自 phi，故 s 恒为 1、l 取偶数。
 """

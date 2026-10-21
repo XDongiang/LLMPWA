@@ -1,4 +1,4 @@
-"""chain.name = "rhopi" —— psi(2S) -> rho' pi -> (phi pi) pi -> (K+K-)(pi+pi-)。
+r"""chain.name = "rhopi" —— psi(2S) -> rho' pi -> (phi pi) pi -> (K+K-)(pi+pi-)。
 
 中间共振态 X = rho'(1^{--})，由 phi + pi 重建。psi->rho'pi 与 rho'->phi pi
 都限于 P 波，所以只有**一个**独立振幅（文档 373 行）；`_1`/`_2` 两条道是

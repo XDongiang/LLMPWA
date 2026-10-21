@@ -1,4 +1,4 @@
-"""chain.name = "rhopi5" —— psi(2S) -> rho5(5^-) pi0 -> (pi+ pi-)(pi0)。
+r"""chain.name = "rhopi5" —— psi(2S) -> rho5(5^-) pi0 -> (pi+ pi-)(pi0)。
 
 文档 249–263 行（论文 `jpsipwa1.tex` 327–340 行）的 `U_{rho_5}^mu`：
 
