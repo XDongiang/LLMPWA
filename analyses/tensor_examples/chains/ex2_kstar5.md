@@ -53,10 +53,12 @@ psi2s  J=1  P=-1
 | 表象 | kernel | 需要手写道 | 实测 `emit` | 说明 |
 |---|---|---|---|---|
 | `helicity_cascade` | `helicity_cascade` | 否 | ✅ | 1 个脚本 |
+| `cartesian` | `covariant` | 是 | ✅ | 1 个脚本 |
+| `helicity` | `helicity` | 是 | ✅ | 1 个脚本 |
 
 （`emit` 一列是**实测**结果 —— 逐表象单独调 `emitter.emit`，不是靠文件存在推断。）
 
-⚠️ 本链**没有**手写道目录，所以 `cartesian`/`helicity` 两条路线的 `emit` 会报 `LookupError`；只有 `omega` 能出产物。
+手写道（`agent/tensor/chains/ex2_kkpi0_kstar5/`，2 条）：`u_kstar5_13`, `u_kstar5_23`
 
 深度 = 2 ⇒ omega **可用**。
 
@@ -110,4 +112,5 @@ A_13(交换 0<->1 的动量) / A_23(原动量) = +1.000000   残差 0.00e+00
 | `ε·B` 恒等式 | 不适用（J=5，同 ρ₅） |
 | `check` / `emit` | ✅ |
 | `cartesian`/`helicity` + J=5 | ✅ **可算**（`covariant.py` 已有通用 `t_l`/`B5`） |
-| 协变张量路线的 emit | ⚠️ 需要手写道函数；本链没写，故只有 cascade 能出 |
+| 协变张量路线的 emit | ✅ 2026-10-21 补齐 `chains/ex2_kkpi0_kstar5/` 两条，三条路线都能出 |
+| A1（级联 vs 协变，经 `EPS_A`） | 5.5e-15，两道一致 |

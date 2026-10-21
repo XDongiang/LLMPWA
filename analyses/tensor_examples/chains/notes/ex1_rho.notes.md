@@ -8,7 +8,7 @@
 |---|---|---|
 | 末态 | 4 个（两个两体子系统） | **3 个** |
 | 链深度 | 3 | 2 |
-| 可用的表象 | 三种都行 | **只有 `helicity_cascade`** |
+| 可用的表象 | 三种都行 | 三种都行（2026-10-21 起）|
 
 ### 为什么是三条道
 
@@ -59,10 +59,14 @@ rho -> (Pim2, Pip1)    ->  -0.191836 i
 | 三条道相加 vs 文档括号 | 残差 5.2e-15，c 为全局常数 |
 | `check` 三体拓扑 | ✅ |
 | `emit`（cascade）产物 vs 直接调内核 | 逐位相同（0.0） |
+| `emit`（cartesian/helicity） | ✅（2026-10-21 补齐 `chains/ex1_pipipi0_rho/`） |
+| A1（级联 vs 协变，经 `EPS_A`） | 3.9e-15，三道一致 |
 
-`emit` 只有 `helicity_cascade` 能出：`cartesian`/`helicity` 要把
+`emit` 原本只有 `helicity_cascade` 能出：`cartesian`/`helicity` 要把
 `agent/tensor/chains/<chain>/<channel>.py` 里的**手写**道函数内联，而三体置换道
-没有手写函数。这不是缺陷 —— 级联本来就是三体该用的内核。
+当时没有手写函数。**2026-10-21 补上了**（`chains/ex1_pipipi0_rho/` 三条），
+所以三条路线现在都能出。级联仍然是三体该用的内核（`omega` 对置换族静默错，
+见下）。
 
 ### 🐛 omega 对"置换族"是**静默错**的（2026-10-20 发现）
 

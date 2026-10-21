@@ -31,6 +31,21 @@ TENSOR = os.path.join(ROOT, "analyses", "kk_dis", "task",
 EX5 = ["u_kst0_l", "u_kst0_r", "u_PP_1", "u_PP_2", "u_PF_1", "u_PF_2",
        "u_FP_1", "u_FP_2", "u_FF_1", "u_FF_2"]
 
+# `(道名, 用哪个文件对拍)`。
+#
+# ⚠️ 2026-10-21 起 `u_PP_*`/`u_FP_*` 的**生产文件**不再是逐式移植，而是
+# 修正版（内层无迹化改到 $K^*_2$ 系，见 `chains/kstpi/CORRECTION.md`）。
+# jax 参考实现是**历史形式**，所以对拍要拿 `*_paper` 文件 —— 那是保留的
+# 逐式移植，A5 的"逐位一致"保证落在它身上。
+#
+# 生产文件与 jax 的差**是本次修正的内容**，不是回归：脚本最后会把差值
+# 一并打出来，作为"修正确实改了东西"的阳性对照。
+EX5_PAIRS = [(n, n + "_paper" if n in ("u_PP_1", "u_PP_2", "u_FP_1", "u_FP_2")
+              else n) for n in EX5]
+
+# 生产文件与历史形式**有意不同**的道 —— 单独量差值，不计入失败。
+CORRECTED = ["u_PP_1", "u_PP_2", "u_FP_1", "u_FP_2"]
+
 
 def _pair(m_parent, m1, m2, rng, n):
     lam = ((m_parent ** 2 - (m1 + m2) ** 2)
@@ -111,25 +126,35 @@ def main():
     phi_arg = Kp + Km
     mom = {"Kp": Kp, "Km": Km, "Pip": Pip, "Pim": Pim}
 
-    print("%-10s %-14s %-14s %-12s %s"
-          % ("道", "|jax|max", "|numpy|max", "rel", "状态"))
-    print("-" * 68)
+    print("%-10s %-10s %-14s %-14s %-12s %s"
+          % ("道", "对拍文件", "|jax|max", "|numpy|max", "rel", "状态"))
+    print("-" * 80)
     bad = []
-    for nm in EX5:
+    for nm, src in EX5_PAIRS:
         J = np.asarray(getattr(f, nm)(phi_arg, Kp, Km, Pip, Pim))
-        N = COV.compute_event(nm, mom)
+        N = COV.compute_event(src, mom)
         r = float(np.abs(N - J).max() / max(np.abs(J).max(), 1e-300))
         ok = r < 1e-11
         if not ok:
-            bad.append((nm, r))
-        print("%-10s %-14.5g %-14.5g %-12.3e %s"
-              % (nm, float(np.abs(J).max()), float(np.abs(N).max()), r,
+            bad.append((src, r))
+        print("%-10s %-10s %-14.5g %-14.5g %-12.3e %s"
+              % (nm, src, float(np.abs(J).max()), float(np.abs(N).max()), r,
                  "OK" if ok else "**FAIL**"))
-    print("-" * 68)
+    print("-" * 80)
     print("%s：失败 %d / %d"
-          % ("PASS" if not bad else "**FAIL**", len(bad), len(EX5)))
+          % ("PASS" if not bad else "**FAIL**", len(bad), len(EX5_PAIRS)))
     for nm, r in bad:
         print("  %s  rel = %.3e" % (nm, r))
+
+    # 阳性对照：生产文件（修正版）与历史形式的差 —— **应该**非零
+    print()
+    print("修正的阳性对照（生产文件 vs 历史形式，应该非零）：")
+    for nm in CORRECTED:
+        J = np.asarray(getattr(f, nm)(phi_arg, Kp, Km, Pip, Pim))
+        N = COV.compute_event(nm, mom)
+        r = float(np.abs(N - J).max() / max(np.abs(J).max(), 1e-300))
+        print("  %-10s rel = %.3e  %s"
+              % (nm, r, "✅ 确实改了" if r > 1e-6 else "⚠️ 没改？"))
     return 0 if not bad else 1
 
 

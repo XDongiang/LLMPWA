@@ -43,6 +43,11 @@ KST2_NAMES = ["u_PP_1", "u_PP_2", "u_PF_1", "u_PF_2",
 KST0_NAMES = ["u_kst0_l", "u_kst0_r"]
 EX5_NAMES = KST0_NAMES + KST2_NAMES
 
+# 历史形式（`Tensor/FUNC.py` 逐式移植）—— 与修正版共存，A5 对拍用。
+# 见 `chains/kstpi/CORRECTION.md`。
+PAPER_NAMES = ["u_PP_1_paper", "u_PP_2_paper", "u_FP_1_paper", "u_FP_2_paper"]
+ALL_KSTPI = sorted(EX5_NAMES + PAPER_NAMES)
+
 SPECS = os.path.join(_ROOT, "analyses", "tensor_examples", "specs")
 
 
@@ -98,21 +103,36 @@ def _rel(a, b):
 
 # ------------------------------------------------------------------ 测试
 def test_chains_discovered():
-    """`chains/` 能发现 kstpi 的 10 条道，且道名符合预期。"""
+    """`chains/` 能发现 kstpi 的 10 条生产道 + 4 条历史形式，道名符合预期。"""
     allc = chainsmod.all_channels()
-    for nm in EX5_NAMES:
+    for nm in EX5_NAMES + PAPER_NAMES:
         assert allc.get(nm) == "kstpi", (nm, allc.get(nm))
-    assert chainsmod.list_channels("kstpi") == sorted(EX5_NAMES)
+    assert chainsmod.list_channels("kstpi") == ALL_KSTPI
 
 
 def test_all_channels_finite_on_physical_momenta():
-    """10 条道对物理四动量都返回 (N,4) 且有限。"""
+    """14 条道（10 生产 + 4 历史形式）对物理四动量都返回 (N,4) 且有限。"""
     d = physical(n=16, seed=7)
-    for nm in EX5_NAMES:
+    for nm in EX5_NAMES + PAPER_NAMES:
         a = COV.compute_event(nm, d)
         assert a.shape == (16, 4), (nm, a.shape)
         assert np.all(np.isfinite(a)), nm
         assert np.abs(a).max() > 0, nm
+
+
+def test_paper_files_are_the_unmodified_port():
+    """`*_paper` 是历史形式（未修正），与生产文件**有意不同**。
+
+    这条同时是"修正确实落地了"的护栏：若哪天有人把生产文件改回原式，
+    这里会因为"两者相同"而失败。
+    """
+    d = physical(n=16, seed=7)
+    for nm in PAPER_NAMES:
+        prod = COV.compute_event(nm[:-6], d)     # 去掉 "_paper"
+        paper = COV.compute_event(nm, d)
+        r = _rel(prod, paper)
+        assert r > 1e-3, (
+            "%s 与 %s 几乎相同（rel=%.3e）—— 修正被回退了？" % (nm, nm[:-6], r))
 
 
 def test_swap34_swaps_the_pair():
@@ -121,7 +141,9 @@ def test_swap34_swaps_the_pair():
     ds = swap34(d)
     for a, b in [("u_kst0_l", "u_kst0_r"),
                  ("u_PP_1", "u_PP_2"), ("u_PF_1", "u_PF_2"),
-                 ("u_FP_1", "u_FP_2"), ("u_FF_1", "u_FF_2")]:
+                 ("u_FP_1", "u_FP_2"), ("u_FF_1", "u_FF_2"),
+                 ("u_PP_1_paper", "u_PP_2_paper"),
+                 ("u_FP_1_paper", "u_FP_2_paper")]:
         x = COV.compute_event(a, ds)
         y = COV.compute_event(b, d)
         assert _rel(x, y) < 1e-12, (a, b, _rel(x, y))

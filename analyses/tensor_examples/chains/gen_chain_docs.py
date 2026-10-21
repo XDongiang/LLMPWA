@@ -60,22 +60,45 @@ CHAINS = [
      "agent/tensor/chains/b1pi"),
     ("rhopi", "analyses/tensor_examples/specs/ex3_rhopi.toml",
      "agent/tensor/chains/rhopi"),
-    ("rhof2_generic", "agent/tensor/specs/rhof2_generic.toml", None),
+    ("rhof2_generic", "agent/tensor/specs/rhof2_generic.toml", "auto"),
     ("ex5_kst2", "analyses/tensor_examples/specs/ex5_kst2.toml",
      "agent/tensor/chains/kstpi"),
     ("ex5_kst0", "analyses/tensor_examples/specs/ex5_kst0.toml",
      "agent/tensor/chains/kstpi"),
-    # 例 1/2 是**真三体**（末态 3 个粒子），只有 helicity_cascade 能 emit
-    # （cartesian/helicity 需要 chains/<chain>/<channel>.py 里的手写道函数）。
-    ("ex1_rho", "analyses/tensor_examples/specs/ex1_pipipi0_rho.toml", None),
-    ("ex1_rho3", "analyses/tensor_examples/specs/ex1_pipipi0_rho3.toml", None),
-    ("ex2_rho", "analyses/tensor_examples/specs/ex2_kkpi0_rho.toml", None),
-    ("ex2_kstar", "analyses/tensor_examples/specs/ex2_kkpi0_kstar.toml", None),
+    # 对照 spec：4 条历史形式 + 4 条修正版共存，用来演示"用 name 选形式"。
+    # A1 对它**必然**失败（历史形式那 4 条就是缺陷本身），这是设计意图。
+    ("ex5_kst2_paper", "analyses/tensor_examples/specs/ex5_kst2_paper.toml",
+     "agent/tensor/chains/kstpi"),
+    # 例 1/2 是**真三体**（末态 3 个粒子）。2026-10-21 起 18 个手写协变道
+    # 全部补齐，所以它们现在也是三条路线都能 emit（此前只有 cascade）。
+    # `hand_dir` 统一由 spec 的 `[chain].chain_name` 推出来 —— 别再手写
+    # `None`，那会让文档误报"没有手写道目录"（2026-10-21 修）。
+    ("ex1_rho", "analyses/tensor_examples/specs/ex1_pipipi0_rho.toml", "auto"),
+    ("ex1_rho3", "analyses/tensor_examples/specs/ex1_pipipi0_rho3.toml",
+     "auto"),
+    ("ex2_rho", "analyses/tensor_examples/specs/ex2_kkpi0_rho.toml", "auto"),
+    ("ex2_kstar", "analyses/tensor_examples/specs/ex2_kkpi0_kstar.toml", "auto"),
     # J=5 / l=5（2026-10-20 把级联内核上限从 4 扩到 6）
-    ("ex1_rho5", "analyses/tensor_examples/specs/ex1_pipipi0_rho5.toml", None),
-    ("ex2_kstar5", "analyses/tensor_examples/specs/ex2_kkpi0_kstar5.toml", None),
-    ("ex2_kstar3", "analyses/tensor_examples/specs/ex2_kkpi0_kstar3.toml", None),
+    ("ex1_rho5", "analyses/tensor_examples/specs/ex1_pipipi0_rho5.toml",
+     "auto"),
+    ("ex2_kstar5", "analyses/tensor_examples/specs/ex2_kkpi0_kstar5.toml",
+     "auto"),
+    ("ex2_kstar3", "analyses/tensor_examples/specs/ex2_kkpi0_kstar3.toml",
+     "auto"),
 ]
+
+
+def resolve_hand_dir(spec_path, hand_dir):
+    """`hand_dir == "auto"` 时按 spec 的 `[chain].chain_name` 推手写道目录。
+
+    跨目录取道是允许的（`emitter` 会 `all_channels()` 兜底），但**主目录**
+    就是 `chain_name` —— 文档里列"手写道"时用它。
+    """
+    if hand_dir != "auto":
+        return hand_dir
+    sp = S.load_spec(os.path.join(ROOT, spec_path))
+    cn = (sp["raw"].get("chain", {}) or {}).get("chain_name") or sp["name"]
+    return os.path.join("agent", "tensor", "chains", cn)
 
 
 def _rel(p):
@@ -319,6 +342,7 @@ def basis_block(spec, chain, hand_dir):
 
 def generate(name, spec_path, hand_dir):
     spec = S.load_spec(os.path.join(ROOT, spec_path))
+    hand_dir = resolve_hand_dir(spec_path, hand_dir)
     chain = S.to_chain(spec)
     topo, depth, dep = topology_block(spec, chain)
     parts = particle_block(spec)

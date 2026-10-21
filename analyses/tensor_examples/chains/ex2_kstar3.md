@@ -53,10 +53,12 @@ psi2s  J=1  P=-1
 | 表象 | kernel | 需要手写道 | 实测 `emit` | 说明 |
 |---|---|---|---|---|
 | `helicity_cascade` | `helicity_cascade` | 否 | ✅ | 1 个脚本 |
+| `cartesian` | `covariant` | 是 | ✅ | 1 个脚本 |
+| `helicity` | `helicity` | 是 | ✅ | 1 个脚本 |
 
 （`emit` 一列是**实测**结果 —— 逐表象单独调 `emitter.emit`，不是靠文件存在推断。）
 
-⚠️ 本链**没有**手写道目录，所以 `cartesian`/`helicity` 两条路线的 `emit` 会报 `LookupError`；只有 `omega` 能出产物。
+手写道（`agent/tensor/chains/ex2_kkpi0_kstar3/`，2 条）：`u_kstar3_13`, `u_kstar3_23`
 
 深度 = 2 ⇒ omega **可用**。
 
@@ -115,10 +117,13 @@ J=1 时 `T̃^{(1)}_ν` 是矢量，`ε·p_ψ·T̃·t̃` 三个矢量缩并正好
 | 振幅有限 | ✅ `|A|max = 118.2` |
 | `ε·B` 恒等式 | 不适用（J=3 结构上不成立） |
 | `check` / `emit`（cascade） | ✅ |
+| `emit`（cartesian/helicity） | ✅（2026-10-21 补齐 `chains/ex2_kkpi0_kstar3/`） |
+| A1（级联 vs 协变，经 `EPS_A`） | 3.4e-15，两道一致 |
 
-⚠️ 与其它三体 spec 一样，**只有 `helicity_cascade` 能 emit**：
+⚠️ 与其它三体 spec 一样，本链**原本**只有 `helicity_cascade` 能 emit：
 `cartesian`/`helicity` 要把 `agent/tensor/chains/<chain>/<channel>.py` 里的
-**手写**道函数内联，而三体置换道没有手写函数（会报 `LookupError`）。
+**手写**道函数内联，而三体置换道当时没有手写函数（会报 `LookupError`）。
+**2026-10-21 补上了**（`chains/ex2_kkpi0_kstar3/` 两条），三条路线都能出。
 J=3 本身在协变张量路线的 4 以内，但"有张量公式"≠"能 emit" —— 这是两件事。
 
 ### 与 K\*₅ 的关系

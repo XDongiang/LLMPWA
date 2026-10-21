@@ -227,10 +227,13 @@ def test_phase_space_is_genuine_threebody():
 
 # ------------------------------------------- 5) emit 端到端（产物 == 内核）
 # 哪些 spec 有**手写协变道函数**（`chains/<chain>/`）。
-# 其余 spec 的三体置换道没有手写函数，`cartesian`/`helicity` 会 LookupError，
-# 所以只能出 `helicity_cascade` —— 这不是缺陷，是"手写公式"与"自动生成"
-# 的边界（见 `agent/tensor/chains/README`）。
-HANDWRITTEN_COVARIANT = {"ex1_rho5"}
+#
+# 2026-10-21：例 1/2 的 18 个手写道**全部补齐**（此前只有 `ex1_rho5`），
+# 所以本表里七份 spec 的三条路线都出得来。补齐过程见
+# `probes/probe_missing_covariant.py` —— 那 18 条道先用通用构造 `t_l` 与
+# 级联逐道对拍到 1.6e-14，确认"缺的只是搬运"，之后才写成文件。
+HANDWRITTEN_COVARIANT = {"ex1_rho", "ex1_rho3", "ex1_rho5",
+                         "ex2_rho", "ex2_kstar", "ex2_kstar3", "ex2_kstar5"}
 
 
 def test_emit_end_to_end():

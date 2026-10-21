@@ -1,0 +1,174 @@
+# 例 5（K*₂ 部分）**历史形式 vs 修正版 的对照 spec**
+#
+# 这份 spec 的 8 条道 = 4 条 `*_paper`（历史形式 / FUNC.py 逐式移植）
+#                      + 4 条修正版（生产用）。
+# 两种形式**放在同一份产物**里，便于逐道对照：
+#   `u_PP_1`       —— 修正版（内层无迹化在 K*₂ 系）
+#   `u_PP_1_paper` —— 历史形式（内层无迹化隐式交给 P²(p_ψ)，错的系）
+#
+# 机制、公式、代码对照见 `agent/tensor/chains/kstpi/CORRECTION.md`。
+#
+# 道名直接决定 emitter 去哪个文件取函数体 —— 所以"生成论文形式"
+# 不需要改任何代码，只要把 name 写成 `*_paper`。
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 431–623 行。
+# 参考实现 `Tensor/FUNC.py::{_u_PP_l,_u_PP_r,_u_PF_l,_u_PF_r,_u_FP_l,_u_FP_r,
+# _u_FF_l,_u_FF_r}`，已逐式移植到 `agent/tensor/chains/kstpi/`，
+# 并与 jax 对拍通过（rel ≈ 1e-15，见 probes/verify_ex5_port.py）。
+#
+# 拓扑：psi(2S) -> K*₂(2^-) + pi，K*₂ -> phi + pi，phi -> K+ K-
+#       —— **深度 3**，与 `ex3_b1pi.toml` 同构（只是把 b₁ 换成 K*₂）。
+#
+# 道表：8 条。P/F 表示顶层/内层的轨道角动量（P = l1, F = l3）。
+#       顶层 (l,s) 只有 (1,2) 与 (3,2) 两组，而道有 8 条 ——
+#       **(l,s) 不是完备标签**（完备标签是"顶层波 x 内层波"），
+#       所以 check_channels = false。
+#
+# ⚠️ 与 `ex3_b1pi.toml` 同样的设计瑕疵：8 条道是**两棵树**
+#     （旁观者 pi 不同），靠逐道 `tree` 覆盖塞进一份 TOML。
+#     协变张量的道函数完全不读树，所以能共存；但真实拟合里
+#     "两棵树是否共享传播子/参数"这件事仍未处理。
+#
+# ⚠️ K*₀ 那 2 条道（`u_kst0_l/r`）**不在这份 spec 里** —— 它们的
+#     K* 自旋是 0，与这里的 2 冲突（一个 [particles] 条目只能有一个 J）。
+#     见 `ex5_kst0.toml`。
+#
+# 已知边界（见 analyses/tensor_examples/chains/ 的例 5 文档）：
+#     `helicity_cascade` 表象对其中 **6 条**逐位命中（u_PF_*、u_FF_* 及
+#     K*₀ 的两条），而 **u_PP_\*、u_FP_\*** 落在级联子空间之外
+#     （rel ≈ 2e-2 / 1.6e-2）—— 它们含 $P^{(2)}_{\psi}$ 投影且内层是 P 波。
+
+[chain]
+name = "ex5_kst2_paper"
+top = "psi2s"
+output = "../generated/ex5_kst2_paper"
+l_max = 4
+chain_name = "kstpi"
+suffix = "_kst2_paper"
+# (l,s) 不是完备标签（见上）
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["Kstar", "Pim"]
+
+[particles.Kstar]
+J = 2
+mass = 1.43              # K*₂(1430) 附近；只是占位，协变张量对任意四动量都成立
+parity = -1              # 2^-（见文件头：宇称+三角要求 l 为奇数）
+daughters = ["phi", "Pip"]
+
+[particles.phi]
+J = 1
+mass = 1.019
+parity = -1
+daughters = ["Kp", "Km"]
+l = 1
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+# ---------------------------------------------------------------- 道表（8 条）
+# `_1` 的旁观者是粒子 3（Pip），`_2` 的旁观者是粒子 4（Pim）。
+# 前 4 条是**修正版**（生产），后 4 条是**历史形式**（对照）。
+
+[[channel]]
+name = "u_PP_1"
+l = 1
+s = 2
+ls = { psi2s = [[1, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pip"], Kstar = ["phi", "Pim"] }
+
+[[channel]]
+name = "u_PP_2"
+l = 1
+s = 2
+ls = { psi2s = [[1, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pim"], Kstar = ["phi", "Pip"] }
+
+[[channel]]
+name = "u_FP_1"
+l = 3
+s = 2
+ls = { psi2s = [[3, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pip"], Kstar = ["phi", "Pim"] }
+
+[[channel]]
+name = "u_FP_2"
+l = 3
+s = 2
+ls = { psi2s = [[3, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pim"], Kstar = ["phi", "Pip"] }
+
+# ---- 历史形式（= Tensor/FUNC.py 逐式移植）----
+# ⚠️ 这两族的 A1 残差是 1e-2…1e-1（事件依赖，不是常数）—— 这是**已知缺陷**，
+#    留着是为了与修正版对照。生产请用上面 4 条。
+
+[[channel]]
+name = "u_PP_1_paper"
+l = 1
+s = 2
+ls = { psi2s = [[1, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pip"], Kstar = ["phi", "Pim"] }
+
+[[channel]]
+name = "u_PP_2_paper"
+l = 1
+s = 2
+ls = { psi2s = [[1, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pim"], Kstar = ["phi", "Pip"] }
+
+[[channel]]
+name = "u_FP_1_paper"
+l = 3
+s = 2
+ls = { psi2s = [[3, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pip"], Kstar = ["phi", "Pim"] }
+
+[[channel]]
+name = "u_FP_2_paper"
+l = 3
+s = 2
+ls = { psi2s = [[3, 2]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pim"], Kstar = ["phi", "Pip"] }
+
+# ---------------------------------------------------------------- 表象
+# 不出 omega：深度 3，omega 只算 D0*D1*D2，会丢掉最内层（phi -> KK）的角分布。
+# `spec.py` 的分级检查会在读入时直接拒绝（不是静默出错）。
+
+[[basis]]
+name = "cartesian"
+kernel = "covariant"
+
+[[basis]]
+name = "helicity"
+kernel = "helicity"
+
+[[basis]]
+name = "helicity_cascade"
+kernel = "helicity_cascade"

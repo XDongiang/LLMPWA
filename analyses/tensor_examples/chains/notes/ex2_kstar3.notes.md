@@ -49,10 +49,13 @@ J=1 时 `T̃^{(1)}_ν` 是矢量，`ε·p_ψ·T̃·t̃` 三个矢量缩并正好
 | 振幅有限 | ✅ `|A|max = 118.2` |
 | `ε·B` 恒等式 | 不适用（J=3 结构上不成立） |
 | `check` / `emit`（cascade） | ✅ |
+| `emit`（cartesian/helicity） | ✅（2026-10-21 补齐 `chains/ex2_kkpi0_kstar3/`） |
+| A1（级联 vs 协变，经 `EPS_A`） | 3.4e-15，两道一致 |
 
-⚠️ 与其它三体 spec 一样，**只有 `helicity_cascade` 能 emit**：
+⚠️ 与其它三体 spec 一样，本链**原本**只有 `helicity_cascade` 能 emit：
 `cartesian`/`helicity` 要把 `agent/tensor/chains/<chain>/<channel>.py` 里的
-**手写**道函数内联，而三体置换道没有手写函数（会报 `LookupError`）。
+**手写**道函数内联，而三体置换道当时没有手写函数（会报 `LookupError`）。
+**2026-10-21 补上了**（`chains/ex2_kkpi0_kstar3/` 两条），三条路线都能出。
 J=3 本身在协变张量路线的 4 以内，但"有张量公式"≠"能 emit" —— 这是两件事。
 
 ### 与 K\*₅ 的关系

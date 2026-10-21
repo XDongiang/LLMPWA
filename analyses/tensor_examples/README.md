@@ -91,6 +91,19 @@
    于是 **ρ₅ 的 cartesian / helicity / cascade 三条路线都能 emit**，
    实测互相一致（rel ~ 4e-15）。这是"协变张量路线也能表达 J=5"的落点。
 
+   **2026-10-21：18 个缺失的手写道全部补齐**（例 1/2 的 7 个 spec），
+   于是 **14 个 spec / 48 条道全部有手写协变道**，三条路线都能 emit。
+   补之前先用通用构造 `t_l` 直接算这 18 条道、与级联逐道对拍，
+   **全部 ≤1.6e-14** —— 说明缺的只是**搬运**，不是公式表达不出来。
+   补齐后的端到端复验见
+   [`probes/verify_all_specs.py`](probes/verify_all_specs.py)
+   （L1/L2/L3/A7 全过），符号与相位见
+   [`probes/probe_a1_signs.py`](probes/probe_a1_signs.py)。
+   细节见 [`chains/README.md`](chains/README.md) 的"手写协变道"一节。
+
+   ⚠️ 补写时**配对顺序必须逐道照抄 spec 的 `tree`**（`t_l` 里 $r=b-c$，
+   交换子节点整体翻号）—— 否则每条道单看都自洽，只有求和/置换才暴露。
+
 4. 🐛 **omega 对置换族是静默错的**（2026-10-20 发现，真缺陷）。
    `omega_from_momenta(mom, chain)` 只吃 **base chain**，返回**一份逐道共用**
    的 `Omega`；三条置换道的树不同却共用它，只有与 base 树一致的那条道对得上。
@@ -163,7 +176,8 @@ analyses/tensor_examples/
 │   ├── b1pi.md             ← ψ→b₁π   （深度 3，验收主力）← 生成物
 │   ├── rhopi.md            ← ψ→ρ′π   （深度 3，边界）    ← 生成物
 │   ├── rhof2_generic.md    ← ψ→ρf₂   （假想链）          ← 生成物
-│   ├── ex5_kst2.md         ← ψ→K*₂π  （例 5，4/8 是级联）← 生成物
+│   ├── ex5_kst2.md         ← ψ→K*₂π  （例 5，修正后 8/8）← 生成物
+│   ├── ex5_kst2_paper.md   ← 同上（对照 spec：历史形式 vs 修正版）← 生成物
 │   ├── ex5_kst0.md         ← ψ→K*₀π  （例 5，2/2 是级联）← 生成物
 │   ├── ex1_rho.md          ← ψ→ρπ⁰   （例 1，三体，3 条置换道）← 生成物
 │   ├── ex1_rho3.md         ← ψ→ρ₃π⁰  （例 1，J=3，符号 (+,-,-)）← 生成物
@@ -297,7 +311,7 @@ A1 的 `rel` 是**逐事例**比值。若要判断"是不是同一个振幅"，�
 
 | 判据 | 内容 | 阈值 | 状态 |
 |---|---|---|---|
-| **A1** | 新内核 vs `covariant.py` 逐道对拍（经 `EPS_A`） | rel < 1e-12 | ✅ b₁/φf₀/φf₂/例 5 的 6 条；❌ ρ′、例 5 的 `u_PP_*`/`u_FP_*`（**这是发现，不是 bug**） |
+| **A1** | 新内核 vs `covariant.py` 逐道对拍（经 `EPS_A`） | rel < 1e-12 | ✅ 全部 14 个 spec / 48 条道（`probes/verify_all_specs.py`，2026-10-21）；唯一失配是 ρ′（**这是发现，不是 bug**，见边界 3）。例 5 的 `u_PP_*`/`u_FP_*` 原本失配，**2026-10-21 已定位并落地修正**（内层无迹化用错参考系；历史形式保留为 `*_paper.py`，见 [CORRECTION.md](../../agent/tensor/chains/kstpi/CORRECTION.md)） |
 | **A2** | 逐节点组合的秩 $=\prod_n N_n$ | 整数精确 | ✅ `test_helicity_cascade.py` |
 | **A3** | 8 条道两两不重合 | 全部 rel > 1e-6 | ✅ |
 | **A4** | 深度 3 链对**最内层**角分布敏感 | 转动后 rel > 0.1 | ✅ `test_helicity_cascade.py` |
@@ -398,7 +412,7 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 > |---|---|---|---|
 > | 1 | omega 的**逐节点 $(l,s)$ 容量** | 非顶层节点在 cache 里只有标量 $K_i$ | ✅ 已由级联内核推开 |
 > | 2 | omega 的**深度**（只算 `D0*D1*D2`） | 深度 ≥ 3 时最内层角分布被丢 | ✅ 已由级联内核推开 |
-> | 3 | 某些**协变公式不是级联** | 落在级联子空间之外 | ❌ **未解决** |
+> | 3 | 某些**协变公式不是级联** | 落在级联子空间之外 | ⚠️ **部分解决**：例 5 的 4 条已定位并修正（投影装错系）；ρ′ 仍未解决（根本没装投影） |
 
 ### 边界 1/2：omega 的两条限制
 
@@ -451,12 +465,25 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 要澄清需要把 Eq.(46) **重写**成带 $\rho'$ 投影算符的级联形式，
 而不是去拟合它。
 
+2026-10-21 补做了"投影算符"那一支的穷举（
+[`probes/probe_rhopi_why.py`](probes/probe_rhopi_why.py)）：把 Eq.(46) 的
+内层 $\epsilon$ 缩并矢量换成 $p_{\rho'}$、把顶层/内层分析器投到
+$\tilde g(p_{\rho'})$、以及各种组合，**没有一支**落回级联
+（最好的 (h) 是 6.4e-02，其余 1e-1…7e-1）。所以 ρ′ 不是
+"投影装在了错的系里"（那是例 5 的机制），而是**根本没装投影** ——
+两种失配不同型，见下。
+
 所以 `check_ex3.py` 对 ρ′ 设 `"a1": False`（只验 A7 形状与有限性）。
 独立复算脚本见
 `analyses/kk_dis/task/20261019_螺旋度级联内核_审阅/material/verify.py`。
 
 同类现象在例 5 里也出现了（`u_PP_*`/`u_FP_*` 共 4 条落在级联子空间之外），
-详见 [`chains/ex5_kst2.md`](chains/ex5_kst2.md)。
+**但那 4 条已于 2026-10-21 定位并落地修正**（内层 P 波的无迹化用错了参考系，
+与 `phif2` 的 (41)(42) 同型；修正后落到 ~5e-15）。历史形式保留为
+`*_paper.py`，两种形式用 `channel.name` 切换 —— 见
+[`agent/tensor/chains/kstpi/CORRECTION.md`](../../agent/tensor/chains/kstpi/CORRECTION.md)
+与对照 spec [`specs/ex5_kst2_paper.toml`](specs/ex5_kst2_paper.toml)。
+**两者不同型**：例 5 是"投影装在了错的系里"，ρ′ 是"根本没装"。
 
 ---
 
@@ -495,17 +522,49 @@ tree = { psi2s = ["b1","Pim"], b1 = ["phi","Pip"] }
 **结果**（验证细节见 [`chains/ex5_kst2.md`](chains/ex5_kst2.md) 与
 [`chains/ex5_kst0.md`](chains/ex5_kst0.md)）：
 
-* **移植** A5：10/10 到 `rel ≈ 1e-15`；`emit` 三种表象全部通过。
-* **级联可表示性**：`ex5_kst2` **4/8**（`u_PF_*`、`u_FF_*` 命中），
-  `ex5_kst0` **2/2**。⚠️ 探针输出的是**合计 6/10**，引用单链时用 4/8。
+* **移植** A5：10/10 到 `rel ≈ 1e-15`（对 `*_paper.py`，见下）；
+  `emit` 三种表象全部通过。
+* **级联可表示性**：`ex5_kst2` 的**历史形式**是 **4/8**（`u_PF_*`、`u_FF_*`
+  命中），`ex5_kst0` **2/2**。⚠️ 探针输出的是**合计 6/10**，引用单链时用 4/8。
+  **修正版是 8/8**（4 条 `u_PP_*`/`u_FP_*` 修好后也命中）。
 * **阳性对照**：同一探针跑 b₁ 得 **8/8**，所以 4/8 不是探针坏了。
 
 `u_PP_*`/`u_FP_*` 四条都含 $P^{(2)}_{\psi}$ 横向投影且内层是 P 波；但 K*₀ 的
 内层**也是** P 波却命中，所以不是"P 波一律不行"，而是
-$(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合。**原因未查清**（同边界 3）。
+$(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合。
 
-⚠️ **例 5 还没有端到端脚本** —— `check_ex3.py` 只覆盖例 3，所以例 5 目前
-**缺 L1/L2/L3 那三层**，只由 `test_ex5_channels.py` + `emit` 跑通来保证。
+**原因已于 2026-10-21 定位，并已落地到生产代码**：内层 P 波（$l=1$）
+耦合成 $K^*_2$ 的自旋 2 时要做一次**无迹化**，原式用 $\tilde g(p_\psi)$
+（$\psi$ 系）去迹，应该在 $\tilde g(p_{K^*_2})$（$K^*_2$ 系）里做 ——
+与 `phif2` 的 (41)(42) 缺陷同型的**母系自旋投影错配**。换成 $K^*_2$ 系的
+无迹化后，4 条全部从 6e-3…2.7e-1 落到 **~5e-15**（4 个种子复核，见
+[`probes/probe_ex5_why.py`](probes/probe_ex5_why.py)）。
+
+**两种形式共存**（不改 A5、又让生产用修正版）：
+
+| 文件 | 形式 | A1 |
+|---|---|---|
+| `chains/kstpi/u_PP_{1,2}.py`、`u_FP_{1,2}.py` | **修正版（生产）** | ✅ ~5e-15 |
+| `chains/kstpi/u_PP_{1,2}_paper.py`、`u_FP_{1,2}_paper.py` | 历史形式（逐式移植） | ❌ 6e-3…2.7e-1 |
+
+`emitter` 按 **`channel.name`** 取文件 —— 所以**不用改代码**就能生成论文形式：
+把 spec 里的道名写成 `*_paper` 即可。对照 spec
+[`specs/ex5_kst2_paper.toml`](specs/ex5_kst2_paper.toml) 把两种形式放进
+同一份产物。完整推导、公式与代码逐行对照见
+[`agent/tensor/chains/kstpi/CORRECTION.md`](../../agent/tensor/chains/kstpi/CORRECTION.md)。
+
+内层 F 波命中是因为 `T3_cov` **自带** $K^*_2$ 系的无迹化
+（$rrr-\frac15\tilde r^2(\tilde g\tilde r+\ldots)$，其中的 $\tilde g$
+就是 $\tilde g(p_{K^*_2})$）；$K^*_0$ 命中是因为 $J=0$ 耦合成**标量**，
+没有秩-2 无迹化这一步。
+
+⚠️ 这与 ρ′ 的失配**不同型**：例 5 是"投影装在了错的系里"，ρ′ 是"根本没装"
+（ρ′ 的投影穷举见 [`probes/probe_rhopi_why.py`](probes/probe_rhopi_why.py)，
+最好 6.4e-02，不落回级联）。
+
+⚠️ **例 5 还没有端到端脚本** —— `check_ex3.py` 只覆盖例 3。不过
+[`probes/verify_all_specs.py`](probes/verify_all_specs.py) 现在覆盖全部
+14 个 spec（含例 5），L1/L2/L3/A7/A1 都跑。
 
 ## 数据为什么是合成的
 

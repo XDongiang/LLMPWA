@@ -84,13 +84,32 @@ agent/tensor/chains/
   rhopi/   __init__.py  u_rho_1.py  u_rho_2.py                  # 例 3 的 rho'
   b1pi/    __init__.py  u_SS_{1,2}.py  u_SD_{1,2}.py            # 例 3 的 b1
                         u_DS_{1,2}.py  u_DD_{1,2}.py
+  kstpi/   __init__.py  u_kst0_{l,r}.py  u_{PP,PF,FP,FF}_{1,2}.py  # 例 5
+                        u_{PP,FP}_{1,2}_paper.py   # 同上，历史形式（见 CORRECTION.md）
+                        CORRECTION.md              # 修正说明（公式 + 代码对照）
+  rhopi5/  __init__.py  u_rho5_{12,13,23}.py                    # 例 1 的 rho_5
+  ex1_pipipi0_rho/   u_rho_{12,13,23}.py                        # 例 1 置换族
+  ex1_pipipi0_rho3/  u_rho3_{12,13,23}.py
+  ex2_kkpi0_rho/     u_rho_K_12.py                              # 例 2
+  ex2_kkpi0_kstar{,3,5}/  u_kstar{,3,5}_{13,23}.py
+  rhof2/   rhof2_l{0_s1,2_s1,2_s2,2_s3,4_s3}.py                 # 假想链
 ```
+
+**2026-10-21：14 个 spec / 48 条道全部有手写协变道** —— `emit` 的
+`cartesian` / `helicity` / `helicity_cascade` 三条路线对每一份 spec 都能出。
+之前只有 `helicity_cascade` 能出的 7 个 spec（例 1/2）已经补齐；补齐前先用
+通用构造 `t_l` 与级联逐道对拍到 1.6e-14，确认缺的只是**搬运**。
+端到端复验 `analyses/tensor_examples/probes/verify_all_specs.py`。
 
 每个文件导出与文件同名的函数：
 
 ```python
 def phif223(psi, phi, f2, Kp, Km, Pip, Pim) -> (N, 4)
 ```
+
+3 体置换族的签名不同（如 `def u_rho_12(psi, Pip1, Pim2, Pi0)`）——
+`emitter` 与 `kernels/covariant.compute_event` 都按**参数名**解析四动量，
+不依赖固定顺序。
 
 `chains.load_chain("phif2")` 在进程内动态装配；`chains.list_chains()` /
 `list_channels(chain)` 用于发现，`chains.find_channel(name)` 跨目录按道名找。
@@ -124,6 +143,34 @@ COV.available_channels()    # 两边合起来
 ```
 
 这样同一份公式不会存两处，避免日后改一处漏一处。
+
+### 4.3 道名 = 公式选择器（一稿多形式）
+
+`emitter` 取道函数体的规则是**纯按名**：
+
+```
+chains/<chain_name>/<channel.name>.py  →  def <channel.name>(...)
+```
+
+也就是说 **`[[channel]].name` 不只是标签，它直接决定用哪个文件**。
+这条约定在 2026-10-21 被用来做"论文形式 vs 修正形式"的共存：
+
+| spec 里的 `name` | 取到的文件 | 形式 |
+|---|---|---|
+| `u_PP_1` | `chains/kstpi/u_PP_1.py` | 修正版（生产） |
+| `u_PP_1_paper` | `chains/kstpi/u_PP_1_paper.py` | 历史形式（逐式移植） |
+
+于是**不用改任何代码**就能分别生成两种形式，甚至可以放进**同一份产物**
+逐道对照（见 `analyses/tensor_examples/specs/ex5_kst2_paper.toml`）。
+这解决了"既要 A5 逐位一致、又要生产用修正版"的矛盾：
+逐式移植原样保留，修正版另起文件名，由 spec 选择。
+
+⚠️ 名字里的 `_paper` 后缀**没有魔法** —— 换成任何名字都行，只要
+`chains/<chain>/<name>.py` 里有一个同名函数。约定 `*_paper` 只是可读性。
+
+⚠️ 道名必须**全局唯一**（`chains.all_channels()` 跨目录按名索引），
+否则 `find_channel` 只返回链名排序最靠前的那个。所以"同一拓扑的两种形式"
+要在名字上区分，不能都叫 `u_PP_1`。
 
 ## 5. 四个表象
 
@@ -263,16 +310,27 @@ jax 数组**不可变**、`jit` 里不能用 numpy、`jnp.einsum` 不接受 nump
 | 6 | 非法拓扑给可读报错而非 `KeyError` | PASS（J>4 / l>4 / 末态不匹配 / 环） |
 | 7 | sdist 内含 `agent/tensor/**/*.py` 与 `gen/templates/*.py` | PASS（33 + 16 文件） |
 | 8 | `(l,s)` 自动枚举是通用的，不是硬编码 phif2 | PASS（换量子数仍枚举） |
+| 9 | **全部 14 个 spec 都有手写协变道**（三条路线都能 emit） | PASS（48/48 道，2026-10-21 补齐 18 个） |
+| 10 | **A1 全量**：级联 vs 协变，14 个 spec | PASS（13 份到机器精度；`ex3_rhopi` 为**未解决**的结构性失配，`ex5_kst2_paper` 是故意的对照 spec，见 §9e） |
+| 11 | **一稿多形式**：同一拓扑的历史形式与修正版共存，用 `channel.name` 选择 | PASS（`ex5_kst2` / `ex5_kst2_paper`，见 §4.3） |
+| 12 | 修正版与历史形式**确实不同**（不是空改） | PASS（4 条道 rel 2.5e-2…2.5e-1，见 `probes/probe_ex5_paper_form.py`） |
 
 跑测试：
 
 ```bash
-python agent/tensor/tests/test_spec.py              # 11/11
+python agent/tensor/tests/test_spec.py              # 12/12
 python agent/tensor/tests/test_cross_basis.py       # 5/5
 python agent/tensor/tests/test_emitter.py           # 4/4（含"产物在 jax 下跑"）
 python agent/tensor/tests/test_backend.py           # 3/3（jax vs numpy，17 道）
+python agent/tensor/tests/test_handwritten_complete.py  # 4/4（48 道齐全 + A1）
 python agent/tensor/tests/test_production_cache.py  # 4/4（需 tmp/bundledata/）
 TENSOR_ROOT=<...>/tensor_example python agent/tensor/tests/test_covariant_vs_jax.py
+
+# 端到端：全部 14 个 spec 的 L1/L2/L3 + A7 + A1
+python analyses/tensor_examples/probes/verify_all_specs.py
+
+# 历史形式 vs 修正版（一稿多形式的对照）
+python analyses/tensor_examples/probes/probe_ex5_paper_form.py
 
 # 想看 jax 路径的测试：用带 jax 的解释器 + TENSOR_BACKEND=jax
 TENSOR_BACKEND=jax <带 jax 的 python> agent/tensor/tests/test_production_cache.py
@@ -464,6 +522,67 @@ python -m agent.tensor run phif2.toml --momenta <npz> --out <dir>
 `crosscheck.py` 里也修了一个隐患：`_precompute` 原本强制 `dtype=float64`，
 读 `<chain>_hel.npy`（已经是复数 W）时会把虚部悄悄丢掉 —— 现已保留 dtype，
 并用 `already_rotated=True` 区分"要不要再乘一次 `EPS_A`"。
+
+### 9e. A1 全量复验（2026-10-21）：14 个 spec / 48 条道
+
+`probes/verify_all_specs.py` 把 A1（级联 vs 协变，经 `EPS_A`）扩到**全部**
+spec，并对每个 spec 同时跑 L1/L2/L3/A7。结果：
+
+| 结果 | spec |
+|---|---|
+| ✅ A1 到机器精度 | 13 份（含补齐的例 1/2 七份、`ex5_kst0`、`ex3_b1pi`、`phif0`/`phif2`/`rhof2_generic`、**修正后的 `ex5_kst2`**） |
+| ⚠️ 已知失配 | `ex3_rhopi`（Eq.46 无投影） |
+| ⏭️ 故意跳过 | `ex5_kst2_paper`（对照 spec，含历史形式） |
+
+失配**不是**"缺道"，而是公式结构与逐节点级联不同：
+
+* **`ex5_kst2` 的 4 条 —— 已定位且已落地修正（2026-10-21）**：内层 P 波
+  （$l=1$）耦合成 $K^*_2$ 的自旋 2 时要做**无迹化**，历史形式用
+  $\tilde g(p_\psi)$（$\psi$ 系）去迹，应该在 $\tilde g(p_{K^*_2})$
+  （$K^*_2$ 系）里做。修正后 4 条从 6e-3…2.7e-1 落到 ~5e-15。
+
+  **落地方式是"两种形式共存"**（既不破坏 A5，又让生产用修正版）：
+  `chains/kstpi/u_PP_{1,2}.py`、`u_FP_{1,2}.py` 是修正版；
+  逐式移植保留为 `u_*_paper.py`，A5 对拍落在它身上。
+  `emitter` 按 **`channel.name`** 取文件，所以**不用改代码**就能生成历史形式
+  —— 把 spec 里的道名写成 `*_paper` 即可。对照 spec 见
+  `analyses/tensor_examples/specs/ex5_kst2_paper.toml`。
+  新增内核原语 `covariant.py::T2_from_pair(frame, u, v)`。
+  完整推导与公式/代码逐行对照见
+  `agent/tensor/chains/kstpi/CORRECTION.md`。
+
+  内层 F 波命中是因为 `T3_cov` 自带 $K^*_2$ 系的无迹化；$K^*_0$ 命中是因为
+  $J=0$ 耦合成标量、没有无迹化这一步。
+
+  ⚠️ **这一修正已过一轮独立 LLM 审阅**（`gpt-6-sol`，2026-10-21；bundle 见
+  `analyses/kk_dis/task/20260929_螺旋度耦合振幅推导/5_生成器日志/review_kst2_frame_fix/`）。
+  审阅**接受**全部数值结果，但否掉了我们原先的三处过度声称，
+  本文件与 `CORRECTION.md` 已据其修订：
+
+  1. ~~"根因已被**证明**是参考系用错"~~ → 只证明了**代数等价**
+     （$P^{(2)}(a)(u\otimes v)=P^{(2)}(a)T^{(2)}_a(u,v)$）与**充分性**；
+     满足 A1 的构造**不唯一**，所以不能称"唯一根因"。
+  2. ~~"A1 常数是精确闭式（$3/40$、$\sqrt6/64$），故支持修正"~~ → **撤回**。
+     审阅者反例：把正确张量乘 $k$，常数仍是闭式 $3/(40k)$ 且仍过 A1。
+     闭式既不必要也不充分。
+  3. ~~"只有 4 条道受影响"（只实测了 `u_PF_1`）~~ → 已补齐 6 条对照
+     （`u_PF_2`、`u_FF_1/2`、`u_kst0_l/r`）全部实测通过；期间还发现并修掉
+     一个**假通过**（`u_kst0_*` 原先级联恒为 0，`rel=0` 是零对零）。
+
+  **仍未做**：真实拟合行为（A1 的 8 个实自由度可隐藏相位/归一化错误）、
+  boosted $\psi$ 的 A1、$3/40$ 与 $\sqrt6/64$ 的解析推导、
+  `EPS_A` 行序与 `LAM_SLOTS` 的物理 $\lambda$ 标签对齐。
+  结论口径：**$K^*_2$ 系去迹是当前约定下的有效且充分修复；
+  "论文犯错""修复唯一""真实拟合不回归"三条都还没有证据。**
+* **`ex3_rhopi` —— 仍未解决**：Eq.(46) 中间**没有投影算符**。把内层
+  $\epsilon$ 换成 $p_{\rho'}$、或把分析器投到 $\tilde g(p_{\rho'})$，
+  都不落回级联（最好 6.4e-02，见
+  `analyses/tensor_examples/probes/probe_rhopi_why.py`）。
+  这是"根本没装投影"，与例 5 的"装在了错的系里"不同型。
+
+⚠️ 只有 `ex3_rhopi` 这一处还没有落地修法。例 5 的修正**没有**改
+`*_paper.py`（那是参考实现的逐式移植，A5 要求逐位一致），
+而是新增了修正版文件并用道名切换。
 
 ## 10. 深度限制按表象分级（2026-10-19 修正）
 

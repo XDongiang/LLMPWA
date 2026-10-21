@@ -63,7 +63,7 @@ psi2s  J=1  P=-1
 
 （`emit` 一列是**实测**结果 —— 逐表象单独调 `emitter.emit`，不是靠文件存在推断。）
 
-手写道（`agent/tensor/chains/kstpi/`，10 条）：`u_FF_1`, `u_FF_2`, `u_FP_1`, `u_FP_2`, `u_PF_1`, `u_PF_2`, `u_PP_1`, `u_PP_2`, `u_kst0_l`, `u_kst0_r`
+手写道（`agent/tensor/chains/kstpi/`，14 条）：`u_FF_1`, `u_FF_2`, `u_FP_1`, `u_FP_1_paper`, `u_FP_2`, `u_FP_2_paper`, `u_PF_1`, `u_PF_2`, `u_PP_1`, `u_PP_1_paper`, `u_PP_2`, `u_PP_2_paper`, `u_kst0_l`, `u_kst0_r`
 
 深度 = 3 ⇒ omega **不可用**（`spec.py` 的分级检查会直接报错，不是静默出错）。
 

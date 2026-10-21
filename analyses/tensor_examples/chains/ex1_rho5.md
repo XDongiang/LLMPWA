@@ -59,7 +59,7 @@ psi2s  J=1  P=-1
 
 （`emit` 一列是**实测**结果 —— 逐表象单独调 `emitter.emit`，不是靠文件存在推断。）
 
-⚠️ 本链**没有**手写道目录，所以 `cartesian`/`helicity` 两条路线的 `emit` 会报 `LookupError`；只有 `omega` 能出产物。
+手写道（`agent/tensor/chains/rhopi5/`，3 条）：`u_rho5_12`, `u_rho5_13`, `u_rho5_23`
 
 深度 = 2 ⇒ omega **可用**。
 

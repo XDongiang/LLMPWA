@@ -69,7 +69,7 @@ psi2s  J=1  P=-1
 
 （`emit` 一列是**实测**结果 —— 逐表象单独调 `emitter.emit`，不是靠文件存在推断。）
 
-手写道（`agent/tensor/chains/kstpi/`，10 条）：`u_FF_1`, `u_FF_2`, `u_FP_1`, `u_FP_2`, `u_PF_1`, `u_PF_2`, `u_PP_1`, `u_PP_2`, `u_kst0_l`, `u_kst0_r`
+手写道（`agent/tensor/chains/kstpi/`，14 条）：`u_FF_1`, `u_FF_2`, `u_FP_1`, `u_FP_1_paper`, `u_FP_2`, `u_FP_2_paper`, `u_PF_1`, `u_PF_2`, `u_PP_1`, `u_PP_1_paper`, `u_PP_2`, `u_PP_2_paper`, `u_kst0_l`, `u_kst0_r`
 
 深度 = 3 ⇒ omega **不可用**（`spec.py` 的分级检查会直接报错，不是静默出错）。
 
@@ -87,6 +87,12 @@ $\psi\to K^*_2\pi\to(\phi\pi)\pi\to(K^+K^-)(\pi\pi)$ —— **深度 3**，
 [`agent/tensor/chains/kstpi/`](../../../agent/tensor/chains/kstpi/)，
 **与 jax 逐式对拍通过**（rel ≈ 1e-15，见
 [`probes/verify_ex5_port.py`](../probes/verify_ex5_port.py)）。
+
+⚠️ **2026-10-21 起，其中 4 条的对拍对象是 `*_paper.py`** —— `u_PP_*`/
+`u_FP_*` 的生产文件已改为修正版（见下文"原因已定位"与
+[`CORRECTION.md`](../../../agent/tensor/chains/kstpi/CORRECTION.md)）。
+逐式移植保留在 `*_paper.py`，A5 的"逐位一致"落在它身上；
+`verify_ex5_port.py` 会把"生产文件 vs 历史形式"的差作为阳性对照打出来。
 
 ### 移植时踩到的坑：jax 默认 float32
 
@@ -118,7 +124,11 @@ $K^*_0$ 的 $J=0$ 与 $K^*_2$ 的 $J=2$ **冲突**：一个 `[particles.Kstar]`
 
 ```bash
 # 移植正确性（需要 jax + Tensor/，注意下面那个 x64 坑）
+# 现在对 `*_paper.py` 比对 —— 那才是逐式移植
 analyses/kk_dis/.venv/bin/python analyses/tensor_examples/probes/verify_ex5_port.py
+
+# 历史形式 vs 修正版（三形式对拍）
+python analyses/tensor_examples/probes/probe_ex5_paper_form.py
 
 # 纯 numpy 回归（永远能跑，不需要 jax）
 python agent/tensor/tests/test_ex5_channels.py
@@ -165,6 +175,69 @@ $K^*_0$ 那 2 条见 [`ex5_kst0`](ex5_kst0.md)。
 也就是说：$K^*_0$ 的内层**也是** P 波却命中 —— 所以不是"P 波一律不行"，
 而是 $(J_{K^*}=2,\ l_{\text{内}}=1)$ 这个特定组合不行。
 
+#### 原因已定位（2026-10-21）：内层无迹化用错了参考系
+
+**结论**：这四条道与 `phif2` 的 (41)(42) 缺陷**同型** ——
+`ZB_psi_to_phif2_原式缺陷与修正.md` §4 的**母系自旋投影错配**。
+
+内层是 P 波（$l=1$）时，"两个秩-1 分析器耦合成 $K^*_2$ 的自旋 2"这一步
+需要一次**无迹化**（$1\otimes1\to2$ 要去掉自旋 0 的迹）。原式把这个迹
+用 $\tilde g(p_\psi)$ 去掉 —— 那是 **$\psi$ 系**的度规，而耦合发生在
+**$K^*_2$ 系**（$K^*_2$ 在 $\psi$ 静止系里是动的，$|p|\approx0.55$ GeV，
+实测 $\max|\tilde g(p_{K^*_2})-\tilde g(p_\psi)| = 0.32$）。
+
+把内层换成用 $\tilde g(p_{K^*_2})$ 无迹化的 $T^{(2)}$：
+
+| 道 | 原式 rel | 修正后 rel |
+|---|---|---|
+| `u_PP_1` | 6.99e-03 | **7.17e-15** |
+| `u_PP_2` | 2.47e-01 | **5.53e-15** |
+| `u_FP_1` | 6.55e-03 | **5.95e-15** |
+| `u_FP_2` | 2.68e-01 | **3.51e-15** |
+
+（四个种子 3/7/11/23 上都是这个量级，见
+[`probes/probe_ex5_why.py`](../probes/probe_ex5_why.py)。）
+
+**为什么只有内层 P 波出问题**：内层 F 波用 `T3_cov(kst2, phi, π)`，
+它**自带** $rrr-\frac15\tilde r^2(\tilde g\tilde r+\ldots)$，其中的
+$\tilde g$ 就是 $\tilde g(p_{K^*_2})$ —— 无迹化已经在**正确的系**里做完，
+$P^{(2)}(p_\psi)$ 只剩顶层的作用，不再引入错配。
+
+**为什么 $K^*_0$ 的内层也是 P 波却命中**：$J_{K^*}=0$ ⇒ 内层
+$(l,s)=(1,1)$ 耦合成 **0**，是标量，**根本没有秩-2 无迹化这一步**。
+
+⚠️ 注意与 `rhopi` 的区别：`rhopi` 的 Eq.(46) 里内层 $\epsilon$ 缩并的是
+$p_\psi$ 而不是 $p_{\rho'}$、中间**没有投影算符**，把它换成
+$\tilde g(p_{\rho'})$ 也不落回级联（最好 6.4e-02，见
+[`probes/probe_rhopi_why.py`](../probes/probe_rhopi_why.py)）——
+那是**另一种**失配。本链是"投影装在了错的系里"，`rhopi` 是"根本没装"。
+
+⚠️ 起初这个修正**只作为诊断结论**记录在这里（`chains/kstpi/` 那 10 条是
+`Tensor/FUNC.py` 的逐式移植，A5 要求逐位一致，改了会与参考实现分家）。
+
+**2026-10-21 已落地，用的是"两种形式共存"的方案** —— 不改 A5、又让生产
+用修正版：
+
+| 文件 | 形式 | A1 | 用途 |
+|---|---|---|---|
+| `u_PP_{1,2}.py`、`u_FP_{1,2}.py` | **修正版** | ✅ ~5e-15 | **生产** |
+| `u_PP_{1,2}_paper.py`、`u_FP_{1,2}_paper.py` | 历史形式（逐式移植） | ❌ 6e-3…2.7e-1 | A5 对拍、对照基线 |
+
+`emitter` 按 **`channel.name`** 取文件，所以两种形式**不需要改代码**就能
+分别生成 —— 把 spec 里的道名写成 `*_paper` 即得历史形式。
+
+* 完整推导 + 公式/代码逐行对照：
+  [`agent/tensor/chains/kstpi/CORRECTION.md`](../../../agent/tensor/chains/kstpi/CORRECTION.md)
+* 两种形式共存的对照 spec：
+  [`specs/ex5_kst2_paper.toml`](../specs/ex5_kst2_paper.toml)
+* 三形式对拍：
+  [`probes/probe_ex5_paper_form.py`](../probes/probe_ex5_paper_form.py)
+* A5（现在对 `*_paper` 文件比对）：
+  [`probes/verify_ex5_port.py`](../probes/verify_ex5_port.py)
+
+新增的内核原语：`kernels/covariant.py::T2_from_pair(frame, u, v)`
+—— 把两个**任意**秩-1 分析器耦合成 $J=2$，并**在指定系里**无迹化。
+
 #### 阳性对照（这个判据可信的前提）
 
 同一套机器跑 `b1pi` 的 8 条道：**8/8 到 6e-15**。
@@ -192,7 +265,7 @@ $K^*_0$ 那 2 条见 [`ex5_kst0`](ex5_kst0.md)。
 
 | 项 | 状态 |
 |---|---|
-| **$u_{PP}$/$u_{FP}$ 为何不是级联** | ❓ **未解决**。四条失败的道都含 $P^{(2)}_{\psi}$ 横向投影 + 内层 P 波。是"投影算符带来额外张量结构"还是别的，未定 |
+| **$u_{PP}$/$u_{FP}$ 为何不是级联** | ✅ **已定位并已修（2026-10-21）**：内层 P 波的无迹化用了 $\tilde g(p_\psi)$ 而不是 $\tilde g(p_{K^*_2})$（母系自旋投影错配，与 `phif2` (41)(42) 同型）。生产文件已改为修正版（A1 ~5e-15），历史形式保留为 `*_paper.py`。见 [`CORRECTION.md`](../../../agent/tensor/chains/kstpi/CORRECTION.md) |
 | 与文档 Eq 的逐条对应 | ⚠️ **未敲定**。文档 431–623 行给的是 $\langle K^*K^*_J|LS\rangle$ 一族，而参考实现按自己的 $P/F$、$l/r$ 命名。移植以**参考实现为准** |
 | $\psi\to K^*_2\pi$ 的宇称 | ⚠️ spec 里写 $K^*_2$ 为 $2^-$（宇称+三角要求 $l$ 为奇数）。若实际取 $2^+$（$l$ 偶），道表要重列 |
 | $K^*$ 质量 | ⚠️ spec 写 1.43，**只是占位**；协变道函数对任意四动量都成立 |
@@ -213,6 +286,9 @@ python agent/tensor/tests/test_ex5_channels.py
 # 级联可表示性 + 阳性对照
 python analyses/tensor_examples/probes/probe_ex5_identify.py
 python analyses/tensor_examples/probes/probe_ex5_identify.py --control
+
+# 未命中的根因（内层无迹化用错参考系）+ 修正验证
+python analyses/tensor_examples/probes/probe_ex5_why.py
 
 # 端到端生成
 python -m agent.tensor check analyses/tensor_examples/specs/ex5_kst2.toml

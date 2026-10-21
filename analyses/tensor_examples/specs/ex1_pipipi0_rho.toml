@@ -85,3 +85,14 @@ tree = { psi2s = ["rho", "Pip1"], rho = ["Pi0", "Pim2"] }
 name   = "helicity_cascade"
 kernel = "helicity_cascade"
 env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 `chains/<chain>/` 下（2026-10-21 补齐）
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
