@@ -417,16 +417,38 @@ def validate(spec):
     return spec
 
 
+def _decaying_with(spec, overrides):
+    """按**覆盖后**的树列出所有衰变节点（与 `decaying_nodes` 同序）。"""
+    out = []
+
+    def walk(n):
+        ds = overrides.get(n) or _children(spec, n)
+        if not ds:
+            return
+        out.append(n)
+        for d in ds:
+            walk(d)
+
+    walk(spec["top"])
+    return out
+
+
 def _validate_cascade_fields(spec):
     """校验 `[[channel]].ls` / `.tree`（螺旋度级联表象用）。
 
     这两项是 §5-P0-1 新增的：`ls` 给逐节点 (l,s)，`tree` 给镜像树。它们只被
     `helicity_cascade` 表象读，但**必须在读 TOML 时报错**而不是运行时 KeyError。
+
+    ⚠️ 「哪些节点在衰变」必须**逐道按覆盖后的树**算，不能用 base 树：
+    例 6 的 base 树是 `psi -> phi + f2`（f_2 分支），而 f_0 分支的道用
+    `tree = { psi2s = ["phi", "f0"], f0 = [...] }` 把顶层换成 f_0 ——
+    `f0` 在 base 树里根本不可达。用 base 算 `decaying` 会把合法的 f_0 道
+    误判成"给末态节点指定 (l,s)"。
     """
     parts = spec["particles"]
-    decaying = set(decaying_nodes(spec))
-    leaves = set(spec["leaves"])
     for c in spec["channels"]:
+        over = c.get("tree") or {}
+        decaying = set(_decaying_with(spec, over))
         for node, lst in (c.get("ls") or {}).items():
             if node not in parts:
                 raise SpecError("[[channel]] %s 的 ls 里有未知节点 %r" % (c["name"], node))
@@ -447,7 +469,7 @@ def _validate_cascade_fields(spec):
                     raise SpecError(
                         "[[channel]] %s 给节点 %s 指定了宇称/三角不允许的 (l,s)=%s；"
                         "该节点允许的是 %s" % (c["name"], node, bad, sorted(ok)))
-        for node, ds in (c.get("tree") or {}).items():
+        for node, ds in over.items():
             if node not in decaying:
                 raise SpecError("[[channel]] %s 的 tree 里有非衰变节点 %r"
                                 % (c["name"], node))
@@ -580,7 +602,12 @@ def cascade_channels(spec):
         for (n, l, s, f) in resolve_channels(spec)]
     for c in chans:
         ls = {}
-        for node in decaying_nodes(spec):
+        # **逐道**按覆盖后的树算衰变节点，不能用 base 树：
+        # 例 6 的 f_0 道用 `tree = {psi2s = ["phi","f0"], ...}` 把顶层换成 f_0，
+        # 而 base 树是 f_2 分支 —— 用 base 树会往 f_0 道的 `ls` 里塞一个
+        # `f2: [(2, 0)]`，级联仍按 f_2 节点构造（多一个不该出现的因子），
+        # 而协变道算的是 f_0，于是 A1 无谓失配（实测 1.3）。
+        for node in _decaying_with(spec, c.get("tree") or {}):
             if node in c["ls"]:
                 ls[node] = list(c["ls"][node])
             elif node == spec["top"]:

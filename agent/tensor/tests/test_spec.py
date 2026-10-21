@@ -378,6 +378,164 @@ env = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
     assert s["bases"][0]["env"]["HELICITY_LAYER"] == "1"
 
 
+
+
+def test_three_daughter_node_rejected():
+    """§2.5 缺陷：三体节点 `A -> b+c+d` 必须**显式**拒绝，而不是被静默当成占位树。
+
+    文档例 4 的 $\\omega^\\mu$（418–430 行）是一个**单节点三体**对象：
+
+    $$\\omega^\\mu=\\epsilon^{\\mu\\nu\\lambda\\sigma}p_1^\\nu p_2^\\lambda p_0^\\sigma[\\cdots]$$
+
+    它不能分解成两体树，因为 $\\epsilon^{\\mu\\nu\\lambda\\sigma}
+    p_\\omega{}_\\nu p_\\rho{}_\\lambda p_\\pi{}_\\sigma\\equiv0$
+    （$p_\\omega=p_\\rho+p_\\pi$，全反对称三缩并）。
+
+    现在 `specs/ex4_omega_kk.toml` 只能写二叉占位树绕过去。本测试**锁住**
+    这条缺陷：哪天有人实现了真三体节点，这个测试会失败 —— 那时应改成
+    "接受三体节点"并更新
+    `documentation/tensor_examples_feasibility.md` §2.5。
+    """
+    t = '''
+[chain]
+name = "threebody"
+top = "omega"
+l_max = 4
+
+[input]
+keys = ["p1", "p2", "p0"]
+layout = "x,y,z,E"
+
+[particles.omega]
+J = 1
+mass = 1.5
+parity = -1
+daughters = ["p1", "p2", "p0"]
+
+[particles.p1]
+J = 0
+mass = 0.13957039
+[particles.p2]
+J = 0
+mass = 0.13957039
+[particles.p0]
+J = 0
+mass = 0.1349768
+'''
+    try:
+        spec.load_spec(_write(t))
+    except spec.SpecError as e:
+        assert "个 daughter" in str(e) and "两体" in str(e), str(e)
+    else:
+        raise AssertionError(
+            "三体节点（3 个 daughter）未被拒绝 —— 若这是有意支持的，"
+            "请更新 test_three_daughter_node_rejected 与 feasibility §2.5")
+
+
+def test_channel_tree_may_introduce_unreachable_node():
+    """§2.3.1：`[[channel]].tree` 把顶层换成 base 树里**不可达**的节点时必须通过。
+
+    例 6 的 base 树是 `psi -> phi + f2`（$f_2$ 分支），而 $f_0$ 分支的道用
+    `tree = { psi2s = ["phi","f0"], f0 = [...] }` 把顶层换成 $f_0$ ——
+    `f0` 在 base 树里根本不可达。旧实现用 base 树算"哪些节点在衰变"，
+    于是报"给末态节点指定 (l,s)"。真正该看的是**覆盖后**的树。
+    """
+    t = '''
+[chain]
+name = "mirror_top"
+top = "psi2s"
+l_max = 4
+check_channels = false
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim", "Pip2", "Pim2"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["phi", "f2"]
+
+[particles.phi]
+J = 1
+mass = 1.019461
+parity = -1
+l = 1
+daughters = ["Kp", "Km"]
+
+[particles.f2]
+J = 2
+mass = 1.9
+parity = 1
+l = 2
+daughters = ["sigA", "sigB"]
+
+[particles.f0]
+J = 0
+mass = 1.9
+parity = 1
+l = 0
+daughters = ["sigA", "sigB"]
+
+[particles.sigA]
+J = 0
+mass = 0.5
+parity = 1
+l = 0
+daughters = ["Pip", "Pim"]
+
+[particles.sigB]
+J = 0
+mass = 0.5
+parity = 1
+l = 0
+daughters = ["Pip2", "Pim2"]
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+[particles.Km]
+J = 0
+mass = 0.493677
+[particles.Pip]
+J = 0
+mass = 0.13957039
+[particles.Pim]
+J = 0
+mass = 0.13957039
+[particles.Pip2]
+J = 0
+mass = 0.13957039
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+
+[[channel]]
+name = "c_f2"
+l = 2
+s = 2
+ls = { psi2s = [[2, 2]], f2 = [[2, 0]] }
+tree = { psi2s = ["phi", "f2"], f2 = ["sigA", "sigB"] }
+
+[[channel]]
+name = "c_f0"
+l = 0
+s = 1
+ls = { psi2s = [[0, 1]], f0 = [[0, 0]] }
+tree = { psi2s = ["phi", "f0"], f0 = ["sigA", "sigB"] }
+
+[[basis]]
+name = "cartesian"
+kernel = "covariant"
+'''
+    s = spec.load_spec(_write(t))
+    assert sorted(c["name"] for c in s["channels"]) == ["c_f0", "c_f2"]
+    # 逐道按覆盖后的树算衰变节点：f0 道必须认出 f0 是衰变节点
+    assert "f0" in spec._decaying_with(s, {"psi2s": ["phi", "f0"],
+                                          "f0": ["sigA", "sigB"]})
+
+
 def main():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     bad = 0
