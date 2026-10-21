@@ -159,3 +159,7 @@ analyses/tensor_examples/_work/
 # 完全可复现，不入库。
 agent/tensor/generated/
 agent/tensor/specs/generated/
+
+# DSH 每个 analysis 目录下的远端配置（跳板机/集群地址、密钥路径、主机指纹）。
+# 属于本机环境配置，不入库；.dsh/agent.json 等仍需入库的文件用 ! 放行。
+**/.dsh/config.yml
