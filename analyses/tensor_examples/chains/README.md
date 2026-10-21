@@ -72,10 +72,38 @@ python agent/tensor/tests/test_chain_docs.py    # 5 项
 | [`ex2_kstar`](ex2_kstar.md) | ψ→K*K→(Kπ)K | 2 | 2 | cart / hel / **cascade** | ✅ | ✅ 4e-15 | **例 2** |
 | [`ex2_kstar3`](ex2_kstar3.md) | ψ→K*₃K→(Kπ)K | 2 | 2 | cart / hel / **cascade** | ✅ | ✅ 3e-15 | **例 2，J=3** |
 | [`ex2_kstar5`](ex2_kstar5.md) | ψ→K*₅K→(Kπ)K | 2 | 2 | cart / hel / **cascade** | ✅ | ✅ 6e-15 | **例 2，J=5** |
+| [`ex4_omega_kk`](ex4_omega_kk.md) | ψ→ωKK→(πππ)(KK) | **3** | 7 | cart / hel | ✅ | ❌ **无对象** | **例 4，真三体节点** |
+| [`ex6_phi4pi_ss`](ex6_phi4pi_ss.md) | ψ→φf_J→(KK)(σσ) | **3** | 14 | cart / hel / **cascade** | ✅ | ✅ **7e-15** | **例 6，σσ 子分支** |
+| [`ex6_phi4pi_rr`](ex6_phi4pi_rr.md) | ψ→φf_J→(KK)(ρρ) | **3** | 14 | cart / hel / **cascade** | ✅ | f₀ ✅ **6e-15**；f₂ ⚠️ 0.47–0.86 | **例 6，ρρ 子分支** |
+| [`ex6_phi4pi_f2s`](ex6_phi4pi_f2s.md) | ψ→φf_2→(KK)(f₂(1270)σ) | **3** | 10 | cart / hel / **cascade** | ✅ | ⚠️ **0.47–1.08 全不过** | **例 6，f₂σ 子分支** |
 
-⚠️ 表里 14 条链的 `emit` 列**全部是 ✅**（2026-10-21 起）—— 例 1/2 的 18 个
+⚠️ 表里 16 条链的 `emit` 列**全部是 ✅**（2026-10-21 起）—— 例 1/2 的 18 个
 手写协变道补齐后，`cartesian`/`helicity` 两条路线也能出了。A1 列的数字来自
-[`probes/verify_all_specs.py`](../probes/verify_all_specs.py)（全部 14 份 spec）。
+[`probes/verify_all_specs.py`](../probes/verify_all_specs.py)（全部 16 份 spec）。
+
+`ex4_omega_kk` 的 A1 是 **❌ 无对象**，不是"失败"：ω 是真三体节点，
+`helicity_cascade` 算不了，所以没有可比的级联产物。这正是
+[`documentation/tensor_examples_feasibility.md`](../../../documentation/tensor_examples_feasibility.md)
+§2.5 记录的缺陷。
+
+例 6 拆成**三份 spec**（一份一个子分支），因为 A1 是**逐道**判据：
+
+| spec | 道数 | A1 | 记账 |
+|---|---|---|---|
+| `ex6_phi4pi_ss` | 14 | ✅ 7e-15 | 正常 |
+| `ex6_phi4pi_rr` | 14 | f₀ 4 条 ✅ 6e-15；f₂ 10 条 ⚠️ | f₂ 那 10 条在 `A1_EXEMPT` |
+| `ex6_phi4pi_f2s` | 10 | ⚠️ 全不过 | 10 条全在 `A1_EXEMPT` |
+
+**为什么拆**：三条分支状态不同，混在一份 spec 里"这份 spec 过不过 A1"
+就没法回答 —— 报告里只能写"部分过"，很容易读成"可用"。拆开后每份一个答案。
+
+$\rho\rho$ 里 $f_0$ 能过而 $f_2$ 不能，是**自旋结构**的差别（不是实现差异）：
+$f_0$ 是标量，两个 $\rho$ 合成 $S=0$ 用横向度规夹住就够（`S_rr`），
+不涉及 $P^{(2)}$；$f_2$ 要 $1\otimes1\to2$，有 $P^{(2)}$ 的参考系问题。
+
+那 20 条不过的公式是**按文档 / tex 逐式直译**的，但与级联对不上 ——
+无迹化的参考系问题，见 feasibility §2.3.1。**不要拿去拟合**；它们的作用是
+把公式钉在代码里 + 给未来修复留对照基线。
 
 "表象"列加粗的是该链**特有**的那个：
 

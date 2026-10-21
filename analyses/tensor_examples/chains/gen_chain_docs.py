@@ -85,6 +85,21 @@ CHAINS = [
      "auto"),
     ("ex2_kstar3", "analyses/tensor_examples/specs/ex2_kkpi0_kstar3.toml",
      "auto"),
+    # 2026-10-21：例 4（真三体节点，只有协变/螺度）与例 6（σ σ 子分支，
+    # 深度 4、三条路线都行）。例 4 的树是**二叉占位**，见 feasibility §2.5。
+    ("ex4_omega_kk", "analyses/tensor_examples/specs/ex4_omega_kk.toml",
+     "auto"),
+    # 例 6 拆成三份 spec（一份一个子分支）：A1 状态不同，混在一份里没法回答
+    # "这份 spec 过不过 A1"。三份共用 chains/ex6_phi4pi/（道名不重叠）。
+    #
+    # 链文档只给 `ss` 那份出拓扑/道表 —— 另外两份的树与它同构，逐份重复只会
+    # 制造三份要同步的文档。逐份的 A1 状态记在 notes 与 README 的索引表里。
+    ("ex6_phi4pi_ss", "analyses/tensor_examples/specs/ex6_phi4pi_ss.toml",
+     "agent/tensor/chains/ex6_phi4pi"),
+    ("ex6_phi4pi_rr", "analyses/tensor_examples/specs/ex6_phi4pi_rr.toml",
+     "agent/tensor/chains/ex6_phi4pi"),
+    ("ex6_phi4pi_f2s", "analyses/tensor_examples/specs/ex6_phi4pi_f2s.toml",
+     "agent/tensor/chains/ex6_phi4pi"),
 ]
 
 
