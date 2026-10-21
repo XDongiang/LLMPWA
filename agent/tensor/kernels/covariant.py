@@ -284,6 +284,37 @@ def T2_cov(a, b, c):
             - (1.0 / 3) * dot(t_r, t_r)[:, None, None] * gt_cov) * B2(a, b, c)[:, None, None]
 
 
+def T2_from_pair(frame, u, v):
+    r"""把两个**秩-1 分析器** $u_\mu$、$v_\nu$ 耦合成 $J=2$ 的秩-2 张量，
+    且无迹化在 `frame` 系里做：
+
+        T^{(2)}_{\mu\nu}
+          = \tfrac12(u_\mu v_\nu + v_\mu u_\nu)
+            - \tfrac13 \tilde g(frame)_{\mu\nu}\,
+              \tilde g(frame)^{\alpha\beta}u_\alpha v_\beta
+
+    与 `T2_cov` 的区别：`T2_cov(a, b, c)` 的**两个**因子都是同一个
+    $\tilde g(a)\cdot(b-c)$；这里允许 $u$、$v$ 是**任意**两个秩-1 分析器
+    （例如 $u=\tilde t^{(1)}_{(K^*_2\pi)}$、$v=\tilde g(p_{K^*_2})\tilde t^{(1)}_{(\phi\pi)}$），
+    而参考系 `frame` 单独给出。
+
+    ⚠️ 这是 `ex5_kst2` 的 `u_PP_*`/`u_FP_*` 修正的落点：原式把无迹化交给了
+    $P^{(2)}(p_\psi)$（**$\psi$ 系**），而 $1\otimes1\to2$ 的无迹化必须在
+    **耦合所在系**（$K^*_2$ 系）里做。见
+    `chains/kstpi/CORRECTION.md`。
+
+    对称化是必需的：$\tilde g$ 缩并只看到对称部分，所以"非对称去迹"与
+    "对称去迹"**数值相同**（反对称项在 $\tilde g$ 缩并下为零，且不参与
+    与对称的 $P^{(2)}$ 的收缩）—— 但写成对称形式才与 $1\otimes1\to2$
+    的 CG 分解一致，也才对任意后续收缩稳健。
+    """
+    gt_cov = Gt_cov(frame)
+    gt_con = _raise_last(gt_cov, 2)
+    sym = 0.5 * (xp.einsum("ei,ej->eij", u, v) + xp.einsum("ei,ej->eij", v, u))
+    tr = xp.einsum("eij,ei,ej->e", gt_con, u, v)
+    return sym - (1.0 / 3) * xp.einsum("eij,e->eij", gt_cov, tr)
+
+
 def T3_cov(a, b, c):
     """Eq.(12)：\tilde{t}^{(3)}_{mu nu rho}，返回 (N,4,4,4)。"""
     a, b, c = _atleast2(a), _atleast2(b), _atleast2(c)
