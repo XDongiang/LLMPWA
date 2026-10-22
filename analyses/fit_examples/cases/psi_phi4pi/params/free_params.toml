@@ -1,0 +1,536 @@
+# 由 analyses/fit_examples/common/case.py 自动生成（不要手改）
+# 每个道一个复耦合：.const = Re g, .theta = Im g
+# fixed = true 的项冻结；range 先留空（高斯基线由 likelihood 侧决定）
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_01.const"
+value = 0.0999984698263
+error = 0.001
+arg_index = 0
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_01.theta"
+value = 0.000553201950745
+error = 0.001
+arg_index = 1
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_01_b.const"
+value = 0.068385375005
+error = 0.001
+arg_index = 2
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_01_b.theta"
+value = 0.0729619111964
+error = 0.001
+arg_index = 3
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_21.const"
+value = 0.0644766203738
+error = 0.001
+arg_index = 4
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_21.theta"
+value = 0.0764379841779
+error = 0.001
+arg_index = 5
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_21_b.const"
+value = -0.0731778135727
+error = 0.001
+arg_index = 6
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif0_ss_21_b.theta"
+value = 0.0681542926067
+error = 0.001
+arg_index = 7
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_01.const"
+value = -0.072606397663
+error = 0.001
+arg_index = 8
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_01.theta"
+value = -0.0687627153216
+error = 0.001
+arg_index = 9
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_01_b.const"
+value = 0.0520315193816
+error = 0.001
+arg_index = 10
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_01_b.theta"
+value = -0.0853974296501
+error = 0.001
+arg_index = 11
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_21.const"
+value = 0.0704915992092
+error = 0.001
+arg_index = 12
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_21.theta"
+value = 0.0709290803615
+error = 0.001
+arg_index = 13
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_21_b.const"
+value = -0.0928669788212
+error = 0.001
+arg_index = 14
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_21_b.theta"
+value = -0.0370907568625
+error = 0.001
+arg_index = 15
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_22.const"
+value = -0.0151775733906
+error = 0.001
+arg_index = 16
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_22.theta"
+value = 0.0988414956684
+error = 0.001
+arg_index = 17
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_22_b.const"
+value = 0.0453917690614
+error = 0.001
+arg_index = 18
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_22_b.theta"
+value = -0.0891043618544
+error = 0.001
+arg_index = 19
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_23.const"
+value = -0.0628912231683
+error = 0.001
+arg_index = 20
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_23.theta"
+value = -0.0777476305002
+error = 0.001
+arg_index = 21
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_23_b.const"
+value = 0.0219929417113
+error = 0.001
+arg_index = 22
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_23_b.theta"
+value = 0.0975515787411
+error = 0.001
+arg_index = 23
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_43.const"
+value = 0.0967787929218
+error = 0.001
+arg_index = 24
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_43.theta"
+value = 0.0251766804921
+error = 0.001
+arg_index = 25
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_43_b.const"
+value = -0.099858986226
+error = 0.001
+arg_index = 26
+fixed = false
+
+[[data]]
+path = "couplings.ex6_ss.u_phif2_ss_43_b.theta"
+value = 0.0053087540834
+error = 0.001
+arg_index = 27
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_01.const"
+value = -0.0452248542719
+error = 0.001
+arg_index = 28
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_01.theta"
+value = 0.0891891952878
+error = 0.001
+arg_index = 29
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_01_b.const"
+value = 0.0976298935635
+error = 0.001
+arg_index = 30
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_01_b.theta"
+value = -0.0216426403836
+error = 0.001
+arg_index = 31
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_21.const"
+value = 0.0184763581713
+error = 0.001
+arg_index = 32
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_21.theta"
+value = -0.0982782996837
+error = 0.001
+arg_index = 33
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_21_b.const"
+value = 0.00429643366918
+error = 0.001
+arg_index = 34
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_21_b.theta"
+value = -0.0999076606559
+error = 0.001
+arg_index = 35
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_22.const"
+value = 0.0999792971359
+error = 0.001
+arg_index = 36
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_22.theta"
+value = -0.00203473443241
+error = 0.001
+arg_index = 37
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_22_b.const"
+value = 0.0128223203507
+error = 0.001
+arg_index = 38
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_22_b.theta"
+value = -0.0991745335297
+error = 0.001
+arg_index = 39
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_23.const"
+value = 0.00245187072563
+error = 0.001
+arg_index = 40
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_23.theta"
+value = -0.0999699371308
+error = 0.001
+arg_index = 41
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_23_b.const"
+value = -0.0999861258272
+error = 0.001
+arg_index = 42
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_23_b.theta"
+value = -0.00166572568647
+error = 0.001
+arg_index = 43
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_43.const"
+value = -0.0769561972897
+error = 0.001
+arg_index = 44
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_43.theta"
+value = 0.0638572133647
+error = 0.001
+arg_index = 45
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_43_b.const"
+value = 0.0852663576092
+error = 0.001
+arg_index = 46
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif2_rr_43_b.theta"
+value = 0.0522460358311
+error = 0.001
+arg_index = 47
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_01.const"
+value = 0.0974716621378
+error = 0.001
+arg_index = 48
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_01.theta"
+value = 0.0223444641936
+error = 0.001
+arg_index = 49
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_01_b.const"
+value = 0.0231465805278
+error = 0.001
+arg_index = 50
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_01_b.theta"
+value = -0.0972843040262
+error = 0.001
+arg_index = 51
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_21.const"
+value = -0.0438430645958
+error = 0.001
+arg_index = 52
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_21.theta"
+value = -0.0898765024178
+error = 0.001
+arg_index = 53
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_21_b.const"
+value = -0.0935181829058
+error = 0.001
+arg_index = 54
+fixed = false
+
+[[data]]
+path = "couplings.ex6_rr.u_phif0_rr_21_b.theta"
+value = 0.0354167963825
+error = 0.001
+arg_index = 55
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_01.const"
+value = 0.0227777323372
+error = 0.001
+arg_index = 56
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_01.theta"
+value = 0.0973713248835
+error = 0.001
+arg_index = 57
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_01_b.const"
+value = 0.0310645019791
+error = 0.001
+arg_index = 58
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_01_b.theta"
+value = -0.0950525997371
+error = 0.001
+arg_index = 59
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_21.const"
+value = 0.0614675063079
+error = 0.001
+arg_index = 60
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_21.theta"
+value = 0.0788780430049
+error = 0.001
+arg_index = 61
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_21_b.const"
+value = 0.0920021438112
+error = 0.001
+arg_index = 62
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_21_b.theta"
+value = -0.039186803061
+error = 0.001
+arg_index = 63
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_22.const"
+value = 0.0339481618242
+error = 0.001
+arg_index = 64
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_22.theta"
+value = -0.0940612689089
+error = 0.001
+arg_index = 65
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_22_b.const"
+value = -0.076585760511
+error = 0.001
+arg_index = 66
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_22_b.theta"
+value = -0.0643010208858
+error = 0.001
+arg_index = 67
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_23.const"
+value = -0.0516893200384
+error = 0.001
+arg_index = 68
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_23.theta"
+value = 0.0856049893053
+error = 0.001
+arg_index = 69
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_23_b.const"
+value = -0.0853094426206
+error = 0.001
+arg_index = 70
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_23_b.theta"
+value = 0.0521756552403
+error = 0.001
+arg_index = 71
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_43.const"
+value = 0.0979362057876
+error = 0.001
+arg_index = 72
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_43.theta"
+value = 0.0202113729353
+error = 0.001
+arg_index = 73
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_43_b.const"
+value = 0.0665974007899
+error = 0.001
+arg_index = 74
+fixed = false
+
+[[data]]
+path = "couplings.ex6_f2s.u_phif2_f2s_43_b.theta"
+value = -0.0745974946498
+error = 0.001
+arg_index = 75
+fixed = false
+

@@ -1,0 +1,45 @@
+# ψ(2S) → K⁺K⁻π⁰：KK̄ 共振 + K* / K*₃ / K*₅ 四族相干（论文例 2）
+#
+# 四份 spec 的末态相同（K⁺,K⁻,π⁰）。KK̄ 那条是**单道**（换 1↔3 就变成 Kπ，
+# 不是同一个态），K* 一族是 {13,23} 两条同号的置换道。
+#
+# ⚠️ 也是真三体：ψ → R + π⁰，R → K⁺K⁻ 或 Kπ。
+
+[case]
+name = "psi_kkpi0"
+title = "ψ(2S)→K⁺K⁻π⁰：KK̄ + K*/K*₃/K*₅ 四族相干"
+n_events = 20000
+seed = 2
+coupling_scale = 0.1
+
+[[family]]
+name = "ex2_kkbar"
+spec = "ex2_kkpi0_rho.toml"
+resonance = "f0_1710_kk"
+propagator = "BW"
+mass = 1.71
+width = 0.14
+
+[[family]]
+name = "ex2_kstar"
+spec = "ex2_kkpi0_kstar.toml"
+resonance = "Kstar_892"
+propagator = "BW"
+mass = 0.892
+width = 0.051
+
+[[family]]
+name = "ex2_kstar3"
+spec = "ex2_kkpi0_kstar3.toml"
+resonance = "Kstar3_1780"
+propagator = "BW"
+mass = 1.78
+width = 0.16
+
+[[family]]
+name = "ex2_kstar5"
+spec = "ex2_kkpi0_kstar5.toml"
+resonance = "Kstar5_2380"
+propagator = "BW"
+mass = 2.38
+width = 0.32

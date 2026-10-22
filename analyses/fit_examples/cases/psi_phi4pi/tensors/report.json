@@ -1,0 +1,92 @@
+[
+  {
+    "family": "ex6_ss",
+    "spec": "ex6_phi4pi_ss",
+    "basis": "cartesian",
+    "file": "ex6_phi4pi_kk.npy",
+    "shape": [
+      14,
+      5000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 3.14,
+    "finite": true,
+    "max": 19417.49483089047
+  },
+  {
+    "family": "ex6_ss",
+    "spec": "ex6_phi4pi_ss",
+    "basis": "helicity_cascade",
+    "file": "ex6_phi4pi_ss_cascade.npy",
+    "shape": [
+      14,
+      5000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 2.88,
+    "finite": true,
+    "max": 388.6135042796469
+  },
+  {
+    "family": "ex6_rr",
+    "spec": "ex6_phi4pi_rr",
+    "basis": "cartesian",
+    "file": "ex6_phi4pi_kk.npy",
+    "shape": [
+      14,
+      5000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 3.62,
+    "finite": true,
+    "max": 324206.06102920865
+  },
+  {
+    "family": "ex6_rr",
+    "spec": "ex6_phi4pi_rr",
+    "basis": "helicity_cascade",
+    "file": "ex6_phi4pi_rr_cascade.npy",
+    "shape": [
+      14,
+      5000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 3.05,
+    "finite": true,
+    "max": 53.02767609946791
+  },
+  {
+    "family": "ex6_f2s",
+    "spec": "ex6_phi4pi_f2s",
+    "basis": "cartesian",
+    "file": "ex6_phi4pi_kk.npy",
+    "shape": [
+      10,
+      5000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 3.67,
+    "finite": true,
+    "max": 319664.38178906986
+  },
+  {
+    "family": "ex6_f2s",
+    "spec": "ex6_phi4pi_f2s",
+    "basis": "helicity_cascade",
+    "file": "ex6_phi4pi_f2s_cascade.npy",
+    "shape": [
+      10,
+      5000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 2.26,
+    "finite": true,
+    "max": 53.02767609946791
+  }
+]

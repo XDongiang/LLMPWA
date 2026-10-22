@@ -1,0 +1,87 @@
+# 例 2（K* 家族）：psi(2S) -> K*(1^-) K -> (K pi0)(K)
+#
+# 文档 274–304 行，`U_{K*}^mu` 一式：
+#   U_{K*}^mu = eps_{mu nu lam sig} p1^nu p2^lam p3^sig
+#               * [ B1(Q_{psi K* 2}) f^{(K*)}_{(13)} B1(Q_{K* 13})
+#                 + B1(Q_{psi K* 1}) f^{(K*)}_{(23)} B1(Q_{K* 23}) ]
+#
+# 与 ρ' 族的区别：K* 由 **K π** 组成，所以有两种配对 (13) 和 (23)，
+# 两项相加（共用同一个 f^{(K*)}）。这就是例 2 里真正的「置换求和」。
+# 而 (12) 是 K⁺K⁻，不是 K*，所以 K* 族没有 (12) 项。
+#
+# 注意与例 1 的差别：例 1 三项是 {12,13,23} 全排列；例 2 的 K* 族只有
+# 两项 —— 因为 K⁺ 与 K⁻ 是同种粒子，交换 1<->2 不产生新配对。
+
+[chain]
+name = "ex2_kkpi0_kstar"
+top = "psi2s"
+output = "../generated/ex2_kkpi0_kstar"
+l_max = 4
+chain_name = "ex2_kkpi0_kstar"
+suffix = "_kkpi0kst"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp1", "Km2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["kstar", "Km2"]
+
+[particles.kstar]
+J = 1
+mass = 0.892
+parity = -1
+daughters = ["Kp1", "Pi0"]
+
+[particles.Kp1]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km2]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+# (13) 配对：K* = K+ + pi0，旁观者 = K-
+[[channel]]
+name = "u_kstar_13"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], kstar = [[1, 0]] }
+tree = { psi2s = ["kstar", "Km2"], kstar = ["Kp1", "Pi0"] }
+
+# (23) 配对：K* = K- + pi0，旁观者 = K+
+[[channel]]
+name = "u_kstar_23"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], kstar = [[1, 0]] }
+tree = { psi2s = ["kstar", "Kp1"], kstar = ["Km2", "Pi0"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 `chains/<chain>/` 下（2026-10-21 补齐）
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

@@ -1,0 +1,133 @@
+{
+  "case": "psi_phi4pi",
+  "dir": "/home/iso/openclaw/deepseek-harness/LLMPWA/analyses/fit_examples/cases/psi_phi4pi",
+  "devices": [
+    "cpu:0"
+  ],
+  "jax": "0.11.1",
+  "x64": true,
+  "setup": {
+    "cartesian": {
+      "families": [
+        "ex6_ss",
+        "ex6_rr",
+        "ex6_f2s"
+      ],
+      "n_ch": 38,
+      "n_free": 76,
+      "n_data": 5000,
+      "n_mc": 5000,
+      "k": 3,
+      "dtype": "float64",
+      "sources": {
+        "ex6_ss": "tensors/ex6_phi4pi_ss/cartesian/ex6_phi4pi_kk.npy",
+        "ex6_rr": "tensors/ex6_phi4pi_rr/cartesian/ex6_phi4pi_kk.npy",
+        "ex6_f2s": "tensors/ex6_phi4pi_f2s/cartesian/ex6_phi4pi_kk.npy"
+      }
+    },
+    "helicity_cascade": {
+      "families": [
+        "ex6_ss",
+        "ex6_rr",
+        "ex6_f2s"
+      ],
+      "n_ch": 38,
+      "n_free": 76,
+      "n_data": 5000,
+      "n_mc": 5000,
+      "k": 3,
+      "dtype": "complex128",
+      "sources": {
+        "ex6_ss": "tensors/ex6_phi4pi_ss/helicity_cascade/ex6_phi4pi_ss_cascade.npy",
+        "ex6_rr": "tensors/ex6_phi4pi_rr/helicity_cascade/ex6_phi4pi_rr_cascade.npy",
+        "ex6_f2s": "tensors/ex6_phi4pi_f2s/helicity_cascade/ex6_phi4pi_f2s_cascade.npy"
+      }
+    }
+  },
+  "comparable_families": {
+    "ex6_ss": true,
+    "ex6_rr": false,
+    "ex6_f2s": false
+  },
+  "cart_vs_casc": {
+    "initial": {
+      "intensity_rel_on_comparable": 9.329838215084328e-08,
+      "excluded": [
+        "ex6_rr",
+        "ex6_f2s"
+      ],
+      "per_family": {
+        "ex6_ss": 9.329838215084328e-08,
+        "ex6_rr": {
+          "shape_rel": 0.9808678,
+          "note": "两个 cache 是不同振幅，不能相除"
+        },
+        "ex6_f2s": {
+          "shape_rel": 1.002397,
+          "note": "两个 cache 是不同振幅，不能相除"
+        }
+      }
+    },
+    "perturbed": {
+      "intensity_rel_on_comparable": 9.372558636593255e-08,
+      "excluded": [
+        "ex6_rr",
+        "ex6_f2s"
+      ],
+      "per_family": {
+        "ex6_ss": 9.372558636593255e-08,
+        "ex6_rr": {
+          "shape_rel": 0.9808678,
+          "note": "两个 cache 是不同振幅，不能相除"
+        },
+        "ex6_f2s": {
+          "shape_rel": 1.002397,
+          "note": "两个 cache 是不同振幅，不能相除"
+        }
+      }
+    }
+  },
+  "sanity": {
+    "cartesian": {
+      "likelihood": 10552.209408652678,
+      "I_min": 8.985624566828902,
+      "I_max": 5801759776.19309,
+      "finite": true
+    },
+    "helicity_cascade": {
+      "likelihood": 4498.6093836276705,
+      "I_min": 5.048647036397737,
+      "I_max": 5882121.165297042,
+      "finite": true
+    }
+  },
+  "derivative_check": {
+    "cartesian": {
+      "grad_vs_fd_rel": 1.0046009288612678e-09,
+      "hvp_vs_fd_rel": 4.553669535027425e-10,
+      "hvp_max": 127196.03676561662
+    },
+    "helicity_cascade": {
+      "grad_vs_fd_rel": 7.50810717829561e-10,
+      "hvp_vs_fd_rel": 3.3717737390815605e-08,
+      "hvp_max": 427936.59987811407
+    }
+  },
+  "seconds_per_value_grad": {
+    "cartesian": 0.0025268952051798505,
+    "helicity_cascade": 0.0026431560516357424
+  },
+  "events_per_s_value_grad": {
+    "cartesian": 3957425.6896372777,
+    "helicity_cascade": 3783355.883891685
+  },
+  "fit": {
+    "basis": "helicity_cascade",
+    "success": false,
+    "nit": 30,
+    "nfev": 31,
+    "f0": 1727.152720924496,
+    "seconds": 0.635,
+    "note": "短跑，未收敛是预期的"
+  }
+}

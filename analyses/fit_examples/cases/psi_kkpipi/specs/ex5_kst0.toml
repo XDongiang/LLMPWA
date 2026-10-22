@@ -1,0 +1,104 @@
+# 例 5（K*₀ 部分）：psi(2S) -> K*₀ pi -> (phi pi) pi -> (K+K-)(pi+pi-)
+#
+# 文档 `document/ψ衰变到介子的分波分析协变张量形式.md` 431–623 行。
+# 参考实现 `Tensor/FUNC.py::{_u_kst0_l,_u_kst0_r}`，已逐式移植到
+# `agent/tensor/chains/kstpi/`，与 jax 对拍通过（rel ≈ 1e-15）。
+#
+# 拓扑：psi(2S) -> K*₀(0^-) + pi，K*₀ -> phi + pi，phi -> K+ K-
+#       —— **深度 3**，与 `ex3_b1pi.toml` 同构。
+#
+# ⚠️ 为什么与 K*₂ 分成两份 spec：K*₀ 的 J=0 与 K*₂ 的 J=2 **冲突** ——
+#     一个 `[particles.Kstar]` 条目只能有一个 J。协变张量的道函数本身
+#     不读 J（公式硬编码），所以"能不能算"不受影响，但 spec 的拓扑校验
+#     需要一个确定的 J，只能拆开。
+#
+# 内层 (l,s) 唯一（宇称 + 三角只允许 (1,1)），所以 omega 的计数律满足；
+# 但深度 3 让 omega 仍然不可用（它只算 D0*D1*D2）。
+
+[chain]
+name = "ex5_kst0"
+top = "psi2s"
+output = "../generated/ex5_kst0"
+l_max = 4
+chain_name = "kstpi"
+suffix = "_kst0"
+# 两条道的顶层 (l,s) 相同，区别只是旁观者 pi —— 不是完备标签
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp", "Km", "Pip", "Pim"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["Kstar", "Pim"]
+
+[particles.Kstar]
+J = 0
+mass = 1.43              # K*₀(1430) 附近；只是占位
+parity = -1              # 0^-（宇称 + 三角要求 l 为奇数，见下）
+daughters = ["phi", "Pip"]
+
+[particles.phi]
+J = 1
+mass = 1.019
+parity = -1
+daughters = ["Kp", "Km"]
+l = 1
+
+[particles.Kp]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pip]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim]
+J = 0
+mass = 0.13957039
+parity = -1
+
+# ---------------------------------------------------------------- 道表（2 条）
+# `_l` 的旁观者是粒子 3（Pip），`_r` 的旁观者是粒子 4（Pim）。
+# 逐节点 (l,s)：顶层 (1,0)（$K^*_0$ 自旋 0 + pi 自旋 0 ⇒ s=0），内层 (1,1)。
+
+[[channel]]
+name = "u_kst0_l"
+l = 1
+s = 0
+ls = { psi2s = [[1, 0]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pip"], Kstar = ["phi", "Pim"] }
+
+[[channel]]
+name = "u_kst0_r"
+l = 1
+s = 0
+ls = { psi2s = [[1, 0]], Kstar = [[1, 1]], phi = [[1, 0]] }
+tree = { psi2s = ["Kstar", "Pim"], Kstar = ["phi", "Pip"] }
+
+# ---------------------------------------------------------------- 表象
+# 不出 omega：深度 3。
+
+[[basis]]
+name = "cartesian"
+kernel = "covariant"
+
+[[basis]]
+name = "helicity"
+kernel = "helicity"
+
+[[basis]]
+name = "helicity_cascade"
+kernel = "helicity_cascade"

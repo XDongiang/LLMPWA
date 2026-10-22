@@ -1,0 +1,92 @@
+[
+  {
+    "family": "ex1_rho",
+    "spec": "ex1_pipipi0_rho",
+    "basis": "cartesian",
+    "file": "ex1_pipipi0_rho_kk.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.3,
+    "finite": true,
+    "max": 28.52746728731214
+  },
+  {
+    "family": "ex1_rho",
+    "spec": "ex1_pipipi0_rho",
+    "basis": "helicity_cascade",
+    "file": "ex1_pipipi0_rho_hel.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 1.01,
+    "finite": true,
+    "max": 1.3681474597401138
+  },
+  {
+    "family": "ex1_rho3",
+    "spec": "ex1_pipipi0_rho3",
+    "basis": "cartesian",
+    "file": "ex1_pipipi0_rho3_kk.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.43,
+    "finite": true,
+    "max": 27365.58472996312
+  },
+  {
+    "family": "ex1_rho3",
+    "spec": "ex1_pipipi0_rho3",
+    "basis": "helicity_cascade",
+    "file": "ex1_pipipi0_rho3_hel.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 1.13,
+    "finite": true,
+    "max": 249.41943692235483
+  },
+  {
+    "family": "ex1_rho5",
+    "spec": "ex1_pipipi0_rho5",
+    "basis": "cartesian",
+    "file": "rhopi5_kk.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 16.18,
+    "finite": true,
+    "max": 242623906.63352838
+  },
+  {
+    "family": "ex1_rho5",
+    "spec": "ex1_pipipi0_rho5",
+    "basis": "helicity_cascade",
+    "file": "rhopi5_hel.npy",
+    "shape": [
+      3,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 1.34,
+    "finite": true,
+    "max": 457500.3994911096
+  }
+]

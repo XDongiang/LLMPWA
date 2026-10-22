@@ -1,0 +1,9 @@
+# 由 analyses/fit_examples/common/case.py 自动生成（不要手改）
+# 只写传播子；耦合与初值在 free_params.toml
+
+[resonances.ex4_omega.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 0.782, fixed = true }
+width = { value = 0.0085, fixed = true }
+Sbc = "ex4_omega"
+

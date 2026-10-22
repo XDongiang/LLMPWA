@@ -1,0 +1,17 @@
+[
+  {
+    "family": "ex4_omega",
+    "spec": "ex4_omega_kk",
+    "basis": "cartesian",
+    "file": "ex4_omega_kk_kk.npy",
+    "shape": [
+      7,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 6.21,
+    "finite": true,
+    "max": 38177.68204452706
+  }
+]

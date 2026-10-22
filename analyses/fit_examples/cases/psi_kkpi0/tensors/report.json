@@ -1,0 +1,122 @@
+[
+  {
+    "family": "ex2_kkbar",
+    "spec": "ex2_kkpi0_rho",
+    "basis": "cartesian",
+    "file": "ex2_kkpi0_rho_kk.npy",
+    "shape": [
+      1,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.19,
+    "finite": true,
+    "max": 28.507523638495776
+  },
+  {
+    "family": "ex2_kkbar",
+    "spec": "ex2_kkpi0_rho",
+    "basis": "helicity_cascade",
+    "file": "ex2_kkpi0_rho_hel.npy",
+    "shape": [
+      1,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 0.44,
+    "finite": true,
+    "max": 1.365216044515912
+  },
+  {
+    "family": "ex2_kstar",
+    "spec": "ex2_kkpi0_kstar",
+    "basis": "cartesian",
+    "file": "ex2_kkpi0_kstar_kk.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.24,
+    "finite": true,
+    "max": 28.50591203349195
+  },
+  {
+    "family": "ex2_kstar",
+    "spec": "ex2_kkpi0_kstar",
+    "basis": "helicity_cascade",
+    "file": "ex2_kkpi0_kstar_hel.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 0.75,
+    "finite": true,
+    "max": 1.365850959523785
+  },
+  {
+    "family": "ex2_kstar3",
+    "spec": "ex2_kkpi0_kstar3",
+    "basis": "cartesian",
+    "file": "ex2_kkpi0_kstar3_kk.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.38,
+    "finite": true,
+    "max": 21372.181882303645
+  },
+  {
+    "family": "ex2_kstar3",
+    "spec": "ex2_kkpi0_kstar3",
+    "basis": "helicity_cascade",
+    "file": "ex2_kkpi0_kstar3_hel.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 0.84,
+    "finite": true,
+    "max": 196.14816064660207
+  },
+  {
+    "family": "ex2_kstar5",
+    "spec": "ex2_kkpi0_kstar5",
+    "basis": "cartesian",
+    "file": "ex2_kkpi0_kstar5_kk.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 11.57,
+    "finite": true,
+    "max": 197819264.15163067
+  },
+  {
+    "family": "ex2_kstar5",
+    "spec": "ex2_kkpi0_kstar5",
+    "basis": "helicity_cascade",
+    "file": "ex2_kkpi0_kstar5_hel.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 0.96,
+    "finite": true,
+    "max": 371808.3021080781
+  }
+]

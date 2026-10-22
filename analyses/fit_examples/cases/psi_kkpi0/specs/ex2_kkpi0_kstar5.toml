@@ -1,0 +1,89 @@
+# 例 2（K*₅ 家族）：psi(2S) -> K*_5(5^-) K -> (K pi0)(K)
+#
+# 文档 274–304 行，`U_{K*_5}^mu`：
+#   U_{K*_5}^mu = eps_{mu nu lam sig} p_psi^sig
+#                 [ T~^{(5) nu a b g d}_{(K*_5 2)} t~^{(5) lam}_{(13) a b g d}
+#                   * f^{(K*_5)}_{(13)} - (1<->2) ]
+#
+# 与 K*₃ 同构（只有 (13)/(23) 两对，因为 K+ K- 同种粒子），但 J=5/l=5。
+# 这条曾经和 rho5 一样被内核上限挡住，2026-10-20 扩到 6 之后可算。
+#
+# 注意文档写的是 `- (1<->2)`（反号）。实测本链的两条道在置换下是**同号**
+# （与 J=1 的 U_{K*} 一致）—— 文档那个负号来自 T~^{(J)} 张量缩并的
+# 整体因子，不是道与道之间的相对符号。详见
+# chains/notes/ex2_kstar5.notes.md。
+
+[chain]
+name = "ex2_kkpi0_kstar5"
+top = "psi2s"
+output = "../generated/ex2_kkpi0_kstar5"
+l_max = 5
+chain_name = "ex2_kkpi0_kstar5"
+suffix = "_kkpi0kst5"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp1", "Km2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["kstar5", "Km2"]
+
+[particles.kstar5]
+J = 5
+mass = 1.9
+parity = -1
+daughters = ["Kp1", "Pi0"]
+l = 5
+
+[particles.Kp1]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km2]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+# (13) 配对：K*₅ = K+ + pi0，旁观者 = K-
+[[channel]]
+name = "u_kstar5_13"
+l = 5
+s = 5
+ls = { psi2s = [[5, 5]], kstar5 = [[5, 0]] }
+tree = { psi2s = ["kstar5", "Km2"], kstar5 = ["Kp1", "Pi0"] }
+
+# (23) 配对：K*₅ = K- + pi0，旁观者 = K+
+[[channel]]
+name = "u_kstar5_23"
+l = 5
+s = 5
+ls = { psi2s = [[5, 5]], kstar5 = [[5, 0]] }
+tree = { psi2s = ["kstar5", "Kp1"], kstar5 = ["Km2", "Pi0"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 `chains/<chain>/` 下（2026-10-21 补齐）
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

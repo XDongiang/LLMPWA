@@ -1,0 +1,40 @@
+# ψ(2S) → φπ⁺π⁻π⁺π⁻ → (K⁺K⁻)(π⁺π⁻)(π⁺π⁻)（论文例 6）
+#
+# 三个子分支（σ 交换 / ρρ / f₂σ）是**三份 spec、同一批六体事例**。
+# 六体是本仓库最深的链（深度 4：ψ→φf_J→φσσ→ππ），也是
+# "级联对深度没有假设"这条能力的最强证据。
+#
+# ⚠️ 三份 spec 只有 helicity_cascade 与 cartesian 齐全；
+# 而且 A1（级联 vs 协变）在这三份里**只有 ss 全过**
+# （f₂ 支的两份 0.47–1.08，是已知的"母系自旋投影错配"，见 README）。
+
+[case]
+name = "psi_phi4pi"
+title = "ψ(2S)→φπ⁺π⁻π⁺π⁻：σ 交换 / ρρ / f₂σ 三子分支"
+n_events = 5000
+seed = 4
+coupling_scale = 0.1
+
+[[family]]
+name = "ex6_ss"
+spec = "ex6_phi4pi_ss.toml"
+resonance = "phi_f0_sigma"
+propagator = "BW"
+mass = 1.019461
+width = 0.0042
+
+[[family]]
+name = "ex6_rr"
+spec = "ex6_phi4pi_rr.toml"
+resonance = "phi_f2_rr"
+propagator = "BW"
+mass = 1.275
+width = 0.186
+
+[[family]]
+name = "ex6_f2s"
+spec = "ex6_phi4pi_f2s.toml"
+resonance = "phi_f2_f2s"
+propagator = "BW"
+mass = 1.275
+width = 0.186

@@ -1,0 +1,113 @@
+{
+  "case": "psi_pipipi0",
+  "dir": "/home/iso/openclaw/deepseek-harness/LLMPWA/analyses/fit_examples/cases/psi_pipipi0",
+  "devices": [
+    "cpu:0"
+  ],
+  "jax": "0.11.1",
+  "x64": true,
+  "setup": {
+    "cartesian": {
+      "families": [
+        "ex1_rho",
+        "ex1_rho3",
+        "ex1_rho5"
+      ],
+      "n_ch": 9,
+      "n_free": 18,
+      "n_data": 20000,
+      "n_mc": 20000,
+      "k": 3,
+      "dtype": "float64",
+      "sources": {
+        "ex1_rho": "tensors/ex1_pipipi0_rho/cartesian/ex1_pipipi0_rho_kk.npy",
+        "ex1_rho3": "tensors/ex1_pipipi0_rho3/cartesian/ex1_pipipi0_rho3_kk.npy",
+        "ex1_rho5": "tensors/ex1_pipipi0_rho5/cartesian/rhopi5_kk.npy"
+      }
+    },
+    "helicity_cascade": {
+      "families": [
+        "ex1_rho",
+        "ex1_rho3",
+        "ex1_rho5"
+      ],
+      "n_ch": 9,
+      "n_free": 18,
+      "n_data": 20000,
+      "n_mc": 20000,
+      "k": 3,
+      "dtype": "complex128",
+      "sources": {
+        "ex1_rho": "tensors/ex1_pipipi0_rho/helicity_cascade/ex1_pipipi0_rho_hel.npy",
+        "ex1_rho3": "tensors/ex1_pipipi0_rho3/helicity_cascade/ex1_pipipi0_rho3_hel.npy",
+        "ex1_rho5": "tensors/ex1_pipipi0_rho5/helicity_cascade/rhopi5_hel.npy"
+      }
+    }
+  },
+  "comparable_families": {
+    "ex1_rho": true,
+    "ex1_rho3": true,
+    "ex1_rho5": true
+  },
+  "cart_vs_casc": {
+    "initial": {
+      "intensity_rel_on_comparable": 1.1914241880263408e-07,
+      "per_family": {
+        "ex1_rho": 1.2861195472280316e-07,
+        "ex1_rho3": 1.0212838693393151e-07,
+        "ex1_rho5": 1.1911750653057767e-07
+      }
+    },
+    "perturbed": {
+      "intensity_rel_on_comparable": 1.8385430430634272e-07,
+      "per_family": {
+        "ex1_rho": 8.44440001175315e-08,
+        "ex1_rho3": 1.3433454229152928e-07,
+        "ex1_rho5": 1.8385847240502442e-07
+      }
+    }
+  },
+  "sanity": {
+    "cartesian": {
+      "likelihood": 20139.094884477905,
+      "I_min": 569719878.0171468,
+      "I_max": 1214850533091014.5,
+      "finite": true
+    },
+    "helicity_cascade": {
+      "likelihood": 20139.094783133245,
+      "I_min": 569719726.0706832,
+      "I_max": 1214850469124435.8,
+      "finite": true
+    }
+  },
+  "derivative_check": {
+    "cartesian": {
+      "grad_vs_fd_rel": 4.618287531508392e-09,
+      "hvp_vs_fd_rel": 6.839448864638698e-07,
+      "hvp_max": 1432559.9132121261
+    },
+    "helicity_cascade": {
+      "grad_vs_fd_rel": 4.416216767545019e-09,
+      "hvp_vs_fd_rel": 6.065752327266247e-06,
+      "hvp_max": 2563448.73330878
+    }
+  },
+  "seconds_per_value_grad": {
+    "cartesian": 0.0038604974746704102,
+    "helicity_cascade": 0.0039347648620605465
+  },
+  "events_per_s_value_grad": {
+    "cartesian": 10361358.93429512,
+    "helicity_cascade": 10165791.706052015
+  },
+  "fit": {
+    "basis": "helicity_cascade",
+    "success": true,
+    "nit": 18,
+    "nfev": 29,
+    "f0": 11571.490212625707,
+    "seconds": 0.621,
+    "note": "短跑，未收敛是预期的"
+  }
+}

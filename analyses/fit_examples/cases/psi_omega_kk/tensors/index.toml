@@ -1,0 +1,13 @@
+# 由 common/case.py 生成：实测事实（形状/文件名/dtype）。不要手改。
+# 人手写的输入在 case.toml。
+
+[case]
+name = "psi_omega_kk"
+
+[[family]]
+name = "ex4_omega"
+spec = "ex4_omega_kk"
+cartesian_file = "ex4_omega_kk_kk.npy"
+cartesian_shape = [7, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 38177.68204

@@ -1,0 +1,21 @@
+# 由 analyses/fit_examples/common/case.py 自动生成（不要手改）
+# 只写传播子；耦合与初值在 free_params.toml
+
+[resonances.ex1_rho.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 0.775, fixed = true }
+width = { value = 0.149, fixed = true }
+Sbc = "ex1_rho"
+
+[resonances.ex1_rho3.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.69, fixed = true }
+width = { value = 0.19, fixed = true }
+Sbc = "ex1_rho3"
+
+[resonances.ex1_rho5.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 2.35, fixed = true }
+width = { value = 0.32, fixed = true }
+Sbc = "ex1_rho5"
+

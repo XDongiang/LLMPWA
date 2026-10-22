@@ -1,0 +1,52 @@
+# ψ → K⁺K⁻π⁺π⁻ 的多族相干拟合（例 3 + 例 5）
+#
+# 为什么这四个 spec 是**一个 case**：末态完全相同（K⁺,K⁻,π⁺,π⁻），真实分析里
+# 它们必须**相干求和**（同一个 e+e- 初态、同一批事例）。分成四个 case 等于
+# 假设"这四个中间态互不干涉"，那在物理上是错的。
+#
+# 族 = 一个中间态结构（= 一份 spec）：
+#   ex3_rhopi   ψ→ρ′π, ρ′→φπ          2 条道   深度 3
+#   ex3_b1pi    ψ→b₁π, b₁→φπ           8 条道   深度 3
+#   ex5_kst0    ψ→K*₀π, K*₀→Kπ (P 波)  2 条道   深度 3
+#   ex5_kst2    ψ→K*₂π, K*₂→Kπ         8 条道   深度 3
+#
+# 合计 20 条道 → 20 个复耦合 → 40 个自由实参。
+
+[case]
+name = "psi_kkpipi"
+title = "ψ→K⁺K⁻π⁺π⁻：ρ′/b₁/K*₀/K*₂ 四族相干"
+n_events = 20000
+seed = 0
+coupling_scale = 0.1
+
+[[family]]
+name = "ex3_rhopi"
+spec = "ex3_rhopi.toml"
+resonance = "rho_prime"
+propagator = "BW"
+mass = 1.46
+width = 0.31
+
+[[family]]
+name = "ex3_b1pi"
+spec = "ex3_b1pi.toml"
+resonance = "b1_1235"
+propagator = "BW"
+mass = 1.23
+width = 0.142
+
+[[family]]
+name = "ex5_kst0"
+spec = "ex5_kst0.toml"
+resonance = "Kstar0_1430"
+propagator = "BW"
+mass = 1.43
+width = 0.29
+
+[[family]]
+name = "ex5_kst2"
+spec = "ex5_kst2.toml"
+resonance = "Kstar2_1430"
+propagator = "BW"
+mass = 1.43
+width = 0.109

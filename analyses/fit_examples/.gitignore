@@ -1,0 +1,44 @@
+# `fit_examples` 的忽略规则。
+#
+# 分层原则（与 `analyses/tensor_examples/.gitignore` 同一条纪律）：
+#
+#   入库 = 人手写的输入 + 冻结的 spec + 小体积的"事实记录"
+#   忽略 = 任何能由上面三者**重算**出来的大文件
+#
+# 仓库根的 .gitignore 已经挡掉 *.npz / *.npy / *.log / output/，
+# 这里只补它没覆盖的目录级产物。
+
+# ---------------------------------------------------------------- 生成的产物
+# `gen/` 是 `agent.tensor emit` 吐出来的**自足脚本**（每份 spec 一套
+# _backend.py + covariant.py + runtime.py + helicity_cascade.py + gen_tensor_*.py）。
+# 它是 spec 的确定性函数，重跑 `case.py build <case> --only tensors` 即可再生，
+# 与 tensor_examples 里被忽略的 `generated/` 同性质。
+cases/*/gen/
+
+# 探索期的一次性工作区（2026-10 整理时已清空，留规则防它再长回来）
+_scratch/
+
+# ---------------------------------------------------------------- 仍然入库的
+# 显式列出来，避免以后有人"顺手"把下面这些也忽略掉：
+#
+#   cases/*/case.toml                    人手写的输入（族、质量、宽度、seed）
+#   cases/*/specs/*.toml                 从 tensor_examples 复制的冻结 spec
+#   cases/*/params/free_params.toml      可变参数表（下一步人工冻结/改初值的对象）
+#   cases/*/params/resonances_config.toml 传播子配置
+#   cases/*/tensors/index.toml           实测事实 + calibration_cart_to_casc
+#   cases/*/tensors/report.json          形状/dtype/耗时（8 KB；stage_readme 的数据源，
+#                                        ignore 了的话已入库的 README.md 就没法从入库
+#                                        文件重算 —— 所以它属于"事实记录"，入库）
+#   cases/*/data/momenta.meta.json       四动量的验收记录（守恒/在壳/阈值余量）
+#   cases/*/logs/likelihood.json         似然测试的实测数字（README 表格的来源）
+#   cases/*/README.md                    由 case.py 生成的逐 case 自述
+#   document/                            任务点名的论文（md + tex）
+#   math.md                              似然的数学结构（每条等式都有数值核对）
+#   probe/proto_likelihood.py            判据的出处（早期原型）
+#   probe/verify_math.py                 把 math.md 的等式逐条独立重算（不是单测，是文档校验）
+
+__pycache__/
+*.pyc
+
+# 本机环境配置（根 .gitignore 已有同样的规则，这里重复一次是防它在子目录里生效）
+.dsh/

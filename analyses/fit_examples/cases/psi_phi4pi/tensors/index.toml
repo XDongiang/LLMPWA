@@ -1,0 +1,47 @@
+# 由 common/case.py 生成：实测事实（形状/文件名/dtype）。不要手改。
+# 人手写的输入在 case.toml。
+
+[case]
+name = "psi_phi4pi"
+
+[[family]]
+name = "ex6_ss"
+spec = "ex6_phi4pi_ss"
+cartesian_file = "ex6_phi4pi_kk.npy"
+cartesian_shape = [14, 5000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 19417.49483
+helicity_cascade_file = "ex6_phi4pi_ss_cascade.npy"
+helicity_cascade_shape = [14, 5000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 388.6135043
+calibration_cart_to_casc = [[-3.46410161514, 1.40144198418e-18], [-3.46410161514, 3.15131205607e-20], [6.53197229186, -8.40111815926e-18], [6.53197229186, -8.77638554402e-18], [-14.6059348668, 1.34512792818e-17], [-14.6059348668, -2.70297942584e-17], [27.5412134519, -3.1987851378e-19], [27.541213463, -6.99736955133e-18], [-869.542096933, 5.01886445301e-16], [-869.542097845, -1.04275257561e-15], [-25.2419391007, -1.11888798479e-16], [-25.2419391332, -9.18003703247e-18], [49.9660804284, -1.27666035058e-17], [49.9660805804, 8.30862678649e-17]]
+calibration_max_rel = 1.134077e-07
+
+[[family]]
+name = "ex6_rr"
+spec = "ex6_phi4pi_rr"
+cartesian_file = "ex6_phi4pi_kk.npy"
+cartesian_shape = [14, 5000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 324206.061
+helicity_cascade_file = "ex6_phi4pi_rr_cascade.npy"
+helicity_cascade_shape = [14, 5000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 53.0276761
+calibration_cart_to_casc = [[58.4679806416, 1.14523812812e-16], [58.1259008496, -1.18218548454e-16], [-130.763847031, -4.37731794169e-17], [-129.968474, 3.01491707758e-16], [4247.11232689, -1.94012009136e-14], [4101.04310664, 1.24778096214e-15], [131.72178554, 4.72014830392e-16], [129.345404113, 9.22734218815e-16], [-329.06093591, -3.4844282667e-15], [-315.113094655, -1.61819442905e-15], [24, -2.16284918581e-17], [24, 5.48052045403e-17], [-45.2548316112, 7.92800669756e-17], [-45.2548315806, 1.15220034822e-16]]
+calibration_max_rel = 9.808678e-01
+
+[[family]]
+name = "ex6_f2s"
+spec = "ex6_phi4pi_f2s"
+cartesian_file = "ex6_phi4pi_kk.npy"
+cartesian_shape = [10, 5000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 319664.3818
+helicity_cascade_file = "ex6_phi4pi_f2s_cascade.npy"
+helicity_cascade_shape = [10, 5000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 53.0276761
+calibration_cart_to_casc = [[-1.52793890539, 4.86127738603e-16], [2.67300423896, 4.20439377548e-16], [7.20739373548, 1.9653264228e-17], [-6.34751256847, -6.16597753375e-16], [-138.25088633, -8.57770136857e-15], [418.01560824, -1.42514827153e-14], [-6.36240581173, -1.00169571866e-15], [8.60132059735, 9.1374070791e-16], [22.9887434205, -1.78519741722e-15], [-33.3137662615, 2.96564675919e-15]]
+calibration_max_rel = 1.002397e+00

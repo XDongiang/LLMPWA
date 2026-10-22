@@ -1,0 +1,24 @@
+# ψ(2S) → ωK⁺K⁻ → (π⁺π⁻π⁰)K⁺K⁻（论文例 4）
+#
+# ⚠️ 这条**只有协变/螺度两份 cache，没有 helicity_cascade** ——
+# ω 是一个**三体节点**（ω → π⁺π⁻π⁰），而级联内核只支持两体节点。
+# 两体节点的 ε^{μνλσ}p_ω p_ρ p_π 恒为零（p_ω = p_ρ + p_π），所以不能用
+# "ω → ρπ 再 ρ → ππ" 的二叉写法冒充。`spec.py` 里那棵树是**占位**。
+#
+# 因此本 case 的 `--basis both` 会退化成只跑 cartesian（没有 cascade 可比），
+# 这是**已知也是唯一**的缺口，见 README 的"已知边界"。
+
+[case]
+name = "psi_omega_kk"
+title = "ψ(2S)→ωK⁺K⁻：ω(三体节点) + f₀/f₂ 七道"
+n_events = 20000
+seed = 3
+coupling_scale = 0.1
+
+[[family]]
+name = "ex4_omega"
+spec = "ex4_omega_kk.toml"
+resonance = "omega_782"
+propagator = "BW"
+mass = 0.782
+width = 0.0085

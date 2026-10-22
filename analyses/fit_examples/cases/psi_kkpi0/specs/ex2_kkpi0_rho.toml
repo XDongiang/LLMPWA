@@ -1,0 +1,79 @@
+# 例 2（ρ'/ρ 家族）：psi(2S) -> rho(1^-) pi0 -> (K+ K-)(pi0)
+#
+# 文档 274–304 行，`U_{rho'}^mu` 一式：
+#   U_{rho'}^mu = eps_{mu nu lam sig} p1^nu p2^lam p3^sig
+#                 * B1(Q_{psi rho' 3}) f^{(rho')}_{(12)} B1(Q_{rho' 12})
+#
+# 注意这一式**只有一项**（不同于例 1 的三项）：K+K- 是同种粒子的对，
+# 而 (1<->3)/(2<->3) 会把 K 换成 π⁰，不是同一个 ρ' 中间态。所以
+# KK̄ 共振只配 (12) 一对，Kπ 共振才需要把 (13)/(23) 两对都算（见
+# ex2_kkpi0_kstar.toml）。
+#
+# 也就是说例 2 = 「KK̄ 子系统共振」+「Kπ 子系统共振」两族相加，
+# 而不是例 1 那种同一族的三项置换。
+
+[chain]
+name = "ex2_kkpi0_rho"
+top = "psi2s"
+output = "../generated/ex2_kkpi0_rho"
+l_max = 4
+chain_name = "ex2_kkpi0_rho"
+suffix = "_kkpi0rho"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Kp1", "Km2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rho", "Pi0"]
+
+[particles.rho]
+J = 1
+mass = 1.9              # 占位（ρ' 在高 KK̄ 质量处）；只影响 q^2，不影响公式
+parity = -1
+daughters = ["Kp1", "Km2"]
+
+[particles.Kp1]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Km2]
+J = 0
+mass = 0.493677
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+# KK̄ 共振：只有 (12) 一对
+[[channel]]
+name = "u_rho_K_12"
+l = 1
+s = 1
+ls = { psi2s = [[1, 1]], rho = [[1, 0]] }
+tree = { psi2s = ["rho", "Pi0"], rho = ["Kp1", "Km2"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 `chains/<chain>/` 下（2026-10-21 补齐）
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

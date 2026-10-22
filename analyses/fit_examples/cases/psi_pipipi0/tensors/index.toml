@@ -1,0 +1,47 @@
+# 由 common/case.py 生成：实测事实（形状/文件名/dtype）。不要手改。
+# 人手写的输入在 case.toml。
+
+[case]
+name = "psi_pipipi0"
+
+[[family]]
+name = "ex1_rho"
+spec = "ex1_pipipi0_rho"
+cartesian_file = "ex1_pipipi0_rho_kk.npy"
+cartesian_shape = [3, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 28.52746729
+helicity_cascade_file = "ex1_pipipi0_rho_hel.npy"
+helicity_cascade_shape = [3, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 1.36814746
+calibration_cart_to_casc = [[-1.35250233121e-17, -20.8511638629], [5.00172392534e-17, -20.8511638709], [-1.38186615534e-17, -20.8511641759]]
+calibration_max_rel = 1.669837e-07
+
+[[family]]
+name = "ex1_rho3"
+spec = "ex1_pipipi0_rho3"
+cartesian_file = "ex1_pipipi0_rho3_kk.npy"
+cartesian_shape = [3, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 27365.58473
+helicity_cascade_file = "ex1_pipipi0_rho3_hel.npy"
+helicity_cascade_shape = [3, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 249.4194369
+calibration_cart_to_casc = [[9.46223590458e-17, -108.959382264], [-4.07406344175e-17, -108.959382225], [-5.02697826021e-17, -108.959381292]]
+calibration_max_rel = 9.148954e-08
+
+[[family]]
+name = "ex1_rho5"
+spec = "ex1_pipipi0_rho5"
+cartesian_file = "rhopi5_kk.npy"
+cartesian_shape = [3, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 242623906.6
+helicity_cascade_file = "rhopi5_hel.npy"
+helicity_cascade_shape = [3, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 457500.3995
+calibration_cart_to_casc = [[2.14325939896e-16, -525.043513696], [3.16600366384e-16, -525.043513462], [-3.75491402788e-16, -525.043508673]]
+calibration_max_rel = 1.153849e-07

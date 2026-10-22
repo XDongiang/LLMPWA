@@ -1,0 +1,55 @@
+{
+  "case": "psi_omega_kk",
+  "dir": "/home/iso/openclaw/deepseek-harness/LLMPWA/analyses/fit_examples/cases/psi_omega_kk",
+  "devices": [
+    "cpu:0"
+  ],
+  "jax": "0.11.1",
+  "x64": true,
+  "setup": {
+    "cartesian": {
+      "families": [
+        "ex4_omega"
+      ],
+      "n_ch": 7,
+      "n_free": 14,
+      "n_data": 20000,
+      "n_mc": 20000,
+      "k": 3,
+      "dtype": "float64",
+      "sources": {
+        "ex4_omega": "tensors/ex4_omega_kk/cartesian/ex4_omega_kk_kk.npy"
+      }
+    }
+  },
+  "sanity": {
+    "cartesian": {
+      "likelihood": 21257.28180023952,
+      "I_min": 0.14621991239838644,
+      "I_max": 18479602.49319616,
+      "finite": true
+    }
+  },
+  "derivative_check": {
+    "cartesian": {
+      "grad_vs_fd_rel": 5.342669202704372e-10,
+      "hvp_vs_fd_rel": 5.486328084726694e-10,
+      "hvp_max": 944248.768378902
+    }
+  },
+  "seconds_per_value_grad": {
+    "cartesian": 0.0029381434122721355
+  },
+  "events_per_s_value_grad": {
+    "cartesian": 13614039.339579772
+  },
+  "fit": {
+    "basis": "cartesian",
+    "success": false,
+    "nit": 30,
+    "nfev": 33,
+    "f0": 13585.254627625865,
+    "seconds": 0.531,
+    "note": "短跑，未收敛是预期的"
+  }
+}

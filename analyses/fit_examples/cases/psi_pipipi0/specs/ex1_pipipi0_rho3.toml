@@ -1,0 +1,95 @@
+# 例 1（ρ₃ 家族）：psi(2S) -> rho_3(3^-) pi0 -> (pi+ pi-)(pi0)
+#
+# 文档 200–273 行，`U_{rho_3}^mu` 一式。
+#
+# 与 ρ 家族的区别：文档里三项的**相对符号是 (+,-,-)** ——
+#    U_rho3 = -i eps_{mu nu lam sig} p_psi^sig [
+#               T~(3)_{(rho3 3)} t~(3)_{(12)} f_{(12)}
+#             - (1<->3) - (2<->3) ]
+# 这不是笔误：ρ₃ 是 J=3，eps 张量要缩并 3 个指标，置换奇偶性不同。
+# 我们用 tree 的子节点顺序把这个符号做出来（见 README 的"符号"一节）。
+#
+# (l,s)：(l=3,s=3) —— 顶层 F 波，rho_3 -> pi pi 也是 F 波。
+# J=3 在 LAM_SLOTS 里（上限 4），所以这条能跑。
+
+[chain]
+name = "ex1_pipipi0_rho3"
+top = "psi2s"
+output = "../generated/ex1_pipipi0_rho3"
+l_max = 4
+chain_name = "ex1_pipipi0_rho3"
+suffix = "_pipipi0"
+check_channels = false
+
+psi_mass = 3.686
+
+[input]
+keys = ["Pip1", "Pim2", "Pi0"]
+layout = "x,y,z,E"
+
+[particles.psi2s]
+J = 1
+mass = 3.686
+parity = -1
+daughters = ["rho3", "Pi0"]
+
+[particles.rho3]
+J = 3
+mass = 1.69
+parity = -1
+daughters = ["Pip1", "Pim2"]
+# 显式 (l=3)：不写的话 validate 会按 minimal_l 猜成 1，
+# 然后报 "J=3 无法由 l∈[1,1] + s∈[0,0] 组成"。F 波是两个 π 的 F 波。
+l = 3
+
+[particles.Pip1]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pim2]
+J = 0
+mass = 0.13957039
+parity = -1
+
+[particles.Pi0]
+J = 0
+mass = 0.1349768
+parity = -1
+
+[[channel]]
+name = "u_rho3_12"
+l = 3
+s = 3
+ls = { psi2s = [[3, 3]], rho3 = [[3, 0]] }
+tree = { psi2s = ["rho3", "Pi0"], rho3 = ["Pip1", "Pim2"] }
+
+[[channel]]
+name = "u_rho3_13"
+l = 3
+s = 3
+ls = { psi2s = [[3, 3]], rho3 = [[3, 0]] }
+tree = { psi2s = ["rho3", "Pim2"], rho3 = ["Pi0", "Pip1"] }
+
+[[channel]]
+name = "u_rho3_23"
+l = 3
+s = 3
+ls = { psi2s = [[3, 3]], rho3 = [[3, 0]] }
+tree = { psi2s = ["rho3", "Pip1"], rho3 = ["Pi0", "Pim2"] }
+
+[[basis]]
+name   = "helicity_cascade"
+kernel = "helicity_cascade"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }
+
+# 协变张量路线：手写道函数在 `chains/<chain>/` 下（2026-10-21 补齐）
+[[basis]]
+name   = "cartesian"
+kernel = "covariant"
+env    = { TENSOR_BASIS = "cartesian", HELICITY_LAYER = "0" }
+
+[[basis]]
+name   = "helicity"
+kernel = "helicity"
+env    = { TENSOR_BASIS = "helicity", HELICITY_LAYER = "1" }

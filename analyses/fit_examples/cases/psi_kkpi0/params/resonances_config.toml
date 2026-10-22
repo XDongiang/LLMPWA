@@ -1,0 +1,27 @@
+# 由 analyses/fit_examples/common/case.py 自动生成（不要手改）
+# 只写传播子；耦合与初值在 free_params.toml
+
+[resonances.ex2_kkbar.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.71, fixed = true }
+width = { value = 0.14, fixed = true }
+Sbc = "ex2_kkbar"
+
+[resonances.ex2_kstar.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 0.892, fixed = true }
+width = { value = 0.051, fixed = true }
+Sbc = "ex2_kstar"
+
+[resonances.ex2_kstar3.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 1.78, fixed = true }
+width = { value = 0.16, fixed = true }
+Sbc = "ex2_kstar3"
+
+[resonances.ex2_kstar5.propagators.A_propagator]
+propagator_type = "BW"
+mass = { value = 2.38, fixed = true }
+width = { value = 0.32, fixed = true }
+Sbc = "ex2_kstar5"
+

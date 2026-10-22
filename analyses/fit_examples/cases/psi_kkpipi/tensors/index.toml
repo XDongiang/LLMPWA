@@ -1,0 +1,61 @@
+# 由 common/case.py 生成：实测事实（形状/文件名/dtype）。不要手改。
+# 人手写的输入在 case.toml。
+
+[case]
+name = "psi_kkpipi"
+
+[[family]]
+name = "ex3_rhopi"
+spec = "ex3_rhopi"
+cartesian_file = "rhopi_kk.npy"
+cartesian_shape = [2, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 311.727267
+helicity_cascade_file = "rhopi_casc.npy"
+helicity_cascade_shape = [2, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 1.264393471
+calibration_cart_to_casc = [[-231.271712468, -1.16502914832e-16], [-231.252535916, 3.36839804446e-16]]
+calibration_max_rel = 3.125241e-01
+
+[[family]]
+name = "ex3_b1pi"
+spec = "ex3_b1pi"
+cartesian_file = "b1pi_kk.npy"
+cartesian_shape = [8, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 257.1873735
+helicity_cascade_file = "b1pi_casc.npy"
+helicity_cascade_shape = [8, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 11.71919367
+calibration_cart_to_casc = [[6, -1.79210691873e-18], [6, -6.88821350178e-18], [11.313708499, -1.58164190753e-18], [11.313708499, 6.42175742619e-18], [11.3137078467, 8.34801485674e-18], [11.3137078493, 5.63925599517e-18], [21.333332103, -1.6467203419e-17], [21.3333320949, 2.14307060203e-17]]
+calibration_max_rel = 1.200375e-07
+
+[[family]]
+name = "ex5_kst0"
+spec = "ex5_kst0"
+cartesian_file = "kstpi_kk.npy"
+cartesian_shape = [2, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 25.59726916
+helicity_cascade_file = "kstpi_hel.npy"
+helicity_cascade_shape = [2, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 3.19170595
+calibration_cart_to_casc = [[7.99999966798, 3.60440753254e-18], [7.99999967192, -4.73968414511e-18]]
+calibration_max_rel = 1.289684e-07
+
+[[family]]
+name = "ex5_kst2"
+spec = "ex5_kst2"
+cartesian_file = "kstpi_kk.npy"
+cartesian_shape = [8, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 9673.609512
+helicity_cascade_file = "kstpi_hel.npy"
+helicity_cascade_shape = [8, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 186.5164914
+calibration_cart_to_casc = [[13.3333328226, -6.53319105872e-19], [13.3333328221, -1.6983401115e-17], [26.1278895252, -1.3437665162e-17], [26.1278895327, 8.39430161207e-18], [26.1278889377, 1.0917251327e-17], [26.127888929, 4.08260327123e-18], [51.1999967177, 5.03880743263e-17], [51.1999967401, -2.89404579117e-18]]
+calibration_max_rel = 1.129365e-07

@@ -1,0 +1,61 @@
+# 由 common/case.py 生成：实测事实（形状/文件名/dtype）。不要手改。
+# 人手写的输入在 case.toml。
+
+[case]
+name = "psi_kkpi0"
+
+[[family]]
+name = "ex2_kkbar"
+spec = "ex2_kkpi0_rho"
+cartesian_file = "ex2_kkpi0_rho_kk.npy"
+cartesian_shape = [1, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 28.50752364
+helicity_cascade_file = "ex2_kkpi0_rho_hel.npy"
+helicity_cascade_shape = [1, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 1.365216045
+calibration_cart_to_casc = [[1.47511036566e-17, -20.8511638513]]
+calibration_max_rel = 1.484413e-07
+
+[[family]]
+name = "ex2_kstar"
+spec = "ex2_kkpi0_kstar"
+cartesian_file = "ex2_kkpi0_kstar_kk.npy"
+cartesian_shape = [2, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 28.50591203
+helicity_cascade_file = "ex2_kkpi0_kstar_hel.npy"
+helicity_cascade_shape = [2, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 1.36585096
+calibration_cart_to_casc = [[2.07913682872e-17, -20.8511638474], [-4.95494396019e-18, -20.8511641748]]
+calibration_max_rel = 3.032016e-07
+
+[[family]]
+name = "ex2_kstar3"
+spec = "ex2_kkpi0_kstar3"
+cartesian_file = "ex2_kkpi0_kstar3_kk.npy"
+cartesian_shape = [2, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 21372.18188
+helicity_cascade_file = "ex2_kkpi0_kstar3_hel.npy"
+helicity_cascade_shape = [2, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 196.1481606
+calibration_cart_to_casc = [[-8.892762215e-17, -108.959381348], [-1.34252765794e-16, -108.959381431]]
+calibration_max_rel = 1.135834e-07
+
+[[family]]
+name = "ex2_kstar5"
+spec = "ex2_kkpi0_kstar5"
+cartesian_file = "ex2_kkpi0_kstar5_kk.npy"
+cartesian_shape = [2, 20000, 3]
+cartesian_dtype = "float64"
+cartesian_max = 197819264.2
+helicity_cascade_file = "ex2_kkpi0_kstar5_hel.npy"
+helicity_cascade_shape = [2, 20000, 3]
+helicity_cascade_dtype = "complex128"
+helicity_cascade_max = 371808.3021
+calibration_cart_to_casc = [[-5.72245410668e-16, -525.04351264], [2.55770164303e-16, -525.043511572]]
+calibration_max_rel = 1.194231e-07

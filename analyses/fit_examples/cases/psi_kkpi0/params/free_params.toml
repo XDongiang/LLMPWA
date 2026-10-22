@@ -1,0 +1,102 @@
+# 由 analyses/fit_examples/common/case.py 自动生成（不要手改）
+# 每个道一个复耦合：.const = Re g, .theta = Im g
+# fixed = true 的项冻结；range 先留空（高斯基线由 likelihood 侧决定）
+
+[[data]]
+path = "couplings.ex2_kkbar.u_rho_K_12.const"
+value = -0.0732490827926
+error = 0.001
+arg_index = 0
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kkbar.u_rho_K_12.theta"
+value = 0.0680776899582
+error = 0.001
+arg_index = 1
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar.u_kstar_13.const"
+value = -0.0623718105845
+error = 0.001
+arg_index = 2
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar.u_kstar_13.theta"
+value = 0.0781649361569
+error = 0.001
+arg_index = 3
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar.u_kstar_23.const"
+value = -0.0015001691568
+error = 0.001
+arg_index = 4
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar.u_kstar_23.theta"
+value = -0.0999887468293
+error = 0.001
+arg_index = 5
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar3.u_kstar3_13.const"
+value = -0.076847442907
+error = 0.001
+arg_index = 6
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar3.u_kstar3_13.theta"
+value = 0.0639880498113
+error = 0.001
+arg_index = 7
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar3.u_kstar3_23.const"
+value = -0.0520521322042
+error = 0.001
+arg_index = 8
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar3.u_kstar3_23.theta"
+value = 0.0853848671194
+error = 0.001
+arg_index = 9
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar5.u_kstar5_13.const"
+value = -0.0941105040745
+error = 0.001
+arg_index = 10
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar5.u_kstar5_13.theta"
+value = -0.0338114333155
+error = 0.001
+arg_index = 11
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar5.u_kstar5_23.const"
+value = 0.0384317484461
+error = 0.001
+arg_index = 12
+fixed = false
+
+[[data]]
+path = "couplings.ex2_kstar5.u_kstar5_23.theta"
+value = 0.0923200991733
+error = 0.001
+arg_index = 13
+fixed = false
+

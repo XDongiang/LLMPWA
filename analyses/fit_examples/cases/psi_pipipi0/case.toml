@@ -1,0 +1,40 @@
+# ψ(2S) → π⁺π⁻π⁰：ρ / ρ₃ / ρ₅ 三族相干（论文例 1）
+#
+# 三份 spec 的末态完全一样，只是中间共振的 J 不同（1⁻ / 3⁻ / 5⁻）——
+# 真实分析里它们是**同一个末态的不同分波**，必须相干求和。所以一个 case。
+# 这也是"J=5 真的能进拟合"的落点：ρ₅ 的 3 条道走的是扩展后（l=5）的内核。
+#
+# ⚠️ 这是**真三体**：ψ → R + π⁰，R → π⁺π⁻。三体节点不能写成两体级联
+# （两体节点的 ε(p_R,p_π) 恒为零），所以只能走 helicity_cascade 的
+# "置换道"路线 —— 三条道是同一个 (l,s) 的三种配对。
+
+[case]
+name = "psi_pipipi0"
+title = "ψ(2S)→π⁺π⁻π⁰：ρ/ρ₃/ρ₅ 三族相干"
+n_events = 20000
+seed = 1
+coupling_scale = 0.1
+
+[[family]]
+name = "ex1_rho"
+spec = "ex1_pipipi0_rho.toml"
+resonance = "rho_770"
+propagator = "BW"
+mass = 0.775
+width = 0.149
+
+[[family]]
+name = "ex1_rho3"
+spec = "ex1_pipipi0_rho3.toml"
+resonance = "rho3_1690"
+propagator = "BW"
+mass = 1.69
+width = 0.19
+
+[[family]]
+name = "ex1_rho5"
+spec = "ex1_pipipi0_rho5.toml"
+resonance = "rho5_2350"
+propagator = "BW"
+mass = 2.35
+width = 0.32

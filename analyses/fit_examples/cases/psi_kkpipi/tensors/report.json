@@ -1,0 +1,122 @@
+[
+  {
+    "family": "ex3_rhopi",
+    "spec": "ex3_rhopi",
+    "basis": "cartesian",
+    "file": "rhopi_kk.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 4.76,
+    "finite": true,
+    "max": 311.72726698489
+  },
+  {
+    "family": "ex3_rhopi",
+    "spec": "ex3_rhopi",
+    "basis": "helicity_cascade",
+    "file": "rhopi_casc.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 1.06,
+    "finite": true,
+    "max": 1.2643934714332403
+  },
+  {
+    "family": "ex3_b1pi",
+    "spec": "ex3_b1pi",
+    "basis": "cartesian",
+    "file": "b1pi_kk.npy",
+    "shape": [
+      8,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.5,
+    "finite": true,
+    "max": 257.18737351772245
+  },
+  {
+    "family": "ex3_b1pi",
+    "spec": "ex3_b1pi",
+    "basis": "helicity_cascade",
+    "file": "b1pi_casc.npy",
+    "shape": [
+      8,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 3.83,
+    "finite": true,
+    "max": 11.719193673696054
+  },
+  {
+    "family": "ex5_kst0",
+    "spec": "ex5_kst0",
+    "basis": "cartesian",
+    "file": "kstpi_kk.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.25,
+    "finite": true,
+    "max": 25.59726915909268
+  },
+  {
+    "family": "ex5_kst0",
+    "spec": "ex5_kst0",
+    "basis": "helicity_cascade",
+    "file": "kstpi_hel.npy",
+    "shape": [
+      2,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 1.04,
+    "finite": true,
+    "max": 3.1917059502566594
+  },
+  {
+    "family": "ex5_kst2",
+    "spec": "ex5_kst2",
+    "basis": "cartesian",
+    "file": "kstpi_kk.npy",
+    "shape": [
+      8,
+      20000,
+      3
+    ],
+    "dtype": "float64",
+    "seconds": 0.91,
+    "finite": true,
+    "max": 9673.609511547813
+  },
+  {
+    "family": "ex5_kst2",
+    "spec": "ex5_kst2",
+    "basis": "helicity_cascade",
+    "file": "kstpi_hel.npy",
+    "shape": [
+      8,
+      20000,
+      3
+    ],
+    "dtype": "complex128",
+    "seconds": 4.06,
+    "finite": true,
+    "max": 186.51649139913917
+  }
+]
